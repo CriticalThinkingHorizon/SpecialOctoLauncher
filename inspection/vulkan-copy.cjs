@@ -1,7 +1,7 @@
 // Direct Vulkan GPU transfer with independent resources and byte-for-byte
 // verification. LP64 layouts/constants follow Khronos Vulkan-Headers.
 const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('node:crypto');
-const {journal}=require('./journal.cjs');
+const {journal}=require('../runtime/journal.cjs');
 const check=(ok,msg)=>{if(!ok)throw Error(msg);};
 const struct=(size,type,words={},pointers={})=>{
  const b=Buffer.alloc(size);b.writeUInt32LE(type,0);
