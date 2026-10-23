@@ -1,8 +1,8 @@
 // Read-only discovery. Opening a service is not proof its operations are permitted.
-const definitions=require('../native/service-functions.json');
+const definitions=require('../../native/service-functions.json');
 async function inspect(rpc){
  const names=['service','closeHandle','audioInputs'];
- const api=await require('../native/client.cjs').create(rpc,Object.fromEntries(names.map(k=>[k,definitions[k]])));
+ const api=await require('../../native/client.cjs').create(rpc,Object.fromEntries(names.map(k=>[k,definitions[k]])));
  const services={};
  for(const name of ['nfc:user','nfp:user','irs','audin:u','nifm:u','bsd:u','ssl','hidbus']){
   await api.write(64,Buffer.from(name+'\0'));const result=await api.result('service',[api.base,api.base+64,name.length]);services[name]={result};

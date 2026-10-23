@@ -130,34 +130,15 @@ async function main() {
     await runScript(path.join(__dirname, 'homebrew-launcher/inspect-input.cjs'), [directory]);
     console.log('✔ Input inspection completed successfully.');
 
-    console.log('\n[4/6] Setting Up Vulkan Display Resources...');
+    console.log('\n[4/4] Setting Up Vulkan Display Resources...');
     await runScript(path.join(__dirname, 'homebrew-launcher/vulkan-copy.cjs'), [directory, 'display']);
     console.log('✔ Vulkan display setup completed successfully.');
 
-    console.log('\n[5/6] Initializing Launcher Menu & Pipeline (launcher.cjs)...');
-    await runScript(path.join(__dirname, 'homebrew-launcher/launcher.cjs'), [directory, 'auto']);
-    console.log('✔ Launcher pipeline initialized successfully.');
-
-    console.log('\n[6/6] Verifying Launcher Frame & Input Check (launcher-check.cjs)...');
-    await runScript(path.join(__dirname, 'homebrew-launcher/launcher-check.cjs'), [directory, 'auto']);
-    console.log('✔ Launcher check verified successfully.');
-
-    console.log('\n--- Starting continuous launcher loop ---');
-    const launcherData = JSON.parse(await fs.readFile(path.join(directory, 'launcher-auto.json'), 'utf8'));
-    const loopChild = spawn(process.execPath, [path.join(__dirname, 'homebrew-launcher/launcher-loop.cjs'), directory, 'auto'], {
+    console.log('\n--- Starting Hello World Direct Execution Loop ---');
+    const loopChild = spawn(process.execPath, [path.join(__dirname, 'homebrew-launcher/hello-runner.cjs'), directory, 'auto'], {
       cwd: __dirname,
       stdio: 'inherit'
     });
-
-    const rpc = rpcProxy(directory);
-    const mapped = launcherData.controls.mapped;
-
-    await new Promise(r => setTimeout(r, 1500));
-    const state = await rpc.read(mapped, 1024);
-    if (state.readUInt32LE(112) < 1) throw Error('No apps in launcher catalog; hello-world package was not loaded');
-    state.writeUInt32LE(1, 1012);
-    await rpc.write(mapped, state);
-    console.log('Hello World launch request sent to launcher loop.');
 
     console.log('\nHello World host is running. Press Ctrl+C to stop.');
     await new Promise(resolve => {
