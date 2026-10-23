@@ -212,25 +212,19 @@ async function main(directory, attempt = 'auto') {
     check(base > 0 && base % 4096 === 0, 'Bad allocation');
 
     const control = base + 0x1000;
-    const data = Buffer.alloc(0x9000), putCtrl = (o, b) => b.copy(data, o), u64 = (o, v) => data.writeBigUInt64LE(BigInt(v), o);
-    putCtrl(0x100, struct(56, 1000060010, {48: 1}, {16: swapchain, 24: 0xffffffffffffffffn, 32: acquired}));
-    u64(0x200, acquired); data.writeUInt32LE(0x400, 0x210); u64(0x220, swapchain); data.writeUInt32LE(32, 0x230);
-    const semObject = control + 0x800; u64(0x850, control + 0x880); report.resources.semaphores.forEach((v, i) => u64(0x880 + i * 8, v));
-    putCtrl(0x600, struct(64, 1000001001, {16: 1, 32: 1}, {24: semObject + 0x28, 40: control + 0x220, 48: control}));
-
-    for (let phase = 0; phase < report.commands.length; phase++) {
-      const o = 0x1000 + phase * 0x100, obj = control + o;
-      u64(o + 0x50, obj + 0x60);
-      report.commands[phase].forEach((v, i) => u64(o + 0x60 + i * 8, v));
-      putCtrl(o + 0x80, struct(72, 4, {16: 1, 40: 1, 56: 1}, {24: control + 0x200, 32: control + 0x210, 48: obj + 0x28, 64: semObject + 0x28}));
-    }
-    await rpc.write(control, data);
-
     const lookup = sdk + 0x45c288;
-    const last = images.length - 1;
-    await rpc.callAddress(lookup, [semObject, last]);
 
-    const sdkRuntime = await require('../sdk/host/runtime.cjs').create({rpc, mapped: report.controls.mapped, directory});
+    const resolveVk = (name) => {
+      const s = module.symbols.find(s => s.name === name && s.section && s.type === 2);
+      check(s, 'Missing ' + name);
+      return module.base + s.offset;
+    };
+    const vkAcquireNextImage2KHR = resolveVk('vkAcquireNextImage2KHR');
+    const vkQueueSubmit = resolveVk('vkQueueSubmit');
+    const vkQueuePresentKHR = resolveVk('vkQueuePresentKHR');
+    const vkQueueWaitIdle = resolveVk('vkQueueWaitIdle');
+
+    // Verify all functions BEFORE calling or using them
     const verified = new Set();
 
     for (const c of [...Object.values(code), timing.tick]) {
@@ -248,8 +242,7 @@ async function main(directory, attempt = 'auto') {
     await rpc.request({command: 'verify-function', address: sdk + 0x586fb0, hex: require('../sdk/native/ipc-functions.json').copy.hex});
     verified.add(sdk + 0x586fb0);
 
-    for (const name of ['vkAcquireNextImage2KHR', 'vkQueueSubmit', 'vkQueuePresentKHR', 'vkQueueWaitIdle']) {
-      const symbol = module.symbols.find(s => s.name === name && s.section && s.type === 2), address = module.base + symbol.offset;
+    for (const address of [vkAcquireNextImage2KHR, vkQueueSubmit, vkQueuePresentKHR, vkQueueWaitIdle]) {
       await rpc.request({command: 'verify-function', address, hex: (await rpc.read(address, 32)).toString('hex')});
       verified.add(address);
     }
@@ -259,6 +252,25 @@ async function main(directory, attempt = 'auto') {
 
     await rpc.request({command: 'verify-function', address: touch.target, hex: touch.bytes.slice(0, 64)});
     verified.add(touch.target);
+
+    const data = Buffer.alloc(0x9000), putCtrl = (o, b) => b.copy(data, o), u64 = (o, v) => data.writeBigUInt64LE(BigInt(v), o);
+    putCtrl(0x100, struct(56, 1000060010, {48: 1}, {16: swapchain, 24: 0xffffffffffffffffn, 32: acquired}));
+    u64(0x200, acquired); data.writeUInt32LE(0x400, 0x210); u64(0x220, swapchain); data.writeUInt32LE(32, 0x230);
+    const semObject = control + 0x800; u64(0x850, control + 0x880); report.resources.semaphores.forEach((v, i) => u64(0x880 + i * 8, v));
+    putCtrl(0x600, struct(64, 1000001001, {16: 1, 32: 1}, {24: semObject + 0x28, 40: control + 0x220, 48: control}));
+
+    for (let phase = 0; phase < report.commands.length; phase++) {
+      const o = 0x1000 + phase * 0x100, obj = control + o;
+      u64(o + 0x50, obj + 0x60);
+      report.commands[phase].forEach((v, i) => u64(o + 0x60 + i * 8, v));
+      putCtrl(o + 0x80, struct(72, 4, {16: 1, 40: 1, 56: 1}, {24: control + 0x200, 32: control + 0x210, 48: obj + 0x28, 64: semObject + 0x28}));
+    }
+    await rpc.write(control, data);
+
+    const last = images.length - 1;
+    await rpc.callAddress(lookup, [semObject, last]);
+
+    const sdkRuntime = await require('../sdk/host/runtime.cjs').create({rpc, mapped: report.controls.mapped, directory});
 
     const frameCount = 60;
     const calls = [];
@@ -270,12 +282,12 @@ async function main(directory, attempt = 'auto') {
       const obj = control + 0x1000 + (f % report.commands.length) * 0x100;
       add(input.target, [report.controls.mapped, control + 0x230]);
       add(touch.target, [report.controls.mapped + 128]);
-      add(report.functions.vkAcquireNextImage2KHR, [device.toString(), control + 0x100, control], true);
+      add(vkAcquireNextImage2KHR, [device.toString(), control + 0x100, control], true);
       add(lookup, [obj, {u32: control}]);
       add(lookup, [semObject, {u32: control}]);
-      add(report.functions.vkQueueSubmit, [queue.toString(), 1, obj + 0x80, 0], true);
-      add(report.functions.vkQueuePresentKHR, [queue.toString(), control + 0x600], true);
-      add(report.functions.vkQueueWaitIdle, [queue.toString()], true);
+      add(vkQueueSubmit, [queue.toString(), 1, obj + 0x80, 0], true);
+      add(vkQueuePresentKHR, [queue.toString(), control + 0x600], true);
+      add(vkQueueWaitIdle, [queue.toString()], true);
     }
     add(sdk + timing.tick.offset, []);
 
