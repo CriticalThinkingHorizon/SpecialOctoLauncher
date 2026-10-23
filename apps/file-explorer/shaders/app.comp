@@ -1,0 +1,23 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+void main(){
+ uint pressed=hbPressed();
+ uint buttons=hbButtons();
+ c.game.x=buttons;
+ 
+ uint itemCount = 5u;
+ if((pressed & HB_DOWN) != 0u) {
+  c.game.y = (c.game.y + 1u) % itemCount;
+ }
+ if((pressed & HB_UP) != 0u) {
+  c.game.y = (c.game.y + itemCount - 1u) % itemCount;
+ }
+
+ c.motion.x+=1.0/60.0;c.state.z++;
+ c.transition.x=max(0.0,c.transition.x-1.0/15.0);
+ if(hbConnected() && (pressed&(HB_B|HB_MINUS))!=0u)hbExit();
+ hbEndFrame();
+}
