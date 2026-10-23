@@ -1,6 +1,6 @@
 # Native Functions Reference by Namespace
 
-This document provides a comprehensive reference of native functions available in the SDK definitions, categorized strictly by their native C++ namespaces and classes, along with their mangled symbols, offsets, and argument signatures based on repository abstractions and Horizon OS (`nn`) service standards (cross-referenced with Switchbrew specifications).
+This document provides a comprehensive reference of native functions available in the SDK definitions, categorized strictly by their native C++ namespaces and classes, along with their mangled symbols, offsets, and argument signatures based on repository abstractions and Horizon OS (`nn` / `nn::svc`) service standards (cross-referenced with Switchbrew specifications).
 
 ---
 
@@ -192,7 +192,7 @@ Near Field Communication (NFC / Amiibo) functions.
 | `Finalize` (`nfcFinalize`) | `_ZN2nn3nfc8FinalizeEv` | Finalizes NFC library.<br>**Args:** None (`void`) |
 | `ListDevices` (`nfcList`) | `_ZN2nn3nfc11ListDevicesEPNS0_12DeviceHandleEPii` | Lists connected NFC devices.<br>**Args:** `DeviceHandle *outHandles`, `int *outCount`, `int maxCount` |
 | `StartDetection` (`nfcStart`) | `_ZN2nn3nfc14StartDetectionERKNS0_12DeviceHandleE` | Starts NFC tag detection on a device.<br>**Args:** `const DeviceHandle &handle` |
-| `StopDetection` (`nfcStop`) | `_ZN2nn3sinfc13StopDetectionERKNS0_12DeviceHandleE` | Stops NFC tag detection on a device.<br>**Args:** `const DeviceHandle &handle` |
+| `StopDetection` (`nfcStop`) | `_ZN2nn3nfc13StopDetectionERKNS0_12DeviceHandleE` | Stops NFC tag detection on a device.<br>**Args:** `const DeviceHandle &handle` |
 | `GetTagInfo` (`nfcTag`) | `_ZN2nn3nfc10GetTagInfoEPNS0_7TagInfoERKNS0_12DeviceHandleE` | Gets tag information (UID, type, protocol).<br>**Args:** `TagInfo *outTagInfo`, `const DeviceHandle &handle` |
 | `GetNpadId` (`nfcPad`) | `_ZN2nn3nfc9GetNpadIdEPjRKNS0_12DeviceHandleE` | Gets associated Npad ID for an NFC device.<br>**Args:** `uint32_t *outNpadId`, `const DeviceHandle &handle` |
 
@@ -208,13 +208,34 @@ Audio management and device listing.
 
 ---
 
-## 14. `svc` (Kernel / System Calls)
+## 14. `nn::svc` (Horizon OS Supervisor Calls / System Calls)
 
-Low-level kernel system calls.
+Core kernel system calls (SVCs) invoked via ARM64 `svc #imm` instructions on Horizon OS / Switchbrew specification, utilized by userspace libraries and the IPC bridge:
 
-| Function Name | Symbol | Description & Arguments |
+| SVC Name | SVC Number (Imm) | Description & Arguments |
 | --- | --- | --- |
-| `svcCloseHandle` (`closeHandle`) | `svcCloseHandle` | Closes a kernel handle.<br>**Args:** `nn::svc::Handle handle` |
+| `svcSetHeapSize` | `0x01` | Allocates or resizes the application heap memory region.<br>**Args:** `void **outAddr`, `size_t size` |
+| `svcSetMemoryPermission` | `0x02` | Changes memory region permissions (Read/Write/Execute).<br>**Args:** `uint64_t addr`, `size_t size`, `uint32_t perm` |
+| `svcSetMemoryAttribute` | `0x03` | Modifies memory attributes.<br>**Args:** `uint64_t addr`, `size_t size`, `uint32_t mask`, `uint32_t attr` |
+| `svcMapMemory` | `0x04` | Maps a memory block into another address space.<br>**Args:** `uint64_t destAddr`, `uint64_t srcAddr`, `size_t size` |
+| `svcUnmapMemory` | `0x05` | Unmaps a memory block.<br>**Args:** `uint64_t destAddr`, `uint64_t srcAddr`, `size_t size` |
+| `svcQueryMemory` | `0x06` | Queries information about a memory region.<br>**Args:** `MemoryInfo *outInfo`, `PageInfo *outPageInfo`, `uint64_t addr` |
+| `svcExitProcess` | `0x07` | Terminates the current process.<br>**Args:** None (`void`) |
+| `svcCreateThread` | `0x08` | Creates a new thread.<br>**Args:** `Handle *outHandle`, `uint64_t entryPoint`, `uint64_t arg`, `uint64_t stackTop`, `int32_t priority`, `int32_t coreId` |
+| `svcStartThread` | `0x09` | Starts execution of a created thread.<br>**Args:** `Handle thread` |
+| `svcExitThread` | `0x0a` | Terminates the current thread.<br>**Args:** None (`void`) |
+| `svcSleepThread` | `0x0b` | Sleeps the current thread for a specified nanosecond duration.<br>**Args:** `int64_t ns` |
+| `svcGetThreadPriority` | `0x0c` | Gets thread scheduling priority.<br>**Args:** `int32_t *outPriority`, `Handle thread` |
+| `svcSetThreadPriority` | `0x0d` | Sets thread scheduling priority.<br>**Args:** `Handle thread`, `int32_t priority` |
+| `svcWaitSynchronization` | `0x12` | Waits for a synchronization handle or timeout.<br>**Args:** `int32_t *outIndex`, `const Handle *handles`, `int32_t numHandles`, `int64_t timeout` |
+| `svcCancelSynchronization` | `0x13` | Cancels waiting on a synchronization handle.<br>**Args:** `Handle handle` |
+| `svcCloseHandle` (`closeHandle`) | `0x1e` (`1410028`) | Closes a kernel handle reference.<br>**Args:** `Handle handle` |
+| `svcResetSignal` | `0x1f` | Resets a synchronization signal (event/semaphore).<br>**Args:** `Handle handle` |
+| `svcWaitSynchronizationN` | `0x20` | Waits on multiple synchronization objects (N-handles).<br>**Args:** `int32_t *outIndex`, `const Handle *handles`, `int32_t numHandles`, `int64_t timeout` |
+| `svcSendSyncRequest` | `0x21` | Sends a synchronous IPC request to a service handle (`CMIF` / `HIPC`).<br>**Args:** `Handle sessionHandle` |
+| `svcGetProcessId` | `0x25` | Gets process ID for a process or thread handle.<br>**Args:** `uint64_t *outPid`, `Handle handle` |
+| `svcGetThreadId` | `0x26` | Gets thread ID for a thread handle.<br>**Args:** `uint64_t *outId`, `Handle handle` |
+| `svcOutputDebugString` | `0x3c` | Outputs a debug string to the system logger/debugger.<br>**Args:** `const char *str`, `size_t size` |
 
 ---
 
@@ -225,6 +246,6 @@ Internal utility routines used by the runtime bridge.
 | Key | Offset | Description |
 | --- | --- | --- |
 | `send` | `0x13F270` | Qualified CMIF / IPC send routine |
-| `arguid` | `0x1AE9D0` | Application resource ID query routine (`aruid`) |
+| `aruid` | `0x1AE9D0` | Application resource ID query routine (`aruid`) |
 | `transfer` | `0x1583D4` | Handle transfer helper routine |
 | `copy` | `0x586FB0` | Memory copy / dispatch utility routine |
