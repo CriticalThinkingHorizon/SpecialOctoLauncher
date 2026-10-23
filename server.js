@@ -1,11 +1,11 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const {spawn, execSync} = require('node:child_process');
-const {chooseHost, connectCommand} = require('./smilebasic/connection.cjs');
-const {pairingCode, listen} = require('./smilebasic/engine/lib/connection.cjs');
-const {NativeClient} = require('./smilebasic/engine/lib/native.cjs');
-const {qualify} = require('./smilebasic/engine/lib/qualify.cjs');
-const {serve} = require('./smilebasic/engine/lib/bridge.cjs');
+const {chooseHost, connectCommand} = require('./rpc/connection.cjs');
+const {pairingCode, listen} = require('./rpc/engine-connection.cjs');
+const {NativeClient} = require('./rpc/native.cjs');
+const {qualify} = require('./rpc/qualify.cjs');
+const {serve} = require('./rpc/bridge.cjs');
 
 async function runScript(scriptPath, args = []) {
   return new Promise((resolve, reject) => {
@@ -101,7 +101,7 @@ async function main() {
 
     await fs.mkdir(path.join(directory, 'shared'), {recursive: true});
     await fs.copyFile(
-      path.join(__dirname, 'smilebasic/engine/shared/rpc.cjs'),
+      path.join(__dirname, 'rpc/rpc.cjs'),
       path.join(directory, 'shared/rpc.cjs')
     );
     await fs.writeFile(
@@ -115,27 +115,26 @@ async function main() {
 
     console.log(`Bridge server ready on port ${bridge.port}. Run folder: ${directory}`);
 
-    // Run initialization pipeline asynchronously
-    console.log('\n--- Running Console Initialization Pipeline ---');
+    console.log('\n--- Running Console Inspection & Setup Pipeline ---');
 
-    console.log('\n[1/6] Inspecting Display Imports (VI & NVN Bootstrap)...');
-    await runScript(path.join(__dirname, 'homebrew-launcher/inspect-display.cjs'), [directory]);
+    console.log('\n[1/4] Inspecting Display Imports (VI & NVN Bootstrap)...');
+    await runScript(path.join(__dirname, 'inspection/inspect-display.cjs'), [directory]);
     console.log('✔ Display inspection completed successfully.');
 
-    console.log('\n[2/6] Inspecting Compatibility & Driver Symbol Module...');
-    await runScript(path.join(__dirname, 'homebrew-launcher/inspect-compatibility.cjs'), [directory]);
+    console.log('\n[2/4] Inspecting Compatibility & Driver Symbol Module...');
+    await runScript(path.join(__dirname, 'inspection/inspect-compatibility.cjs'), [directory]);
     console.log('✔ Compatibility inspection completed successfully.');
 
-    console.log('\n[3/6] Inspecting Input & HID State Functions...');
-    await runScript(path.join(__dirname, 'homebrew-launcher/inspect-input.cjs'), [directory]);
+    console.log('\n[3/4] Inspecting Input & HID State Functions...');
+    await runScript(path.join(__dirname, 'inspection/inspect-input.cjs'), [directory]);
     console.log('✔ Input inspection completed successfully.');
 
     console.log('\n[4/4] Setting Up Vulkan Display Resources...');
-    await runScript(path.join(__dirname, 'homebrew-launcher/vulkan-copy.cjs'), [directory, 'display']);
+    await runScript(path.join(__dirname, 'inspection/vulkan-copy.cjs'), [directory, 'display']);
     console.log('✔ Vulkan display setup completed successfully.');
 
     console.log('\n--- Starting Hello World Direct Execution Loop ---');
-    const loopChild = spawn(process.execPath, [path.join(__dirname, 'homebrew-launcher/hello-runner.cjs'), directory, 'auto'], {
+    const loopChild = spawn(process.execPath, [path.join(__dirname, 'runtime/hello-runner.cjs'), directory, 'auto'], {
       cwd: __dirname,
       stdio: 'inherit'
     });
@@ -163,11 +162,6 @@ async function main() {
     await native?.stop();
     console.log('Server stopped.');
   }
-}
-
-function rpcProxy(directory) {
-  const rpc = require(path.join(directory, 'shared/rpc.cjs'));
-  return rpc;
 }
 
 if (require.main === module) {

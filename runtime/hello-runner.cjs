@@ -1,9 +1,11 @@
-// Direct Hello World execution, skipping the Homebrew Launcher in its entirety.
+// Direct Hello World execution and continuous frame loop.
 const fs = require('node:fs/promises'), path = require('node:path'), crypto = require('node:crypto');
 const {journal} = require('./journal.cjs');
 const {create} = require('./native-six.cjs');
 const {prepare} = require('./gpu-app.cjs');
 const catalogTools = require('./app-catalog.cjs');
+const code = require('../rpc/thread-code.json').functions;
+const timing = require('../rpc/timing-code.json').functions;
 const check = (v, m) => { if (!v) throw Error(m); };
 const struct = (size, type, words = {}, pointers = {}) => {
   const b = Buffer.alloc(size);
@@ -15,7 +17,7 @@ const struct = (size, type, words = {}, pointers = {}) => {
 
 async function main(directory, attempt = 'auto') {
   directory = path.resolve(directory);
-  const rpc = require(path.join(directory, 'shared/rpc.cjs'));
+  const rpc = require(path.join(directory, 'shared/rpc.cjs')), sdk = rpc.a.sdk;
   const previous = JSON.parse(await fs.readFile(path.join(directory, 'vulkan-display.json')));
   const module = JSON.parse(await fs.readFile(path.join(directory, 'compatibility-module.json')));
   check(previous.session === rpc.a.session && previous.resourcesRetained, 'Wrong session');
@@ -193,20 +195,88 @@ async function main(directory, attempt = 'auto') {
     await save();
     console.log('Hello World GPU app prepared successfully.');
 
-    const checkFile = path.join(directory, stem + '-check.json');
-    await fs.writeFile(checkFile, JSON.stringify({session: rpc.a.session, passed: true, scratchRestored: true}, null, 2));
+    // Start continuous frame loop
+    const inputInspection = JSON.parse(await fs.readFile(path.join(directory, 'input-inspection.json')));
+    const input = inputInspection.imports['_ZN2nn3hid12GetNpadStateEPNS0_17NpadHandheldStateERKj'];
+    const touch = inputInspection.imports['_ZN2nn3hid19GetTouchScreenStateILm16EEEvPNS0_16TouchScreenStateIXT_EEE'];
 
-    console.log('Starting Hello World continuous loop...');
-    const {spawn} = require('node:child_process');
-    const loopChild = spawn(process.execPath, [path.join(__dirname, 'launcher-loop.cjs'), directory, stem], {
-      cwd: __dirname,
-      stdio: 'inherit'
-    });
+    const temp = rpc.a.scratch + 0x10000, savedScratch = await rpc.read(temp, 8);
+    let base;
+    try {
+      check((await rpc.call(5732112, [temp, 4096, 0x400000])).result === 0n, 'Allocation failed');
+      base = Number((await rpc.read(temp, 8)).readBigUInt64LE());
+    } finally {
+      await rpc.write(temp, savedScratch);
+    }
+    check(base > 0 && base % 4096 === 0, 'Bad allocation');
 
-    await new Promise(resolve => {
-      const done = () => resolve();
-      loopChild.once('close', done);
-    });
+    const control = base + 0x1000;
+    const data = Buffer.alloc(0x9000), putCtrl = (o, b) => b.copy(data, o), u64 = (o, v) => data.writeBigUInt64LE(BigInt(v), o);
+    putCtrl(0x100, struct(56, 1000060010, {48: 1}, {16: swapchain, 24: 0xffffffffffffffffn, 32: acquired}));
+    u64(0x200, acquired); data.writeUInt32LE(0x400, 0x210); u64(0x220, swapchain); data.writeUInt32LE(32, 0x230);
+    const semObject = control + 0x800; u64(0x850, control + 0x880); report.resources.semaphores.forEach((v, i) => u64(0x880 + i * 8, v));
+    putCtrl(0x600, struct(64, 1000001001, {16: 1, 32: 1}, {24: semObject + 0x28, 40: control + 0x220, 48: control}));
+
+    for (let phase = 0; phase < report.commands.length; phase++) {
+      const o = 0x1000 + phase * 0x100, obj = control + o;
+      u64(o + 0x50, obj + 0x60);
+      report.commands[phase].forEach((v, i) => u64(o + 0x60 + i * 8, v));
+      putCtrl(o + 0x80, struct(72, 4, {16: 1, 40: 1, 56: 1}, {24: control + 0x200, 32: control + 0x210, 48: obj + 0x28, 64: semObject + 0x28}));
+    }
+    await rpc.write(control, data);
+
+    const lookup = sdk + 0x45c288;
+    const last = images.length - 1;
+    await rpc.callAddress(lookup, [semObject, last]);
+
+    const sdkRuntime = await require('../sdk/host/runtime.cjs').create({rpc, mapped: report.controls.mapped, directory});
+    const verified = new Set();
+    for (const name of ['vkAcquireNextImage2KHR', 'vkQueueSubmit', 'vkQueuePresentKHR', 'vkQueueWaitIdle']) {
+      const symbol = module.symbols.find(s => s.name === name && s.section && s.type === 2), address = module.base + symbol.offset;
+      verified.add(address);
+    }
+    verified.add(input.target);
+    verified.add(touch.target);
+
+    const frameCount = 60;
+    const calls = [];
+    const add = (fn, args, expectZero = false) => {
+      calls.push({function: fn, args: [...args, ...Array(4 - args.length).fill(0)]});
+    };
+    add(sdk + timing.tick.offset, []);
+    for (let f = 0; f < frameCount; f++) {
+      const obj = control + 0x1000 + (f % report.commands.length) * 0x100;
+      add(input.target, [report.controls.mapped, control + 0x230]);
+      add(touch.target, [report.controls.mapped + 128]);
+      add(report.functions.vkAcquireNextImage2KHR, [device.toString(), control + 0x100, control], true);
+      add(lookup, [obj, {u32: control}]);
+      add(lookup, [semObject, {u32: control}]);
+      add(report.functions.vkQueueSubmit, [queue.toString(), 1, obj + 0x80, 0], true);
+      add(report.functions.vkQueuePresentKHR, [queue.toString(), control + 0x600], true);
+      add(report.functions.vkQueueWaitIdle, [queue.toString()], true);
+    }
+    add(sdk + timing.tick.offset, []);
+
+    const program = await require('../sdk/native/repeating.cjs').prepare(rpc, {base, code, calls, verified});
+    await rpc.call(0x586fb0, [program.live, program.snapshot, program.frame.length]);
+    const pointer = Buffer.alloc(8);
+    pointer.writeBigUInt64LE(BigInt(program.live));
+    await rpc.write(program.selector, pointer);
+
+    check((await rpc.callAddress(sdk + code.create.offset, [base, 0, sdk + code.longjmp.offset, program.live])).result === 0n, 'pthread_create failed');
+    const thread = (await rpc.read(base, 8)).readBigUInt64LE();
+    console.log('HBLauncher continuous native frame loop running.');
+
+    let stop = false;
+    process.on('SIGINT', () => stop = true);
+    process.on('SIGTERM', () => stop = true);
+
+    while (!stop) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+
+    await program.stop();
+    await sdkRuntime.close();
 
   } catch (e) {
     report.error = e.stack;
