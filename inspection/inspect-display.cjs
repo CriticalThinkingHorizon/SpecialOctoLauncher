@@ -27,7 +27,7 @@ async function main(directory) {
       await save();
     }
     // Only interpret this global after matching the implementation that loads it.
-    const reference = require('../smilebasic/reference/sdk-checks.cjs');
+    const reference = require('../rpc/reference/sdk-checks.cjs');
     const offset = 0x3d8200;
     const implementation = await rpc.read(rpc.a.sdk + offset, 32);
     if (!implementation.equals(reference.bytes(offset,32)))

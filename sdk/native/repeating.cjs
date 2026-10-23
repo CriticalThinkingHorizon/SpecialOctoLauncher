@@ -1,5 +1,5 @@
 // Re-enter a restored qualified frame on-console; host requests a clean pthread exit.
-const {build}=require('../../smilebasic/engine/shared/frames.cjs');
+const {build}=require('../../rpc/engine/shared/frames.cjs');
 function frame({base,sdk,calls,code,verified=new Set()}){
  const live=base+0x10000,snapshot=base+0x210000,results=base+0x320000,exit=base+0x350000,selector=base+0x3f0000;
  const padded=calls.map(c=>({...c,args:[...c.args,...Array(4-c.args.length).fill(0)]}));
@@ -21,7 +21,7 @@ async function prepare(rpc,options){
 module.exports={frame,prepare};
 
 async function create(rpc){
- const code=require('../../smilebasic/engine/switch2/app/thread-code.json').functions,sdk=rpc.a.sdk;
+ const code=require('../../rpc/engine/switch2/app/thread-code.json').functions,sdk=rpc.a.sdk;
  for(const f of Object.values(code))await rpc.request({command:'verify-function',address:sdk+f.offset,hex:f.bytes.slice(0,512)});
  await rpc.request({command:'verify-function',address:sdk+0x586fb0,hex:require('./ipc-functions.json').copy.hex});
  const allocation=await rpc.call(5732112,[rpc.output,4096,0x400000]);if(allocation.result!==0n)throw Error('Repeating worker allocation failed');

@@ -1,7 +1,7 @@
 // Bounded native jobs. The console exits its worker even if the host disconnects.
-const {build,SENTINEL}=require('../../smilebasic/engine/shared/frames.cjs');
+const {build,SENTINEL}=require('../../rpc/engine/shared/frames.cjs');
 async function create(rpc){
- const code=require('../../smilebasic/engine/switch2/app/thread-code.json').functions,sdk=rpc.a.sdk;
+ const code=require('../../rpc/engine/switch2/app/thread-code.json').functions,sdk=rpc.a.sdk;
  for(const f of Object.values(code))await rpc.request({command:'verify-function',address:sdk+f.offset,hex:f.bytes.slice(0,512)});
  const a=await rpc.call(5732112,[rpc.output,4096,0x400000]);if(a.result!==0n)throw Error('Finite worker allocation failed');const base=Number(a.output.readBigUInt64LE());if(!Number.isSafeInteger(base)||base<=0||base%4096)throw Error('Invalid finite allocation');let busy=false;
  return {async run(calls){

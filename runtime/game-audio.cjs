@@ -18,7 +18,7 @@ async function main(directory){
  directory=path.resolve(directory);const rpc=require(path.join(directory,'shared/rpc.cjs')),source=JSON.parse(await fs.readFile(path.join(directory,'game-audio-source.json')));
  check(source.session===rpc.a.session,'Game audio belongs to another session');
  const file=path.join(directory,'game-audio.json'),report={session:rpc.a.session,started:new Date().toISOString(),functions:{},resourcesRetained:true,played:0,history:[]};await fs.writeFile(file,'{}',{flag:'wx'});
- const save=()=>fs.writeFile(file,JSON.stringify(report,null,2));const sdkImage=require('../smilebasic/reference/sdk-checks.cjs');
+ const save=()=>fs.writeFile(file,JSON.stringify(report,null,2));const sdkImage=require('../rpc/reference/sdk-checks.cjs');
  async function call(name,...args){
   if(!report.functions[name]){const matches=symbols.filter(s=>s.name.includes(name));check(matches.length===1,'Ambiguous sound symbol '+name);const s=matches[0],address=rpc.a.sdk+s.offset;await rpc.request({command:'verify-function',address,hex:sdkImage.bytes(s.offset,Math.min(32,s.size)).toString('hex')});report.functions[name]=address;}
   return (await rpc.callAddress(report.functions[name],args)).result;

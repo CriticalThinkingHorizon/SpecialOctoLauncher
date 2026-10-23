@@ -1,7 +1,7 @@
 // Six-argument worker using verified instructions from the supported SDK.
 // Runs on an owned pthread and exits through the SDK's pthread_exit.
 const fs=require('node:fs/promises'),path=require('node:path');
-const code=require('../../smilebasic/engine/switch2/app/thread-code.json').functions;
+const code=require('../../rpc/engine/switch2/app/thread-code.json').functions;
 const SENTINEL=0xfedcba9876543210n;
 function frame(base,sdk,target,args){
  if(args.length>6)throw Error('At most six arguments');args=[...args];while(args.length<6)args.push(0);
@@ -16,7 +16,7 @@ function frame(base,sdk,target,args){
  return b;
 }
 async function create(rpc,directory){
- const sdk=rpc.a.sdk,original=require('../../smilebasic/reference/sdk-checks.cjs');
+ const sdk=rpc.a.sdk,original=require('../../rpc/reference/sdk-checks.cjs');
  for(const name of ['create','join','longjmp','loadTable','call4','saveResult64','exit','tryWait']){
   const f=code[name],expected=Buffer.from(f.bytes,'hex').subarray(0,Math.min(256,f.bytes.length/2));
   await rpc.request({command:'verify-function',address:sdk+f.offset,hex:expected.toString('hex')});
