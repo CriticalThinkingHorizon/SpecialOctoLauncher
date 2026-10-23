@@ -6,6 +6,7 @@ const {prepare} = require('./gpu-app.cjs');
 const catalogTools = require('./app-catalog.cjs');
 const code = require('../rpc/thread-code.json').functions;
 const timing = require('../rpc/timing-code.json').functions;
+const sdkImage = require('../rpc/reference/sdk-checks.cjs');
 const check = (v, m) => { if (!v) throw Error(m); };
 const struct = (size, type, words = {}, pointers = {}) => {
   const b = Buffer.alloc(size);
@@ -231,11 +232,32 @@ async function main(directory, attempt = 'auto') {
 
     const sdkRuntime = await require('../sdk/host/runtime.cjs').create({rpc, mapped: report.controls.mapped, directory});
     const verified = new Set();
+
+    for (const c of [...Object.values(code), timing.tick]) {
+      const expected = Buffer.from(c.bytes, 'hex').subarray(0, 256);
+      await rpc.request({command: 'verify-function', address: sdk + c.offset, hex: expected.toString('hex')});
+      verified.add(sdk + c.offset);
+    }
+    await rpc.request({command: 'verify-function', address: lookup, hex: sdkImage.bytes(0x45c288, 16).toString('hex')});
+    verified.add(lookup);
+
+    const freq = module.base + 0x13d6f0;
+    await rpc.request({command: 'verify-function', address: freq, hex: '00ca9a52803ba072c0035fd6'});
+    verified.add(freq);
+
+    await rpc.request({command: 'verify-function', address: sdk + 0x586fb0, hex: require('../sdk/native/ipc-functions.json').copy.hex});
+    verified.add(sdk + 0x586fb0);
+
     for (const name of ['vkAcquireNextImage2KHR', 'vkQueueSubmit', 'vkQueuePresentKHR', 'vkQueueWaitIdle']) {
       const symbol = module.symbols.find(s => s.name === name && s.section && s.type === 2), address = module.base + symbol.offset;
+      await rpc.request({command: 'verify-function', address, hex: (await rpc.read(address, 32)).toString('hex')});
       verified.add(address);
     }
+
+    await rpc.request({command: 'verify-function', address: input.target, hex: input.bytes.slice(0, 64)});
     verified.add(input.target);
+
+    await rpc.request({command: 'verify-function', address: touch.target, hex: touch.bytes.slice(0, 64)});
     verified.add(touch.target);
 
     const frameCount = 60;
@@ -265,7 +287,7 @@ async function main(directory, attempt = 'auto') {
 
     check((await rpc.callAddress(sdk + code.create.offset, [base, 0, sdk + code.longjmp.offset, program.live])).result === 0n, 'pthread_create failed');
     const thread = (await rpc.read(base, 8)).readBigUInt64LE();
-    console.log('HBLauncher continuous native frame loop running.');
+    console.log('Hello World continuous native frame loop running.');
 
     let stop = false;
     process.on('SIGINT', () => stop = true);
