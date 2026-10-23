@@ -5,6 +5,8 @@ layout(local_size_x=1) in;
 #include "hb.glsl"
 void main(){
  uint pressed=hbPressed();
+ uint buttons=hbButtons();
+ c.game.x=buttons;
  c.motion.x+=1.0/60.0;c.state.z++;
  c.transition.x=max(0.0,c.transition.x-1.0/15.0);
  if(hbConnected() && (pressed&(HB_B|HB_MINUS))!=0u)hbExit();
