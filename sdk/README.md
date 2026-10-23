@@ -18,6 +18,7 @@ shader API here matches the execution environment that has actually been tested.
 - [Host API and service protocol](docs/services.md)
 - [Capability matrix and discovery](docs/capabilities.md)
 - [Native ABI, qualification and investigation](docs/native.md)
+- [Native functions reference](docs/native-reference.md)
 - [Package format, graphics, audio and installation](../README.md)
 
 ## Getting started
