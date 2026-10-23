@@ -1,7 +1,8 @@
 const L=require('./layout.cjs');
+const SUPPORTED_CAPABILITIES = ['vibration','nfc','udp','account','time','system','display','fs'];
 function validateManifest(value){
  if(value===undefined)return {capabilities:[],endpoints:[]};
- if(!value||value.version!==1||!Array.isArray(value.capabilities)||value.capabilities.some(x=>!['vibration','nfc','udp'].includes(x)))throw Error('Invalid SDK manifest');
+ if(!value||value.version!==1||!Array.isArray(value.capabilities)||value.capabilities.some(x=>!SUPPORTED_CAPABILITIES.includes(x)))throw Error('Invalid SDK manifest');
  const endpoints=value.endpoints??[];if(!Array.isArray(endpoints)||endpoints.length>8)throw Error('SDK supports at most eight UDP endpoints');
  return {capabilities:[...new Set(value.capabilities)],endpoints:endpoints.map(require('./network.cjs').endpoint)};
 }
@@ -16,7 +17,7 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
   if(!sequence||sequence===lastSequence)return;lastSequence=sequence;
   const op=request.readUInt32LE(4),reply=Buffer.alloc(1056);reply.writeUInt32LE(sequence);
   const config=app?validateManifest(app.manifest.sdk):{capabilities:['vibration','nfc'],endpoints:[]};
-  const capability=({1:'vibration',2:'nfc',3:'udp',4:'vibration'})[op];let status=L.STATUS.ok,payload=Buffer.alloc(0);
+  const capability=({1:'vibration',2:'nfc',3:'udp',4:'vibration',5:'account',6:'time',7:'system',8:'display',9:'fs'})[op];let status=L.STATUS.ok,payload=Buffer.alloc(0);
   try{
    if(!capability||!config.capabilities.includes(capability)){status=L.STATUS.unsupported;}
    else if(op===L.OP.vibrate){
@@ -32,6 +33,12 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
    }else if(op===L.OP.udp){
     const index=request.readUInt32LE(8),length=request.readUInt32LE(12);if(index>=config.endpoints.length||length<1||length>1024){status=L.STATUS.invalid;}
     else{network??=await require('./network.cjs').create(rpc,directory);payload=await network.exchange(config.endpoints[index],request.subarray(32,32+length));}
+   }else if(op===L.OP.time){
+    const timeModule=require('./time.cjs');
+    const t=await (await timeModule.create(rpc)).now();
+    payload=Buffer.alloc(8);payload.writeBigUInt64LE(BigInt(t));
+   }else if(op===L.OP.system){
+    payload=Buffer.alloc(8);payload.writeBigUInt64LE(BigInt(process.pid));
    }
   }catch(error){status=error.code==='ETIMEDOUT'?L.STATUS.timeout:L.STATUS.native;payload=Buffer.from(error.message).subarray(0,1024);}
   reply.writeUInt32LE(status,4);reply.writeUInt32LE(payload.length,8);payload.copy(reply,32);await rpc.write(base+L.FIELD.response,reply);
