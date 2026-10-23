@@ -194,7 +194,7 @@ Near Field Communication (NFC / Amiibo) functions.
 | `StartDetection` (`nfcStart`) | `_ZN2nn3nfc14StartDetectionERKNS0_12DeviceHandleE` | Starts NFC tag detection on a device.<br>**Args:** `const DeviceHandle &handle` |
 | `StopDetection` (`nfcStop`) | `_ZN2nn3nfc13StopDetectionERKNS0_12DeviceHandleE` | Stops NFC tag detection on a device.<br>**Args:** `const DeviceHandle &handle` |
 | `GetTagInfo` (`nfcTag`) | `_ZN2nn3nfc10GetTagInfoEPNS0_7TagInfoERKNS0_12DeviceHandleE` | Gets tag information (UID, type, protocol).<br>**Args:** `TagInfo *outTagInfo`, `const DeviceHandle &handle` |
-| `GetNpadId` (`nfcPad`) | `_ZN2nn3nfc9GetNpadIdEPjRKNS0_12DeviceHandleE` | Gets associated Npad ID for an NFC device.<br>**Args:** `uint32_t *outNpadId`, `const DeviceHandle &handle` |
+| `GetNpadId` (`nfcPad`) | `_ZN2nn3nfc9GetNpadIdEPjRKNS0_12DeviceHandleE` | `@nn::nfc::GetNpadId` — Gets associated Npad ID for an NFC device.<br>**Args:** `uint32_t *outNpadId`, `const DeviceHandle &handle` |
 
 ---
 
@@ -208,9 +208,9 @@ Audio management and device listing.
 
 ---
 
-## 14. `nn::svc` (Horizon OS Supervisor Calls / System Calls)
+## 14. Horizon OS Supervisor Calls (SVCs)
 
-Core kernel system calls (SVCs) invoked via ARM64 `svc #imm` instructions on Horizon OS / Switchbrew specification, utilized by userspace libraries and the IPC bridge:
+> **Note on Symbol Matching:** Unlike high-level userspace C++ SDK functions (which contain exported mangled symbols in the MOD0 symbol table), individual **SVC instructions** (such as `svcSetHeapSize`, `svcSendSyncRequest`, `svcSleepThread`) are direct ARM64 kernel trap instructions (`svc #imm`) rather than linked library symbols. Consequently, they do not appear as standard exported function symbols in the application/SDK symbol table. However, helper stubs and low-level kernel handle operations (such as `svcCloseHandle`) are explicitly resolved and checked by the runtime bridge.
 
 | SVC Name | SVC Number (Imm) | Description & Arguments |
 | --- | --- | --- |
