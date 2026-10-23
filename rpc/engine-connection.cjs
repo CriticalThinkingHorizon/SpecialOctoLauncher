@@ -145,7 +145,7 @@ async function listen({host, port, token, onWaiting, onRejected, timeout = 30 * 
       });
     });
     timer = setTimeout(() => fail(Error('No console connected before the pairing deadline')), timeout);
-    server.listen(port, host, () => {
+    server.listen(port, () => {
       try {onWaiting?.();}
       catch (error) {fail(error);}
     });
