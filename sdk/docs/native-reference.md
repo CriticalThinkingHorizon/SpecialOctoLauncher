@@ -52,7 +52,25 @@ Filesystem and save data management functions.
 
 ---
 
-## 3. `nn::hid`
+## 3. `nn::sm`
+
+Service Manager (`nn::sm::detail::IUserInterface` and `nn::sm::detail::IManagerInterface`) for discovering services and registering processes.
+
+| Function Name | C++ Symbol | Description & Arguments |
+| --- | --- | --- |
+| `Initialize` | `_ZN2nn2sm10InitializeEv` | Initializes the Service Manager client library.<br>**Args:** None (`void`) |
+| `Finalize` | `_ZN2nn2sm8FinalizeEv` | Finalizes the Service Manager client library.<br>**Args:** None (`void`) |
+| `GetServiceHandle` (`service`) | `_ZN2nn2sm16GetServiceHandleEPNS_3svc6HandleEPKcm` | Gets a registered service handle by name (`IUserInterface::GetServiceHandle`).<br>**Args:** `nn::svc::Handle *outHandle`, `const char *serviceName`, `size_t nameLength` |
+| `RegisterService` | `_ZN2nn2sm15RegisterServiceEPNS_3svc6HandleEPKcmib` | Registers a service (`IUserInterface::RegisterService`).<br>**Args:** `nn::svc::Handle *outHandle`, `const char *serviceName`, `size_t nameLength`, `int maxSessions`, `bool isLight` |
+| `UnregisterService` | `_ZN2nn2sm17UnregisterServiceEPKcm` | Unregisters a service (`IUserInterface::UnregisterService`).<br>**Args:** `const char *serviceName`, `size_t nameLength` |
+| `InitializeForManager` | `_ZN2nn2sm20InitializeForManagerEv` | Initializes Service Manager for manager client.<br>**Args:** None (`void`) |
+| `FinalizeForManager` | `_ZN2nn2sm18FinalizeForManagerEv` | Finalizes Service Manager for manager client.<br>**Args:** None (`void`) |
+| `RegisterProcess` | `_ZN2nn2sm15RegisterProcessENS_2os9ProcessIdEPKvmS4_m` | Registers a process and access rights (`IManagerInterface::RegisterProcess`).<br>**Args:** `nn::os::ProcessId pid`, `const void *accessRightsLimit`, `size_t limitSize`, `const void *accessRights`, `size_t rightsSize` |
+| `UnregisterProcess` | `_ZN2nn2sm17UnregisterProcessENS_2os9ProcessIdE` | Unregisters a process (`IManagerInterface::UnregisterProcess`).<br>**Args:** `nn::os::ProcessId pid` |
+
+---
+
+## 4. `nn::hid`
 
 Controller handles and state management functions in the public `nn::hid` namespace.
 
@@ -68,7 +86,7 @@ Controller handles and state management functions in the public `nn::hid` namesp
 
 ---
 
-## 4. `nn::hid::detail`
+## 5. `nn::hid::detail`
 
 Detailed or internal HID, motion, vibration, keyboard, mouse, and peripheral support functions.
 
@@ -89,7 +107,7 @@ Detailed or internal HID, motion, vibration, keyboard, mouse, and peripheral sup
 
 ---
 
-## 5. `nn::vi`
+## 6. `nn::vi`
 
 VI (Video Interface) display, layer, and window management.
 
@@ -105,7 +123,7 @@ VI (Video Interface) display, layer, and window management.
 
 ---
 
-## 6. `nn::account`
+## 7. `nn::account`
 
 User account management and authorization services.
 
@@ -116,7 +134,7 @@ User account management and authorization services.
 
 ---
 
-## 7. `nn::time`
+## 8. `nn::time`
 
 Time service, system clocks, and calendar time conversion.
 
@@ -127,7 +145,7 @@ Time service, system clocks, and calendar time conversion.
 
 ---
 
-## 8. `nn::os`
+## 9. `nn::os`
 
 Operating system synchronization primitives, thread management, and memory heap info.
 
@@ -138,16 +156,6 @@ Operating system synchronization primitives, thread management, and memory heap 
 | `GetHostArgc` | `_ZN2nn2os11GetHostArgcEv` | Gets host command-line argument count (`argc`).<br>**Args:** None (`void`) |
 | `GetHostArgv` | `_ZN2nn2os11GetHostArgvEv` | Gets host command-line argument values (`argv`).<br>**Args:** None (`void`) |
 | `InitializeMessageQueue` | `_ZN2nn2os22InitializeMessageQueueEPNS0_16MessageQueueTypeEPmm` | Initializes an OS message queue buffer.<br>**Args:** `MessageQueueType *outQueue`, `void *buffer`, `size_t bufferSize` |
-
----
-
-## 9. `nn::sm`
-
-Service manager functions.
-
-| Function Name | C++ Symbol | Description & Arguments |
-| --- | --- | --- |
-| `GetServiceHandle` (`service`) | `_ZN2nn2sm16GetServiceHandleEPNS_3svc6HandleEPKcm` | Gets a registered service handle from SM.<br>**Args:** `nn::svc::Handle *outHandle`, `const char *serviceName`, `size_t nameLength` |
 
 ---
 
@@ -184,7 +192,7 @@ Near Field Communication (NFC / Amiibo) functions.
 | `Finalize` (`nfcFinalize`) | `_ZN2nn3nfc8FinalizeEv` | Finalizes NFC library.<br>**Args:** None (`void`) |
 | `ListDevices` (`nfcList`) | `_ZN2nn3nfc11ListDevicesEPNS0_12DeviceHandleEPii` | Lists connected NFC devices.<br>**Args:** `DeviceHandle *outHandles`, `int *outCount`, `int maxCount` |
 | `StartDetection` (`nfcStart`) | `_ZN2nn3nfc14StartDetectionERKNS0_12DeviceHandleE` | Starts NFC tag detection on a device.<br>**Args:** `const DeviceHandle &handle` |
-| `StopDetection` (`nfcStop`) | `_ZN2nn3nfc13StopDetectionERKNS0_12DeviceHandleE` | Stops NFC tag detection on a device.<br>**Args:** `const DeviceHandle &handle` |
+| `StopDetection` (`nfcStop`) | `_ZN2nn3sinfc13StopDetectionERKNS0_12DeviceHandleE` | Stops NFC tag detection on a device.<br>**Args:** `const DeviceHandle &handle` |
 | `GetTagInfo` (`nfcTag`) | `_ZN2nn3nfc10GetTagInfoEPNS0_7TagInfoERKNS0_12DeviceHandleE` | Gets tag information (UID, type, protocol).<br>**Args:** `TagInfo *outTagInfo`, `const DeviceHandle &handle` |
 | `GetNpadId` (`nfcPad`) | `_ZN2nn3nfc9GetNpadIdEPjRKNS0_12DeviceHandleE` | Gets associated Npad ID for an NFC device.<br>**Args:** `uint32_t *outNpadId`, `const DeviceHandle &handle` |
 
@@ -217,6 +225,6 @@ Internal utility routines used by the runtime bridge.
 | Key | Offset | Description |
 | --- | --- | --- |
 | `send` | `0x13F270` | Qualified CMIF / IPC send routine |
-| `aruid` | `0x1AE9D0` | Application resource ID query routine |
+| `arguid` | `0x1AE9D0` | Application resource ID query routine (`aruid`) |
 | `transfer` | `0x1583D4` | Handle transfer helper routine |
 | `copy` | `0x586FB0` | Memory copy / dispatch utility routine |
