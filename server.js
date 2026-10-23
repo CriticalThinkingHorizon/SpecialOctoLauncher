@@ -133,8 +133,9 @@ async function main() {
     await runScript(path.join(__dirname, 'inspection/vulkan-copy.cjs'), [directory, 'display']);
     console.log('✔ Vulkan display setup completed successfully.');
 
-    console.log('\n--- Starting Hello World Direct Execution Loop ---');
-    const loopChild = spawn(process.execPath, [path.join(__dirname, 'runtime/hello-runner.cjs'), directory, 'auto'], {
+    const targetApp = process.argv[3] || 'file-explorer';
+    console.log(`\n--- Starting ${targetApp} Direct Execution Loop ---`);
+    const loopChild = spawn(process.execPath, [path.join(__dirname, 'runtime/hello-runner.cjs'), directory, 'auto', targetApp], {
       cwd: __dirname,
       stdio: 'inherit'
     });

@@ -28,7 +28,8 @@ async function main(directory, attempt = 'auto') {
   const file = path.join(directory, stem + '.json');
   await fs.writeFile(file, '{}', {flag: 'wx'});
 
-  const app = await catalogTools.readApp(path.join(__dirname, '../apps/hello-world'));
+  const appName = process.argv[4] || 'hello-world';
+  const app = await catalogTools.readApp(path.join(__dirname, '../apps', appName));
   const report = {purpose: 'Hello World direct GPU execution', session: rpc.a.session, started: new Date().toISOString(), resourcesRetained: true, functions: {}, commands: []};
   const save = () => fs.writeFile(file, JSON.stringify(report, null, 2)), tracked = journal(report, save), fn = report.functions;
 
