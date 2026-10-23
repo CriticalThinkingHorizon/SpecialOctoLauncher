@@ -1,6 +1,6 @@
 # Native Functions Reference by Namespace
 
-This document provides a comprehensive reference of native functions available in the SDK definitions, categorized strictly by their native C++ namespaces and classes, along with their mangled symbols, offsets, and argument signatures based on repository abstractions and Horizon OS (`nn` / `nn::svc`) service standards (cross-referenced with Switchbrew specifications).
+This document provides a comprehensive reference of native functions available in the SDK definitions, categorized strictly by their native C++ namespaces and classes, along with their mangled symbols, offsets, and argument signatures based on repository abstractions and functions present in the loaded module's MOD0 export symbol table.
 
 ---
 
@@ -54,7 +54,7 @@ Filesystem and save data management functions.
 
 ## 3. `nn::sm`
 
-Service Manager (`nn::sm::detail::IUserInterface` and `nn::sm::detail::IManagerInterface`) for discovering services and registering processes.
+Service Manager (`nn::sm::detail::IUserInterface` and `nn::sm::detail::IManagerInterface`) exported symbols present in the MOD0 symbol table.
 
 | Function Name | C++ Symbol | Description & Arguments |
 | --- | --- | --- |
@@ -194,7 +194,7 @@ Near Field Communication (NFC / Amiibo) functions.
 | `StartDetection` (`nfcStart`) | `_ZN2nn3nfc14StartDetectionERKNS0_12DeviceHandleE` | Starts NFC tag detection on a device.<br>**Args:** `const DeviceHandle &handle` |
 | `StopDetection` (`nfcStop`) | `_ZN2nn3nfc13StopDetectionERKNS0_12DeviceHandleE` | Stops NFC tag detection on a device.<br>**Args:** `const DeviceHandle &handle` |
 | `GetTagInfo` (`nfcTag`) | `_ZN2nn3nfc10GetTagInfoEPNS0_7TagInfoERKNS0_12DeviceHandleE` | Gets tag information (UID, type, protocol).<br>**Args:** `TagInfo *outTagInfo`, `const DeviceHandle &handle` |
-| `GetNpadId` (`nfcPad`) | `_ZN2nn3nfc9GetNpadIdEPjRKNS0_12DeviceHandleE` | `@nn::nfc::GetNpadId` — Gets associated Npad ID for an NFC device.<br>**Args:** `uint32_t *outNpadId`, `const DeviceHandle &handle` |
+| `GetNpadId` (`nfcPad`) | `_ZN2nn3nfc9GetNpadIdEPjRKNS0_12DeviceHandleE` | Gets associated Npad ID for an NFC device.<br>**Args:** `uint32_t *outNpadId`, `const DeviceHandle &handle` |
 
 ---
 
@@ -208,38 +208,7 @@ Audio management and device listing.
 
 ---
 
-## 14. Horizon OS Supervisor Calls (SVCs)
-
-> **Note on Symbol Matching:** Unlike high-level userspace C++ SDK functions (which contain exported mangled symbols in the MOD0 symbol table), individual **SVC instructions** (such as `svcSetHeapSize`, `svcSendSyncRequest`, `svcSleepThread`) are direct ARM64 kernel trap instructions (`svc #imm`) rather than linked library symbols. Consequently, they do not appear as standard exported function symbols in the application/SDK symbol table. However, helper stubs and low-level kernel handle operations (such as `svcCloseHandle`) are explicitly resolved and checked by the runtime bridge.
-
-| SVC Name | SVC Number (Imm) | Description & Arguments |
-| --- | --- | --- |
-| `svcSetHeapSize` | `0x01` | Allocates or resizes the application heap memory region.<br>**Args:** `void **outAddr`, `size_t size` |
-| `svcSetMemoryPermission` | `0x02` | Changes memory region permissions (Read/Write/Execute).<br>**Args:** `uint64_t addr`, `size_t size`, `uint32_t perm` |
-| `svcSetMemoryAttribute` | `0x03` | Modifies memory attributes.<br>**Args:** `uint64_t addr`, `size_t size`, `uint32_t mask`, `uint32_t attr` |
-| `svcMapMemory` | `0x04` | Maps a memory block into another address space.<br>**Args:** `uint64_t destAddr`, `uint64_t srcAddr`, `size_t size` |
-| `svcUnmapMemory` | `0x05` | Unmaps a memory block.<br>**Args:** `uint64_t destAddr`, `uint64_t srcAddr`, `size_t size` |
-| `svcQueryMemory` | `0x06` | Queries information about a memory region.<br>**Args:** `MemoryInfo *outInfo`, `PageInfo *outPageInfo`, `uint64_t addr` |
-| `svcExitProcess` | `0x07` | Terminates the current process.<br>**Args:** None (`void`) |
-| `svcCreateThread` | `0x08` | Creates a new thread.<br>**Args:** `Handle *outHandle`, `uint64_t entryPoint`, `uint64_t arg`, `uint64_t stackTop`, `int32_t priority`, `int32_t coreId` |
-| `svcStartThread` | `0x09` | Starts execution of a created thread.<br>**Args:** `Handle thread` |
-| `svcExitThread` | `0x0a` | Terminates the current thread.<br>**Args:** None (`void`) |
-| `svcSleepThread` | `0x0b` | Sleeps the current thread for a specified nanosecond duration.<br>**Args:** `int64_t ns` |
-| `svcGetThreadPriority` | `0x0c` | Gets thread scheduling priority.<br>**Args:** `int32_t *outPriority`, `Handle thread` |
-| `svcSetThreadPriority` | `0x0d` | Sets thread scheduling priority.<br>**Args:** `Handle thread`, `int32_t priority` |
-| `svcWaitSynchronization` | `0x12` | Waits for a synchronization handle or timeout.<br>**Args:** `int32_t *outIndex`, `const Handle *handles`, `int32_t numHandles`, `int64_t timeout` |
-| `svcCancelSynchronization` | `0x13` | Cancels waiting on a synchronization handle.<br>**Args:** `Handle handle` |
-| `svcCloseHandle` (`closeHandle`) | `0x1e` (`1410028`) | Closes a kernel handle reference.<br>**Args:** `Handle handle` |
-| `svcResetSignal` | `0x1f` | Resets a synchronization signal (event/semaphore).<br>**Args:** `Handle handle` |
-| `svcWaitSynchronizationN` | `0x20` | Waits on multiple synchronization objects (N-handles).<br>**Args:** `int32_t *outIndex`, `const Handle *handles`, `int32_t numHandles`, `int64_t timeout` |
-| `svcSendSyncRequest` | `0x21` | Sends a synchronous IPC request to a service handle (`CMIF` / `HIPC`).<br>**Args:** `Handle sessionHandle` |
-| `svcGetProcessId` | `0x25` | Gets process ID for a process or thread handle.<br>**Args:** `uint64_t *outPid`, `Handle handle` |
-| `svcGetThreadId` | `0x26` | Gets thread ID for a thread handle.<br>**Args:** `uint64_t *outId`, `Handle handle` |
-| `svcOutputDebugString` | `0x3c` | Outputs a debug string to the system logger/debugger.<br>**Args:** `const char *str`, `size_t size` |
-
----
-
-## 15. Internal / Low-Level IPC Helpers (`ipc-functions.json`)
+## 14. Internal / Low-Level IPC Helpers (`ipc-functions.json`)
 
 Internal utility routines used by the runtime bridge.
 
