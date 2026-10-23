@@ -1,6 +1,6 @@
 # Native Functions Reference by Namespace
 
-This document provides a complete reference of all native functions available in the SDK definitions, categorized strictly by their native C++ namespaces and classes, along with their mangled symbols, offsets, and argument signatures based on the repository's abstractions.
+This document provides a comprehensive reference of native functions available in the SDK definitions, categorized strictly by their native C++ namespaces and classes, along with their mangled symbols, offsets, and argument signatures based on repository abstractions and Horizon OS (`nn`) service standards (cross-referenced with Switchbrew specifications).
 
 ---
 
@@ -89,7 +89,59 @@ Detailed or internal HID, motion, vibration, keyboard, mouse, and peripheral sup
 
 ---
 
-## 5. `nn::sm`
+## 5. `nn::vi`
+
+VI (Video Interface) display, layer, and window management.
+
+| Function Name | C++ Symbol | Description & Arguments |
+| --- | --- | --- |
+| `Initialize` | `_ZN2nn2vi10InitializeEv` | Initializes the VI service subsystem.<br>**Args:** None (`void`) |
+| `Finalize` | `_ZN2nn2vi8FinalizeEv` | Finalizes the VI service subsystem.<br>**Args:** None (`void`) |
+| `OpenDefaultDisplay` | `_ZN2nn2vi18OpenDefaultDisplayEPPNS0_7DisplayE` | Opens the system default display.<br>**Args:** `Display **outDisplay` |
+| `CloseDisplay` | `_ZN2nn2vi12CloseDisplayEPNS0_7DisplayE` | Closes an open display handle.<br>**Args:** `Display *display` |
+| `CreateLayer` | `_ZN2nn2vi11CreateLayerEPPNS0_5LayerEPNS0_7DisplayE` | Creates a rendering layer on a display.<br>**Args:** `Layer **outLayer`, `Display *display` |
+| `DestroyLayer` | `_ZN2nn2vi12DestroyLayerEPNS0_5LayerE` | Destroys an existing rendering layer.<br>**Args:** `Layer *layer` |
+| `GetNativeWindow` | `_ZN2nn2vi15GetNativeWindowEPPvPNS0_5LayerE` | Gets native window handle for NVN / graphics backend binding.<br>**Args:** `void **outNativeWindow`, `Layer *layer` |
+
+---
+
+## 6. `nn::account`
+
+User account management and authorization services.
+
+| Function Name | C++ Symbol | Description & Arguments |
+| --- | --- | --- |
+| `OpenUser` | `_ZN2nn7account8OpenUserEPNS0_10UserHandleERKNS0_3UidE` | Opens a user handle for a given user ID (`Uid`).<br>**Args:** `UserHandle *outUserHandle`, const `Uid &uid` |
+| `GetUserId` | `_ZN2nn7account6detail9GetUserIdERKNS0_10UserHandleE` | Extracts user ID (`Uid`) from an open user handle.<br>**Args:** `const UserHandle &userHandle` |
+
+---
+
+## 7. `nn::time`
+
+Time service, system clocks, and calendar time conversion.
+
+| Function Name | C++ Symbol | Description & Arguments |
+| --- | --- | --- |
+| `StandardSteadyClock::now` | `_ZN2nn4time19StandardSteadyClock3nowEv` | Gets current monotonic steady clock time point.<br>**Args:** None (`void`) |
+| `ToPosixTimeFromUtc` | `_ZN2nn4time18ToPosixTimeFromUtcERKNS0_12CalendarTimeE` | Converts calendar time to POSIX timestamp.<br>**Args:** `const CalendarTime &calendarTime` |
+
+---
+
+## 8. `nn::os`
+
+Operating system synchronization primitives, thread management, and memory heap info.
+
+| Function Name | C++ Symbol | Description & Arguments |
+| --- | --- | --- |
+| `GetMemoryHeapSize` | `_ZN2nn2os17GetMemoryHeapSizeEv` | Gets current application memory heap size.<br>**Args:** None (`void`) |
+| `GetCurrentCoreNumber` | `_ZN2nn2os20GetCurrentCoreNumberEv` | Gets ID of currently executing CPU core.<br>**Args:** None (`void`) |
+| `GetHostArgc` | `_ZN2nn2os11GetHostArgcEv` | Gets host command-line argument count (`argc`).<br>**Args:** None (`void`) |
+| `GetHostArgv` | `_ZN2nn2os11GetHostArgvEv` | Gets host command-line argument values (`argv`).<br>**Args:** None (`void`) |
+| `InitializeMessageQueue` | `_ZN2nn2os22InitializeMessageQueueEPNS0_16MessageQueueTypeEPmm` | Initializes an OS message queue buffer.<br>**Args:** `MessageQueueType *outQueue`, `void *buffer`, `size_t bufferSize` |
+
+---
+
+## 9. `nn::sm`
 
 Service manager functions.
 
@@ -99,7 +151,7 @@ Service manager functions.
 
 ---
 
-## 6. `nn::nifm`
+## 10. `nn::nifm`
 
 Network interface manager functions.
 
@@ -110,7 +162,7 @@ Network interface manager functions.
 
 ---
 
-## 7. `nn::irsensor::detail`
+## 11. `nn::irsensor::detail`
 
 IR camera sensor details and data acquisition.
 
@@ -121,7 +173,7 @@ IR camera sensor details and data acquisition.
 
 ---
 
-## 8. `nn::nfc`
+## 12. `nn::nfc`
 
 Near Field Communication (NFC / Amiibo) functions.
 
@@ -138,7 +190,7 @@ Near Field Communication (NFC / Amiibo) functions.
 
 ---
 
-## 9. `nn::audio`
+## 13. `nn::audio`
 
 Audio management and device listing.
 
@@ -148,7 +200,7 @@ Audio management and device listing.
 
 ---
 
-## 10. `svc` (Kernel / System Calls)
+## 14. `svc` (Kernel / System Calls)
 
 Low-level kernel system calls.
 
@@ -158,7 +210,7 @@ Low-level kernel system calls.
 
 ---
 
-## 11. Internal / Low-Level IPC Helpers (`ipc-functions.json`)
+## 15. Internal / Low-Level IPC Helpers (`ipc-functions.json`)
 
 Internal utility routines used by the runtime bridge.
 
