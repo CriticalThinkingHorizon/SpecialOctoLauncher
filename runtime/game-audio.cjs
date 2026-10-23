@@ -1,6 +1,6 @@
 // Synthesized game effects. No ROM, downloaded samples, or injected CPU code.
 const fs=require('node:fs/promises'),path=require('node:path');
-const symbols=require('./audio-symbols.json');
+const symbols=require('../inspection/audio-symbols.json');
 const check=(v,m)=>{if(!v)throw Error(m);};
 function synth(kind){
  const rate=48000,duration=[0,.035,.065,.11,.32,.45,.08,.18][kind],frames=Math.ceil(rate*duration),pcm=Buffer.alloc(frames*4);

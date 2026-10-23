@@ -34,7 +34,7 @@ async function main(directory,mode='copy',attempt){
  let instance=0n,device=0n,pool=0n,image=0n,imageView=0n,submitted=false,finished=false;
  let layer=0,display=0n,layerOpened=false,surface=0n,swapchain=0n,acquireSemaphore=0n,presentSemaphore=0n,imageIndex=0;
  let retainDisplayResources=false;
- const sdk=require('../rpc/engine/shared/sdk-functions.json');
+ const sdk=require('../rpc/sdk-functions.json');
  const sdkCall=(name,...args)=>tracked('sdk.'+name,args,async()=>(await rpc.call(sdk[name].offset,args)).result);
  const buffers=[],memories=[];
  try{

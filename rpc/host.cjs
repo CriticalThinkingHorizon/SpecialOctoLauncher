@@ -2,10 +2,10 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const {chooseHost, connectCommand} = require('./connection.cjs');
-const {pairingCode, listen} = require('./engine/lib/connection.cjs');
-const {NativeClient} = require('./engine/lib/native.cjs');
-const {qualify} = require('./engine/lib/qualify.cjs');
-const {serve} = require('./engine/lib/bridge.cjs');
+const {pairingCode, listen} = require('./engine-connection.cjs');
+const {NativeClient} = require('./native.cjs');
+const {qualify} = require('./qualify.cjs');
+const {serve} = require('./bridge.cjs');
 
 async function main() {
   const host = await chooseHost(process.argv.slice(2)), token = pairingCode();
@@ -14,9 +14,12 @@ async function main() {
   const record = {started: new Date().toISOString(), purpose: 'HBLauncher SmileBASIC session'};
   let native, pico, bridge;
   try {
-    const key = (await fs.readFile(path.join(__dirname, 'pico-keyboard/secret'), 'utf8')).trim();
-    pico = await require('./pico-keyboard/host.cjs').start({host, command: connectCommand(host, token), key,
-      onStatus: console.log});
+    let key = '';
+    try {
+      key = (await fs.readFile(path.join(__dirname, 'pico-keyboard/secret'), 'utf8')).trim();
+      pico = await require('./pico-keyboard/host.cjs').start({host, command: connectCommand(host, token), key,
+        onStatus: console.log});
+    } catch (e) {}
     const connected = await listen({host, port: 39380, token, onRejected: console.error,
       onWaiting() {console.log('Graphics listener ready. Reconnect the Pico in fresh SmileBASIC Direct mode.');
         console.log('Run folder: ' + directory);}});

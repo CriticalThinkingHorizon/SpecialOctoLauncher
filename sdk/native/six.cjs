@@ -1,7 +1,7 @@
 // Six-argument worker using verified instructions from the supported SDK.
 // Runs on an owned pthread and exits through the SDK's pthread_exit.
 const fs=require('node:fs/promises'),path=require('node:path');
-const code=require('../../rpc/engine/switch2/app/thread-code.json').functions;
+const code=require('../../rpc/thread-code.json').functions;
 const SENTINEL=0xfedcba9876543210n;
 function frame(base,sdk,target,args){
  if(args.length>6)throw Error('At most six arguments');args=[...args];while(args.length<6)args.push(0);
