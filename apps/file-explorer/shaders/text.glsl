@@ -1,3 +1,10 @@
-const ivec4 TEXT_TITLE = ivec4(2, 2, 362, 59);
-const ivec4 TEXT_SUBTITLE = ivec4(2, 69, 417, 26);
-const ivec4 TEXT_HINT = ivec4(2, 103, 393, 22);
+const ivec4 TEXT_TITLE = ivec4(2, 2, 272, 45);
+const ivec4 TEXT_SUBTITLE = ivec4(2, 55, 247, 20);
+const ivec4 TEXT_HINT = ivec4(2, 83, 323, 19);
+const ivec4 ITEM_0 = ivec4(2, 110, 142, 17);
+const ivec4 ITEM_1 = ivec4(2, 135, 51, 18);
+const ivec4 ITEM_2 = ivec4(2, 161, 106, 22);
+const ivec4 ITEM_3 = ivec4(2, 191, 33, 18);
+const ivec4 ITEM_4 = ivec4(2, 217, 46, 13);
+const ivec4 ITEM_5 = ivec4(2, 238, 79, 17);
+const ivec4 ITEM_6 = ivec4(2, 263, 69, 22);

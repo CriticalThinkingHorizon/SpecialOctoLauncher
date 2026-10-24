@@ -4,7 +4,7 @@
   "id": "file-explorer",
   "name": "File Explorer",
   "version": "1.0.0",
-  "description": "Built with HB SDK",
+  "description": "Read-only file explorer using HB SDK",
   "icon": "assets/icon.png",
   "initialState": "assets/state.bin",
   "data": "assets/text.bin",
@@ -15,6 +15,6 @@
   },
   "sdk": {
     "version": 1,
-    "capabilities": []
+    "capabilities": ["fs"]
   }
 }

@@ -8,7 +8,7 @@ void main(){
  uint buttons=hbButtons();
  c.game.x=buttons;
  
- uint itemCount = 5u;
+ uint itemCount = 7u;
  if((pressed & HB_DOWN) != 0u) {
   c.game.y = (c.game.y + 1u) % itemCount;
  }
