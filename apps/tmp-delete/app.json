@@ -1,0 +1,16 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "tmp-delete",
+  "name": "TMP Cleaner (Delete tmptest)",
+  "version": "1.0.0",
+  "description": "Checks if tmp:/tmptest exists and deletes it if present",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  }
+}

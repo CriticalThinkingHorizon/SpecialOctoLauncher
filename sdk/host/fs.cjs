@@ -292,6 +292,58 @@ async function create(rpc) {
       logLines.push('=== TMP:/ PERSISTENCE TEST (tmp:/tmptest) ===');
       logLines.push('');
 
+      if (action === 2) {
+        logLines[0] = '=== TMP:/ CLEANER APP (Delete tmp:/tmptest) ===';
+        await client.write(typeOff, Buffer.alloc(8));
+        const checkRes = await client.result('GetEntryType', [client.base + typeOff, client.base + pathOff]);
+        const existedBefore = (checkRes === 0);
+
+        logLines.push('[STEP 1] Check if tmp:/tmptest exists:');
+        logLines.push(`  GetEntryType("tmp:/tmptest") -> 0x${checkRes.toString(16)}`);
+        if (existedBefore) {
+          logLines.push('  STATUS: FOUND tmp:/tmptest!');
+        } else {
+          logLines.push('  STATUS: DOES NOT EXIST (Already Clean)');
+        }
+        logLines.push('');
+
+        let delRes = 0;
+        if (existedBefore) {
+          logLines.push('[STEP 2] Deleting tmp:/tmptest:');
+          delRes = await client.result('DeleteFile', [client.base + pathOff]);
+          logLines.push(`  nn::fs::DeleteFile("tmp:/tmptest") -> 0x${delRes.toString(16)}`);
+          if (delRes === 0) {
+            logLines.push('  STATUS: DELETED SUCCESSFULLY!');
+          } else {
+            logLines.push('  STATUS: DELETE FAILED!');
+          }
+        } else {
+          logLines.push('[STEP 2] DeleteFile skipped (file not present).');
+        }
+        logLines.push('');
+
+        await client.write(typeOff, Buffer.alloc(8));
+        const afterRes = await client.result('GetEntryType', [client.base + typeOff, client.base + pathOff]);
+        logLines.push('[STEP 3] Verify deletion:');
+        logLines.push(`  GetEntryType("tmp:/tmptest") -> 0x${afterRes.toString(16)}`);
+        logLines.push(afterRes !== 0 ? '  STATUS: CONFIRMED REMOVED (0x202)' : '  STATUS: STILL PRESENT!');
+
+        const dirListing = await this.listDirectory('tmp:/', 10, 0);
+        const names = dirListing.entries.map(e => `${e.name} (${e.size}B)`).join(', ');
+        logLines.push('');
+        logLines.push(`[TMP:/ DIR] ${names || '(empty)'}`);
+        logLines.push('------------------------------------------------');
+        logLines.push('A: Re-check & Delete             -: Exit to Menu');
+
+        return {
+          result: 0,
+          existedBefore: existedBefore ? 1 : 0,
+          createRes: delRes,
+          openRes: afterRes,
+          lines: logLines
+        };
+      }
+
       if (action === 1) {
         logLines.push('[ACTION] Deleting tmp:/tmptest...');
         const delRes = await client.result('DeleteFile', [client.base + pathOff]);

@@ -98,7 +98,9 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
      }
     }else if(subOp===4){
      const action=request.readUInt32LE(12)||0;
-     const res=await fsService.testTmpFile(action);
+     delete require.cache[require.resolve('./fs.cjs')];
+     const activeFs=action===2?await require('./fs.cjs').create(rpc):fsService;
+     const res=await activeFs.testTmpFile(action);
      payload=Buffer.alloc(16+res.lines.length*48);
      payload.writeUInt32LE(res.lines.length,0);
      payload.writeUInt32LE(res.existedBefore,4);
