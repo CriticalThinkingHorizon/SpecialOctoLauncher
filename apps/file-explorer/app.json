@@ -12,9 +12,5 @@
     "vertex": "app.vert.spv",
     "fragment": "app.frag.spv",
     "compute": "app.comp.spv"
-  },
-  "sdk": {
-    "version": 1,
-    "capabilities": ["fs"]
   }
 }

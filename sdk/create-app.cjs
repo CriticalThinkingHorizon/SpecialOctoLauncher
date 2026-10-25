@@ -4,7 +4,7 @@ async function create(id,name=id){
  const root=path.resolve(__dirname,'../apps'),target=path.join(root,id),source=path.join(root,'hello-world');
  await fs.mkdir(target); // Refuse to overwrite an existing app, including symlinks.
  for(const item of ['assets','shaders','assets.py','build.cjs','app.json'])await fs.cp(path.join(source,item),path.join(target,item),{recursive:true,errorOnExist:true,force:false});
- const manifest=JSON.parse(await fs.readFile(path.join(target,'app.json')));manifest.id=id;manifest.name=name;manifest.description='Built with HB SDK';manifest.sdk={version:1,capabilities:[]};
+ const manifest=JSON.parse(await fs.readFile(path.join(target,'app.json')));manifest.id=id;manifest.name=name;manifest.description='Built with HB SDK';delete manifest.sdk;
  await fs.writeFile(path.join(target,'app.json'),JSON.stringify(manifest,null,2)+'\n');
  await fs.writeFile(path.join(target,'README.md'),`# ${name}\n\nBuild from the project root:\n\n\`\`\`sh\nnode apps/${id}/build.cjs\n\`\`\`\n\nEdit shaders/app.comp for logic, shaders/app.frag for rendering, and assets.py for text and icon artwork. See ../../sdk/README.md for the complete SDK guide.\n`);
  return target;
