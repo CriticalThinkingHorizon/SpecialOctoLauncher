@@ -1,0 +1,53 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+
+void main(){
+ uint pressed=hbPressed();
+
+ if(c.game.z==0u&&!hbBusy()){
+  if(hbFsListApps())c.game.z=1u;
+ }
+
+ uint count=1u;
+ if(c.game.z==1u&&!hbBusy()){
+  if(hbResult()==0u&&hbResponseBytes()>=8u){
+   c.game.z=2u;
+   count=max(hbFsEntryCount(),1u);
+   if(count>15u)count=15u;
+   c.game.w=count;
+  }else{
+   c.game.z=3u;
+   c.game.w=1u;
+  }
+ }else if(c.game.w!=0u){
+  count=c.game.w;
+ }
+ if(c.game.y>=count)c.game.y=0u;
+
+ if((pressed&HB_DOWN)!=0u)c.game.y=(c.game.y+1u)%count;
+ if((pressed&HB_UP)!=0u)c.game.y=(c.game.y+count-1u)%count;
+
+ // Press X to rescan/update apps from server at any time
+ if((pressed&HB_X)!=0u&&!hbBusy()){
+  c.reserved.w=99u;
+  c.game.z=0u;
+ }
+
+ // Press A to launch the selected app or trigger the [UPDATE] row
+ if((pressed&HB_A)!=0u&&c.game.z==2u&&!hbBusy()){
+  uint sel=c.game.y;
+  uint rowType=hbFsEntryType(sel);
+  if(rowType==2u){
+   c.reserved.w=99u;
+   c.game.z=0u;
+  }else{
+   c.reserved.w=sel+1u;
+   hbExit();
+  }
+ }
+
+ hbEndFrame();
+}

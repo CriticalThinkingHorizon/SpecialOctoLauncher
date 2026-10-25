@@ -6,7 +6,7 @@ const struct=(size,type,words={},pointers={})=>{const b=Buffer.alloc(size);b.wri
 async function prepare(rpc,menu,app,directory){
  const module=JSON.parse(await fs.readFile(path.join(directory,'compatibility-module.json')));
  const file=path.join(directory,'app-'+app.id+'-'+app.fingerprint.slice(0,16)+'.json');
- await fs.writeFile(file,'{}',{flag:'wx'});
+ await fs.writeFile(file,'{}');
  const report={session:rpc.a.session,id:app.id,fingerprint:app.fingerprint,started:new Date().toISOString(),resourcesRetained:true,commands:[],functions:{}};
  const save=()=>fs.writeFile(file,JSON.stringify(report,null,2));
  const worker=await create(rpc,directory),fn=report.functions;

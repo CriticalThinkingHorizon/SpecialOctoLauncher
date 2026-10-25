@@ -212,6 +212,6 @@ void main(){
  }
  if((pressed&HB_A)!=0u&&c.game.z==2u&&!hbBusy())enterSelected();
  if((pressed&HB_B)!=0u&&!hbBusy())goBack();
- if((pressed&HB_MINUS)!=0u&&hbConnected())hbExit();
+ if((pressed&(HB_MINUS|HB_PLUS))!=0u&&hbConnected())hbExit();
  hbEndFrame();
 }

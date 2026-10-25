@@ -81,6 +81,23 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
        payload.write(lines[i].substring(0,47),16+i*48,48,'utf8');
       }
      }
+    }else if(subOp===3){
+     const catalogTools=require('../../runtime/app-catalog.cjs');
+     const catalog=await catalogTools.scan();
+     const apps=catalog.apps.filter(a=>a.id!=='launcher');
+     const rows=[
+      ...apps.map(a=>({id:a.id,title:`[APP] ${a.name} (${a.id})`})),
+      {id:'__refresh__',title:'[UPDATE] Rescan & Reload Apps from Server'}
+     ];
+     payload=Buffer.alloc(8+rows.length*64);
+     payload.writeUInt32LE(rows.length,0);
+     payload.writeUInt32LE(rows.length,4);
+     for(let i=0;i<rows.length;i++){
+      const o=8+i*64,r=rows[i];
+      payload.write(r.title.substring(0,47),o,48,'utf8');
+      payload.writeUInt32LE(r.id==='__refresh__'?2:1,o+48);
+      payload.writeBigInt64LE(BigInt(i),o+56);
+     }
     }else{
      status=L.STATUS.invalid;
     }

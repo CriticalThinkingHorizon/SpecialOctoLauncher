@@ -1,0 +1,20 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "launcher",
+  "name": "Homebrew Launcher",
+  "version": "1.0.0",
+  "description": "App picker with live server catalog refresh",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  },
+  "sdk": {
+    "version": 1,
+    "capabilities": ["fs"]
+  }
+}

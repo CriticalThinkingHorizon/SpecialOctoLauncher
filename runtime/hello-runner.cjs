@@ -28,7 +28,7 @@ async function main(directory, attempt = 'auto') {
   const file = path.join(directory, stem + '.json');
   await fs.writeFile(file, '{}', {flag: 'wx'});
 
-  const appName = process.argv[4] || 'hello-world';
+  const appName = process.argv[4] || 'launcher';
   const app = await catalogTools.readApp(path.join(__dirname, '../apps', appName));
   const report = {purpose: 'Hello World direct GPU execution', session: rpc.a.session, started: new Date().toISOString(), resourcesRetained: true, functions: {}, commands: []};
   const save = () => fs.writeFile(file, JSON.stringify(report, null, 2)), tracked = journal(report, save), fn = report.functions;
@@ -187,23 +187,45 @@ async function main(directory, attempt = 'auto') {
       capture: report.capture
     };
 
-    const appNames = ['file-explorer', 'hello-world'];
-    let currentIdx = Math.max(0, appNames.indexOf(appName));
     const preparedApps = {};
-    for (const name of appNames) {
-      const loadedApp = name === appName ? app : await catalogTools.readApp(path.join(__dirname, '../apps', name));
-      console.log(`Preparing ${name} GPU app via gpu-app.cjs...`);
-      const prep = await prepare(rpc, menuObj, loadedApp, directory);
-      preparedApps[name] = { app: loadedApp, prep };
-    }
-    const appPrep = preparedApps[appNames[currentIdx]].prep;
+    const reloadCatalog = async (forceRecompile = false) => {
+      const scanned = await catalogTools.scan();
+      if (forceRecompile) {
+        const glslang = process.env.GLSLANG || 'C:\\VulkanSDK\\1.4.363.0\\Bin\\glslangValidator.exe';
+        const spirvVal = process.env.SPIRV_VAL || 'C:\\VulkanSDK\\1.4.363.0\\Bin\\spirv-val.exe';
+        process.env.GLSLANG = glslang;
+        process.env.SPIRV_VAL = spirvVal;
+        const builder = require('../sdk/build.cjs');
+        for (const a of scanned.apps) {
+          try {
+            await builder.buildApp(a.root);
+          } catch (err) {
+            console.warn(`[LIVE UPDATE] Shader rebuild skipped/failed for ${a.id}:`, err.message);
+          }
+        }
+      }
+      const freshScan = forceRecompile ? await catalogTools.scan() : scanned;
+      for (const loadedApp of freshScan.apps) {
+        const prev = preparedApps[loadedApp.id];
+        if (!prev || prev.app.fingerprint !== loadedApp.fingerprint || forceRecompile) {
+          console.log(`[CATALOG] Preparing GPU pipelines for ${loadedApp.id} (${loadedApp.name})...`);
+          const prep = await prepare(rpc, menuObj, loadedApp, directory);
+          preparedApps[loadedApp.id] = { app: loadedApp, prep };
+        }
+      }
+      return freshScan.apps.filter(a => a.id !== 'launcher').map(a => a.id);
+    };
+
+    let launchableIds = await reloadCatalog(false);
+    let activeAppId = preparedApps[appName] ? appName : 'launcher';
+    const appPrep = preparedApps[activeAppId].prep;
     report.pipeline = appPrep.pipeline;
     report.computePipeline = appPrep.computePipeline;
     report.computePipelines = appPrep.computePipelines;
     report.commands = appPrep.commands;
     report.ready = true;
     await save();
-    console.log('GPU apps prepared successfully (press PLUS or MINUS on console to switch apps).');
+    console.log('GPU apps prepared successfully.');
 
     // Start continuous frame loop
     const inputInspection = JSON.parse(await fs.readFile(path.join(directory, 'input-inspection.json')));
@@ -329,19 +351,43 @@ async function main(directory, attempt = 'auto') {
       targetApp.files.data.bytes.copy(appRegion, 1024 - 784);
       appRegion.writeFloatLE(1, 960 - 784);
       await rpc.write(mapped + 784, appRegion);
+      activeAppId = name;
     };
 
-    // Service SDK requests (fs, vibration, etc.) and app switch flag (c.reserved.z at offset 1016) while the native frame loop runs.
+    // Service SDK requests and launcher app selection / live reload while the native frame loop runs.
     while (!stop) {
       try {
-        const currentEntry = preparedApps[appNames[currentIdx]];
-        await sdkRuntime.atBoundary({ fingerprint: currentEntry.app.id, manifest: currentEntry.app.manifest });
-        const exitFlag = (await rpc.read(mapped + 1016, 4)).readUInt32LE(0);
-        if (exitFlag !== 0) {
-          currentIdx = (currentIdx + 1) % appNames.length;
-          const nextName = appNames[currentIdx];
-          console.log(`[APP SWITCH] Switching active app to: ${nextName}`);
-          await applyApp(nextName);
+        const currentEntry = preparedApps[activeAppId];
+        await sdkRuntime.atBoundary({ fingerprint: `${currentEntry.app.id}-${currentEntry.app.fingerprint.slice(0, 8)}`, manifest: currentEntry.app.manifest });
+        const reserved = await rpc.read(mapped + 1008, 16);
+        const exitFlag = reserved.readUInt32LE(8);     // c.reserved.z (1016)
+        const actionCode = reserved.readUInt32LE(12);  // c.reserved.w (1020)
+
+        if (activeAppId === 'launcher' && actionCode === 99) {
+          console.log('[LIVE UPDATE] Rescanning apps directory and rebuilding changed shaders/assets...');
+          const clearW = Buffer.alloc(4);
+          await rpc.write(mapped + 1020, clearW);
+          launchableIds = await reloadCatalog(true);
+          console.log('[LIVE UPDATE] Catalog updated:', launchableIds.join(', '));
+        } else if (exitFlag !== 0) {
+          if (activeAppId === 'launcher') {
+            const idx = actionCode > 0 ? actionCode - 1 : 0;
+            const targetId = launchableIds[idx] || launchableIds[0];
+            if (targetId && preparedApps[targetId]) {
+              console.log(`[LAUNCHER] Launching app: ${targetId} (reloading latest files from server)...`);
+              const freshApp = await catalogTools.readApp(path.join(__dirname, '../apps', targetId));
+              if (freshApp.fingerprint !== preparedApps[targetId].app.fingerprint) {
+                const prep = await prepare(rpc, menuObj, freshApp, directory);
+                preparedApps[targetId] = { app: freshApp, prep };
+              }
+              await applyApp(targetId);
+            } else {
+              await rpc.write(mapped + 1016, Buffer.alloc(8));
+            }
+          } else {
+            console.log(`[LAUNCHER] Returning from ${activeAppId} to Homebrew Launcher...`);
+            await applyApp('launcher');
+          }
         }
       } catch (error) {
         console.error('[SDK] request failed:', error.message);

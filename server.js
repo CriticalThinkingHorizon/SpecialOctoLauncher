@@ -147,7 +147,7 @@ async function main() {
 
     const argApp = process.argv.slice(2).find(a => a.startsWith('--app='))?.split('=')[1]
       || process.argv.slice(3).find(a => !a.startsWith('-'));
-    const targetApp = argApp || 'file-explorer';
+    const targetApp = argApp || 'launcher';
     console.log(`\n--- Starting ${targetApp} Direct Execution Loop ---`);
     const loopChild = spawn(process.execPath, [path.join(__dirname, 'runtime/hello-runner.cjs'), directory, 'auto', targetApp], {
       cwd: __dirname,
