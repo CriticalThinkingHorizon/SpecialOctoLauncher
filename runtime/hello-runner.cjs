@@ -196,35 +196,27 @@ async function main(directory, attempt = 'auto') {
     };
 
     const preparedApps = {};
-    const reloadCatalog = async (forceRecompile = false) => {
-      const scanned = await catalogTools.scan();
-      if (forceRecompile) {
-        const glslang = process.env.GLSLANG || 'C:\\VulkanSDK\\1.4.363.0\\Bin\\glslangValidator.exe';
-        const spirvVal = process.env.SPIRV_VAL || 'C:\\VulkanSDK\\1.4.363.0\\Bin\\spirv-val.exe';
-        process.env.GLSLANG = glslang;
-        process.env.SPIRV_VAL = spirvVal;
-        const builder = require('../sdk/build.cjs');
-        for (const a of scanned.apps) {
-          try {
-            await builder.buildApp(a.root);
-          } catch (err) {
-            console.warn(`[LIVE UPDATE] Shader rebuild skipped/failed for ${a.id}:`, err.message);
-          }
-        }
+    const ensureAppPrepared = async (targetId) => {
+      const freshApp = await catalogTools.readApp(path.join(__dirname, '../apps', targetId));
+      const prev = preparedApps[targetId];
+      if (!prev || prev.app.fingerprint !== freshApp.fingerprint) {
+        console.log(`[CATALOG] Preparing GPU pipeline on-demand for ${freshApp.id} (${freshApp.name})...`);
+        const prep = await prepare(rpc, menuObj, freshApp, directory);
+        preparedApps[targetId] = { app: freshApp, prep };
       }
-      const freshScan = forceRecompile ? await catalogTools.scan() : scanned;
-      for (const loadedApp of freshScan.apps) {
-        const prev = preparedApps[loadedApp.id];
-        if (!prev || prev.app.fingerprint !== loadedApp.fingerprint || forceRecompile) {
-          console.log(`[CATALOG] Preparing GPU pipelines for ${loadedApp.id} (${loadedApp.name})...`);
-          const prep = await prepare(rpc, menuObj, loadedApp, directory);
-          preparedApps[loadedApp.id] = { app: loadedApp, prep };
-        }
-      }
-      return freshScan.apps.filter(a => a.id !== 'launcher').map(a => a.id);
+      return preparedApps[targetId];
     };
 
-    let launchableIds = await reloadCatalog(false);
+    const reloadCatalog = async () => {
+      const scanned = await catalogTools.scan();
+      return scanned.apps.filter(a => a.id !== 'launcher').map(a => a.id);
+    };
+
+    let launchableIds = await reloadCatalog();
+    await ensureAppPrepared('launcher');
+    if (appName !== 'launcher') {
+      await ensureAppPrepared(appName);
+    }
     let activeAppId = preparedApps[appName] ? appName : 'launcher';
     const appPrep = preparedApps[activeAppId].prep;
     report.pipeline = appPrep.pipeline;
@@ -233,7 +225,7 @@ async function main(directory, attempt = 'auto') {
     report.commands = appPrep.commands;
     report.ready = true;
     await save();
-    console.log('GPU apps prepared successfully.');
+    console.log('Launcher GPU pipeline prepared successfully (apps load on-demand).');
 
     // Start continuous frame loop
     const inputInspection = JSON.parse(await fs.readFile(path.join(directory, 'input-inspection.json')));
@@ -409,10 +401,10 @@ async function main(directory, attempt = 'auto') {
         const actionCode = reserved.readUInt32LE(12);  // c.reserved.w (1020)
 
         if (activeAppId === 'launcher' && actionCode === 99) {
-          console.log('[LIVE UPDATE] Rescanning apps directory and rebuilding changed shaders/assets...');
+          console.log('[LIVE UPDATE] Rescanning apps directory for compiled apps...');
           const clearW = Buffer.alloc(4);
           await rpc.write(mapped + 1020, clearW);
-          launchableIds = await reloadCatalog(true);
+          launchableIds = await reloadCatalog();
           console.log('[LIVE UPDATE] Catalog updated:', launchableIds.join(', '));
         } else if (exitFlag !== 0) {
           if (activeAppId === 'launcher') {
@@ -424,8 +416,9 @@ async function main(directory, attempt = 'auto') {
             }
             const idx = actionCode > 0 ? actionCode - 1 : 0;
             const targetId = launchableIds[idx] || launchableIds[0];
-            if (targetId && preparedApps[targetId]) {
+            if (targetId) {
               console.log(`[LAUNCHER] Switching to app: ${targetId}`);
+              await ensureAppPrepared(targetId);
               await applyApp(targetId);
             } else {
               await rpc.write(mapped + 1016, Buffer.alloc(8));

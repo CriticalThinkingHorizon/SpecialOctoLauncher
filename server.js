@@ -137,14 +137,6 @@ async function main() {
     await runScript(path.join(__dirname, 'inspection/fs-inspect.cjs'), [directory]);
     console.log('✔ Filesystem inspection completed successfully.');
 
-    console.log('\n[6/6] Building File Explorer Assets from S2 Files...');
-    const pyCmd = process.platform === 'win32' ? 'python' : 'python3';
-    await new Promise((resolve, reject) => {
-      const py = spawn(pyCmd, [path.join(__dirname, 'apps/file-explorer/assets.py')], {stdio: 'inherit', cwd: __dirname});
-      py.once('error', reject);
-      py.once('close', code => code === 0 ? resolve() : reject(Error(`assets.py exited with code ${code}`)));
-    });
-
     const argApp = process.argv.slice(2).find(a => a.startsWith('--app='))?.split('=')[1]
       || process.argv.slice(3).find(a => !a.startsWith('-'));
     const targetApp = argApp || 'launcher';

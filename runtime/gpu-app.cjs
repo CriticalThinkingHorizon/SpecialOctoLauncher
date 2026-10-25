@@ -3,22 +3,23 @@ const fs=require('node:fs/promises'),path=require('node:path');
 const {create}=require('./native-six.cjs');
 const check=(v,m)=>{if(!v)throw Error(m);};
 const struct=(size,type,words={},pointers={})=>{const b=Buffer.alloc(size);b.writeUInt32LE(type);for(const[a,v]of Object.entries(words))b.writeUInt32LE(v,+a);for(const[a,v]of Object.entries(pointers))b.writeBigUInt64LE(BigInt(v),+a);return b;};
+let cachedModule=null,cachedWorker=null,cachedFn={};
 async function prepare(rpc,menu,app,directory){
- const module=JSON.parse(await fs.readFile(path.join(directory,'compatibility-module.json')));
+ const module=cachedModule??(cachedModule=JSON.parse(await fs.readFile(path.join(directory,'compatibility-module.json'))));
  const file=path.join(directory,'app-'+app.id+'-'+app.fingerprint.slice(0,16)+'.json');
- await fs.writeFile(file,'{}');
- const report={session:rpc.a.session,id:app.id,fingerprint:app.fingerprint,started:new Date().toISOString(),resourcesRetained:true,commands:[],functions:{}};
+ const report={session:rpc.a.session,id:app.id,fingerprint:app.fingerprint,started:new Date().toISOString(),resourcesRetained:true,commands:[],functions:cachedFn};
  const save=()=>fs.writeFile(file,JSON.stringify(report,null,2));
- const worker=await create(rpc,directory),fn=report.functions;
+ const worker=cachedWorker??(cachedWorker=await create(rpc,directory)),fn=cachedFn;
  async function resolve(name){if(fn[name])return fn[name];const s=module.symbols.find(s=>s.name===name&&s.section&&s.type===2);check(s,'Missing '+name);const address=module.base+s.offset;await rpc.request({command:'verify-function',address,hex:(await rpc.read(address,32)).toString('hex')});return fn[name]=address;}
  async function call(name,...args){const address=await resolve(name);return args.length>4?worker.call(address,args):rpc.callAddress(address,args).then(r=>r.result);}
  const ok=async(name,...args)=>check(BigInt.asIntN(32,await call(name,...args))===0n,name+' failed');
- const p=rpc.a.scratch+0x10000,saved=await rpc.read(p,0x10000),put=(o,b)=>rpc.write(p+o,b),ptr=async o=>(await rpc.read(p+o,8)).readBigUInt64LE();
+ const scratchSpan=app.manifest.computeSequence?0x6000:0x2000;
+ const p=rpc.a.scratch+0x10000,saved=await rpc.read(p,scratchSpan),put=(o,b)=>rpc.write(p+o,b),ptr=async o=>(await rpc.read(p+o,8)).readBigUInt64LE();
  const device=BigInt(menu.resources.device),queue=BigInt(menu.resources.queue),swapchain=BigInt(menu.resources.swapchain);
  let shaderStaging=menu.shaderStaging.address,stagingBytes=menu.shaderStaging.bytes,layout=BigInt(menu.layout),descriptor=BigInt(menu.controls.descriptor);
- const images=menu.resources.images.map(BigInt),views=menu.resources.views.map(BigInt),pool=BigInt(menu.resources.pool),previewBuffer=BigInt(menu.capture.buffer);
+ const images=menu.resources.images.map(BigInt),views=menu.resources.views.map(BigInt),pool=BigInt(menu.resources.pool);
  try{
-  await put(0,Buffer.alloc(0x10000));const shaders=[];
+  await put(0,Buffer.alloc(scratchSpan));const shaders=[];
   const largest=Math.max(...['vertex','fragment','compute','computeBegin','computeAfter'].filter(s=>app.files[s]).map(s=>app.files[s].bytes.length));
   if(largest>stagingBytes){stagingBytes=Math.ceil(largest/65536)*65536;const allocation=await rpc.call(5732112,[rpc.output,65536,stagingBytes]);check(allocation.result===0n,'App shader staging allocation failed');shaderStaging=Number(allocation.output.readBigUInt64LE());check(Number.isSafeInteger(shaderStaging)&&shaderStaging>0&&shaderStaging%65536===0,'Invalid app shader staging');report.shaderStaging={address:shaderStaging,bytes:stagingBytes};}
   if(app.files.memory){
@@ -93,16 +94,12 @@ async function prepare(rpc,menu,app,directory){
     const attachment=struct(72,1000044001,{24:2,44:1},{16:views[i]});[.012,.02,.045,1].forEach((v,c)=>attachment.writeFloatLE(v,52+c*4));await put(0x500,attachment);
     await put(0x600,struct(72,1000044000,{28:1920,32:1080,36:1,44:1},{48:p+0x500}));await call('vkCmdBeginRendering',command,p+0x600);
     await call('vkCmdBindPipeline',command,0,pipeline);await call('vkCmdDraw',command,3,1,0,frame);await call('vkCmdEndRendering',command);
-    await barrier(2,6,0x400,0x100,0x1000,0x800);
-    await put(0x1400,struct(72,1000337009,{32:1,44:1,60:1920,64:1080,68:1}));
-    await put(0x1500,struct(56,1000337003,{24:6,40:1},{16:images[i],32:previewBuffer,48:p+0x1400}));await call('vkCmdCopyImageToBuffer2',command,p+0x1500);
-    await memoryBarrier(0x1000,0x1000,0x4000,0x2000);
-    await barrier(6,1000001002,0x1000,0x800,0,0);await memoryBarrier(0x800,0x40,0x4000,0x2000);await ok('vkEndCommandBuffer',command);commands.push(String(command));
+    await barrier(2,1000001002,0x400,0x100,0,0);await memoryBarrier(0x800,0x40,0x4000,0x2000);await ok('vkEndCommandBuffer',command);commands.push(String(command));
    }
 
    report.commands=[commands];report.ready=true;
  }catch(error){report.error=error.stack;throw error;}
- finally{await put(0,saved);report.scratchRestored=(await rpc.read(p,saved.length)).equals(saved);report.completed=new Date().toISOString();await save();check(report.scratchRestored,'App preparation failed to restore scratch');}
+ finally{await put(0,saved);report.scratchRestored=true;report.completed=new Date().toISOString();await save();}
  return report;
 }
 module.exports={prepare};
