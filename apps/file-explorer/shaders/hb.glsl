@@ -36,12 +36,12 @@ uint hbResponseBytes(){return min(hbWord(4104u),1024u);}
 uint hbResponseByte(uint index){return index<hbResponseBytes()?(hbWord(4128u+(index/4u)*4u)>>((index%4u)*8u))&255u:0u;}
 uint hbFsEntryCount(){return hbWord(4128u);}
 uint hbFsEntryTotal(){return hbWord(4132u);}
-uint hbFsEntryByte(uint entry,uint byteIndex){return entry<8u&&byteIndex<48u?hbResponseByte(8u+entry*64u+byteIndex):0u;}
-uint hbFsEntryType(uint index){return index<8u?hbWord(4128u+8u+index*64u+48u):0u;}
+uint hbFsEntryByte(uint entry,uint byteIndex){return entry<15u&&byteIndex<48u?hbResponseByte(8u+entry*64u+byteIndex):0u;}
+uint hbFsEntryType(uint index){return index<15u?hbWord(4128u+8u+index*64u+48u):0u;}
 uint hbFsTextLineCount(){return hbWord(4128u);}
 uint hbFsTextTotalLines(){return hbWord(4132u);}
 uint hbFsTextLineStart(){return hbWord(4136u);}
-uint hbFsTextByte(uint line,uint col){return line<12u&&col<80u?hbResponseByte(16u+line*80u+col):0u;}
+uint hbFsTextByte(uint line,uint col){return line<20u&&col<48u?hbResponseByte(16u+line*48u+col):0u;}
 // Native optical ring: 8 players x 2 sides. Side 0/1 matches Jcms handles.
 // Keep a separate previous sequence for each player/side in your app state.
 vec2 hbJoyMouseDelta(uint player,uint side,inout uint previous){

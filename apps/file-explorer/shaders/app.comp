@@ -4,6 +4,9 @@ layout(local_size_x=1) in;
 #include "abi.glsl"
 #include "hb.glsl"
 
+const uint DIR_PAGE_SIZE=15u;
+const int TEXT_PAGE_LINES=20;
+
 uint pathLen(){return uint(max(c.piece.x,0));}
 uint pathByte(uint i){return (c.rows[i/4u]>>((i%4u)*8u))&255u;}
 void setPathByte(uint i,uint v){
@@ -41,7 +44,7 @@ void initPath(){
 bool requestListing(){
  uint n=pathLen();
  for(uint i=0u;i<64u;i++)hbFsPathByte(i,i<n?pathByte(i):0u);
- return hbFsListDirOffset(8u,uint(max(c.piece.w,0)),n);
+ return hbFsListDirOffset(DIR_PAGE_SIZE,uint(max(c.piece.w,0)),n);
 }
 
 bool requestTextRead(){
@@ -109,7 +112,7 @@ void main(){
   if(c.game.z==1u&&!hbBusy()){
    if(hbResult()==0u&&hbResponseBytes()>=16u){
     c.game.z=2u;
-    c.game.w=min(hbFsTextLineCount(),12u);
+    c.game.w=min(hbFsTextLineCount(),uint(TEXT_PAGE_LINES));
    }else{
     c.game.z=3u;
     c.game.w=0u;
@@ -117,13 +120,13 @@ void main(){
   }
   if(c.game.z==2u&&!hbBusy()){
    int total=int(hbFsTextTotalLines());
-   int maxStart=max(0,total-12);
+   int maxStart=max(0,total-TEXT_PAGE_LINES);
    int cur=max(c.piece.z,0);
    int next=cur;
    if((pressed&HB_DOWN)!=0u)next=min(cur+1,maxStart);
    if((pressed&HB_UP)!=0u)next=max(cur-1,0);
-   if((pressed&HB_RIGHT)!=0u)next=min(cur+12,maxStart);
-   if((pressed&HB_LEFT)!=0u)next=max(cur-12,0);
+   if((pressed&HB_RIGHT)!=0u)next=min(cur+TEXT_PAGE_LINES,maxStart);
+   if((pressed&HB_LEFT)!=0u)next=max(cur-TEXT_PAGE_LINES,0);
    if(next!=cur){
     c.piece.z=next;
     c.game.z=0u;
@@ -144,7 +147,7 @@ void main(){
   if(hbResult()==0u&&hbResponseBytes()>=8u){
    c.game.z=2u;
    count=max(hbFsEntryCount(),1u);
-   if(count>8u)count=8u;
+   if(count>DIR_PAGE_SIZE)count=DIR_PAGE_SIZE;
    c.game.w=count;
   }else{
    c.game.z=3u;
@@ -160,8 +163,8 @@ void main(){
   uint startOff=uint(max(c.piece.w,0));
   if(c.game.y+1u<count){
    c.game.y++;
-  }else if(startOff+8u<total&&!hbBusy()){
-   c.piece.w=int(startOff+8u);
+  }else if(startOff+DIR_PAGE_SIZE<total&&!hbBusy()){
+   c.piece.w=int(startOff+DIR_PAGE_SIZE);
    c.game.y=0u;
    c.game.z=0u;
   }else{
@@ -172,9 +175,9 @@ void main(){
   uint startOff=uint(max(c.piece.w,0));
   if(c.game.y>0u){
    c.game.y--;
-  }else if(startOff>=8u&&!hbBusy()){
-   c.piece.w=int(startOff-8u);
-   c.game.y=7u;
+  }else if(startOff>=DIR_PAGE_SIZE&&!hbBusy()){
+   c.piece.w=int(startOff-DIR_PAGE_SIZE);
+   c.game.y=DIR_PAGE_SIZE-1u;
    c.game.z=0u;
   }else{
    c.game.y=count-1u;
@@ -183,16 +186,16 @@ void main(){
  if((pressed&HB_RIGHT)!=0u&&!hbBusy()){
   uint total=hbFsEntryTotal();
   uint startOff=uint(max(c.piece.w,0));
-  if(startOff+8u<total){
-   c.piece.w=int(startOff+8u);
+  if(startOff+DIR_PAGE_SIZE<total){
+   c.piece.w=int(startOff+DIR_PAGE_SIZE);
    c.game.y=0u;
    c.game.z=0u;
   }
  }
  if((pressed&HB_LEFT)!=0u&&!hbBusy()){
   uint startOff=uint(max(c.piece.w,0));
-  if(startOff>=8u){
-   c.piece.w=int(startOff-8u);
+  if(startOff>=DIR_PAGE_SIZE){
+   c.piece.w=int(startOff-DIR_PAGE_SIZE);
    c.game.y=0u;
    c.game.z=0u;
   }

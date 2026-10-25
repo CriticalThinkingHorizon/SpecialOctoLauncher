@@ -44,7 +44,7 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
     const subOp=request.readUInt32LE(8);
     if(subOp===1){
      const param=request.readUInt32LE(12);
-     const maxEntries=Math.min((param&0xffff)||8,8);
+     const maxEntries=Math.min((param&0xffff)||15,15);
      const startOffset=(param>>>16)&0xffff;
      const pathLen=Math.min(request.readUInt32LE(16)||6,64);
      const pathStr=request.subarray(32,32+pathLen).toString('utf8').replace(/\0.*$/, '')||'rom:/';
@@ -67,18 +67,18 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
      const lineStart=request.readUInt32LE(12)||0;
      const pathLen=Math.min(request.readUInt32LE(16)||6,64);
      const pathStr=request.subarray(32,32+pathLen).toString('utf8').replace(/\0.*$/, '');
-     const {result,totalLines,lines}=await fsService.readTextFile(pathStr,lineStart,12,80);
+     const {result,totalLines,lines}=await fsService.readTextFile(pathStr,lineStart,20,48);
      if(result!==0){
       status=L.STATUS.native;
       payload=Buffer.alloc(4);payload.writeUInt32LE(result);
      }else{
-      payload=Buffer.alloc(16+lines.length*80);
+      payload=Buffer.alloc(16+lines.length*48);
       payload.writeUInt32LE(lines.length,0);
       payload.writeUInt32LE(totalLines,4);
       payload.writeUInt32LE(lineStart,8);
       payload.writeUInt32LE(result,12);
       for(let i=0;i<lines.length;i++){
-       payload.write(lines[i].substring(0,79),16+i*80,80,'utf8');
+       payload.write(lines[i].substring(0,47),16+i*48,48,'utf8');
       }
      }
     }else{

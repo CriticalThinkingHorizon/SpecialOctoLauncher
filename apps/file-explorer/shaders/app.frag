@@ -33,7 +33,7 @@ float drawName(vec2 p,vec2 origin,uint entry){
 // One line of text from the fs text response.
 float drawTextLine(vec2 p,vec2 origin,uint line){
  float ink=0.0;
- for(uint col=0u;col<79u;col++){
+ for(uint col=0u;col<47u;col++){
   uint ch=hbFsTextByte(line,col);
   if(ch==0u)break;
   ink=max(ink,drawChar(p,origin+vec2(float(col*uint(GLYPH_W)),0.0),ch));
@@ -54,13 +54,13 @@ float drawPath(vec2 p,vec2 origin){
 
 void main(){
  vec2 p=gl_FragCoord.xy;
- float ink=drawPath(p,vec2(120.0,80.0));
+ float ink=drawPath(p,vec2(100.0,48.0));
 
  if(c.piece.y==1){
-  float lineH=float(GLYPH_H)+10.0;
-  vec2 left=vec2(120.0,150.0);
-  uint lineCount=c.game.z==2u?min(c.game.w,12u):0u;
-  for(uint i=0u;i<12u;i++){
+  float lineH=float(GLYPH_H)+12.0;
+  vec2 left=vec2(100.0,115.0);
+  uint lineCount=c.game.z==2u?min(c.game.w,20u):0u;
+  for(uint i=0u;i<20u;i++){
    if(i>=lineCount)break;
    vec2 origin=left+vec2(0.0,float(i)*lineH);
    ink=max(ink,drawTextLine(p,origin,i));
@@ -69,17 +69,18 @@ void main(){
   return;
  }
 
- float rowH=float(GLYPH_H)+24.0;
- vec2 left=vec2(120.0,160.0);
- uint count=c.game.z==2u?min(c.game.w,8u):0u;
+ float rowH=float(GLYPH_H)+26.0;
+ uint count=c.game.z==2u?min(c.game.w,15u):0u;
  uint selected=c.game.y;
 
- for(uint i=0u;i<8u;i++){
+ for(uint i=0u;i<15u;i++){
   if(i>=count)break;
-  vec2 origin=left+vec2(0.0,float(i)*rowH);
+  uint col=i/8u;
+  uint row=i%8u;
+  vec2 origin=vec2(100.0+float(col)*880.0,130.0+float(row)*rowH);
   float text_ink=drawName(p,origin,i);
   if(i==selected){
-   float bar=fill(box(p,origin+vec2(840.0,float(GLYPH_H)*0.5),vec2(840.0,float(GLYPH_H)*0.5+8.0),8.0));
+   float bar=fill(box(p,origin+vec2(410.0,float(GLYPH_H)*0.5),vec2(420.0,float(GLYPH_H)*0.5+6.0),8.0));
    // White bar with black text on the selected row.
    ink=max(ink,bar*(1.0-text_ink)+(1.0-bar)*text_ink);
   }else{
