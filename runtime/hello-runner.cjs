@@ -103,9 +103,17 @@ async function main(directory, attempt = 'auto') {
     await ok('vkMapMemory2', device, p + 0x100, p);
     const mapped = Number(await ptr(0));
 
-    const initialBytes = Buffer.alloc(storageBytes);
+    const getEffectiveDataSlice = (buf) => {
+      let end = buf.length;
+      while (end > 0 && buf[end - 1] === 0) end--;
+      const aligned = Math.min(buf.length, Math.max(4096, (end + 4095) & ~4095));
+      return buf.subarray(0, aligned);
+    };
+    let currentAtlasSlice = getEffectiveDataSlice(app.files.data.bytes);
+
+    const initialBytes = Buffer.alloc(1024 + currentAtlasSlice.length);
     app.files.state.bytes.copy(initialBytes, 0);
-    app.files.data.bytes.copy(initialBytes, 1024);
+    currentAtlasSlice.copy(initialBytes, 1024);
     initialBytes.writeFloatLE(1, 960);
     await rpc.write(mapped, initialBytes);
 
@@ -346,16 +354,8 @@ async function main(directory, attempt = 'auto') {
 
     const applyApp = async (name) => {
       const { app: targetApp, prep } = preparedApps[name];
-      // Clear previous SDK response payload length (offset 4104) while preserving request/response sequence numbers
-      await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(1048));
 
-      // Write app scratch state (784..1024) and data atlas (1024..) first
-      await rpc.write(mapped + 784, targetApp.files.state.bytes.subarray(784, 1024));
-      await rpc.write(mapped + 1024, targetApp.files.data.bytes);
-      const fadeBuf = Buffer.alloc(4);
-      fadeBuf.writeFloatLE(1, 0);
-      await rpc.write(mapped + 960, fadeBuf);
-
+      // 1. Switch command buffers immediately so the old app's compute shader stops running
       for (let phase = 0; phase < prep.commands.length; phase++) {
         const o = 0x1000 + phase * 0x100, obj = control + o;
         u64(o + 0x50, obj + 0x60);
@@ -364,10 +364,26 @@ async function main(directory, attempt = 'auto') {
       }
       await rpc.write(control + 0x1000, data.subarray(0x1000, 0x1000 + prep.commands.length * 0x100));
 
-      // Re-zero scratch state (784..1024) after the new command buffers are active so any old shader's last-frame write is wiped
-      await rpc.write(mapped + 784, targetApp.files.state.bytes.subarray(784, 1024));
-      await rpc.write(mapped + 960, fadeBuf);
-      // Combine all held buttons across handheld (mapped + 8) and PAD_SOURCES (mapped + 0x7f0000 + 640) into c.state.y (mapped + 84)
+      // Wait ~20ms (one frame) so any in-flight GPU frame of the previous app completes
+      await new Promise(r => setTimeout(r, 20));
+
+      // 2. Clear previous SDK response payload length (offset 4104) while preserving request/response sequence numbers
+      await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(1048));
+
+      // 3. Only upload the non-zero portion of data.bytes (~72 KB - 160 KB instead of 2 MiB), and skip if unchanged
+      const nextSlice = getEffectiveDataSlice(targetApp.files.data.bytes);
+      if (!currentAtlasSlice || !nextSlice.equals(currentAtlasSlice)) {
+        const writeLen = Math.max(nextSlice.length, currentAtlasSlice ? currentAtlasSlice.length : 0);
+        await rpc.write(mapped + 1024, targetApp.files.data.bytes.subarray(0, writeLen));
+        currentAtlasSlice = nextSlice;
+      }
+
+      // 4. Reset app scratch state (784..1024), clearing c.reserved.z (1016) & c.reserved.w (1020)
+      const scratchState = Buffer.from(targetApp.files.state.bytes.subarray(784, 1024));
+      scratchState.writeFloatLE(1, 960 - 784);
+      await rpc.write(mapped + 784, scratchState);
+
+      // 5. Combine all held buttons across handheld (mapped + 8) and PAD_SOURCES (mapped + 0x7f0000 + 640) into c.state.y (mapped + 84)
       let heldButtons = (await rpc.read(mapped + 8, 4)).readUInt32LE(0);
       const padSrcBuf = await rpc.read(mapped + 0x7f0000 + 640, 320);
       for (let i = 0; i < 5; i++) {
@@ -401,12 +417,7 @@ async function main(directory, attempt = 'auto') {
             const idx = actionCode > 0 ? actionCode - 1 : 0;
             const targetId = launchableIds[idx] || launchableIds[0];
             if (targetId && preparedApps[targetId]) {
-              console.log(`[LAUNCHER] Launching app: ${targetId} (reloading latest files from server)...`);
-              const freshApp = await catalogTools.readApp(path.join(__dirname, '../apps', targetId));
-              if (freshApp.fingerprint !== preparedApps[targetId].app.fingerprint) {
-                const prep = await prepare(rpc, menuObj, freshApp, directory);
-                preparedApps[targetId] = { app: freshApp, prep };
-              }
+              console.log(`[LAUNCHER] Switching to app: ${targetId}`);
               await applyApp(targetId);
             } else {
               await rpc.write(mapped + 1016, Buffer.alloc(8));
