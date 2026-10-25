@@ -453,6 +453,19 @@ async function create(rpc) {
       }
       return { result: writeRes, bytesWritten: writeRes === 0 ? dataBuf.length : 0 };
     },
+    async renameDirPath(oldPath, newPath) {
+      const oldOff = 0x1000, newOff = 0x1400;
+      await client.write(oldOff, Buffer.from(oldPath + '\0', 'utf8'));
+      await client.write(newOff, Buffer.from(newPath + '\0', 'utf8'));
+      const res = await client.result('RenameDirectory', [client.base + oldOff, client.base + newOff]);
+      return { result: res };
+    },
+    async commitMount(mountName = 'save') {
+      const pathOff = 0x1000;
+      await client.write(pathOff, Buffer.from(mountName + '\0', 'utf8'));
+      const res = await client.result('CommitSaveData', [client.base + pathOff]);
+      return { result: res };
+    },
     async testTmpFile(action = 0) {
       const targetPath = 'tmp:/tmptest';
       const pathOff = 0x1000;

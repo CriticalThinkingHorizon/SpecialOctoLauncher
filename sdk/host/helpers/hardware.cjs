@@ -46,6 +46,18 @@ async function create(rpc){
   if(selected){
    out.writeUInt32LE(selected.id,F.padId);out.writeUInt32LE(selected.style,F.style);await api.write(0,word(selected.id));
    await api.call('pad'+selected.kind,[api.base+0x100,api.base]);(await api.read(0x100,64)).copy(out,F.pad);flags|=FLAGS.pad;
+   try{
+    await api.write(0x20,Buffer.alloc(16));
+    if(await api.result('color',[api.base+0x20,api.base+0x24,api.base])===0){
+     (await api.read(0x20,8)).copy(out,32); // offset 32: bodyColor (RGBA), offset 36: buttonColor (RGBA)
+    }
+    if(await api.result('led',[api.base+0x28,api.base])===0){
+     out.writeUInt32LE((await api.read(0x28,1))[0]??0,40); // offset 40: player LED pattern
+    }
+    if(await api.result('vibrationPermitted',[api.base+0x2c])===0){
+     out.writeUInt32LE((await api.read(0x2c,1))[0]??0,44); // offset 44: IsVibrationPermitted
+    }
+   }catch(e){}
   }
   for(let i=0;i<PAD_SOURCES.length;i++){
    const entry=PAD_SOURCES[i];await api.write(0,word(entry[0]));await api.call('pad'+entry[1],[api.base+0x100,api.base]);
@@ -70,6 +82,43 @@ async function create(rpc){
   if(closed)throw Error('Hardware context closed');
   if(!vibration.length)throw Error('Vibration device unavailable');
   return require('./haptics.cjs').play(api,vibration,{side,steps});
+ },async queryPadDetails(npadId=32){
+  if(closed)throw Error('Hardware context closed');
+  const idOff=0x2000,styleOff=0x2010,bodyColOff=0x2020,btnColOff=0x2028,ledOff=0x2030,permOff=0x2038,vibOff=0x2040;
+  await api.write(idOff,word(npadId>>>0));
+  await api.write(styleOff,Buffer.alloc(64));
+  let styleSet=0,bodyColor=0,buttonColor=0,ledPattern=0,vibPermitted=0;
+  if(await api.result('style',[api.base+styleOff,api.base+idOff])===0){
+   styleSet=(await api.read(styleOff,4)).readUInt32LE(0);
+  }
+  if(await api.result('color',[api.base+bodyColOff,api.base+btnColOff,api.base+idOff])===0){
+   bodyColor=(await api.read(bodyColOff,4)).readUInt32LE(0);
+   buttonColor=(await api.read(btnColOff,4)).readUInt32LE(0);
+  }
+  if(await api.result('led',[api.base+ledOff,api.base+idOff])===0){
+   ledPattern=(await api.read(ledOff,1))[0]??0;
+  }
+  if(await api.result('vibrationPermitted',[api.base+permOff])===0){
+   vibPermitted=(await api.read(permOff,1))[0]??0;
+  }
+  let actualVib=Buffer.alloc(20);
+  if(vibration.length>0){
+   await api.write(vibOff,Buffer.alloc(20));
+   if(await api.result('vibrationRead',[api.base+vibOff,vibration[0]])===0){
+    actualVib=await api.read(vibOff,20);
+   }
+  }
+  return {styleSet,bodyColor,buttonColor,ledPattern,vibPermitted,actualVib};
+ },async queryIrStatus(npadId=32){
+  if(closed)throw Error('Hardware context closed');
+  const idOff=0x2100,handleOff=0x2110,statusOff=0x2120;
+  await api.write(idOff,word(npadId>>>0));
+  await api.write(handleOff,Buffer.alloc(32));
+  const hRes=await api.result('irHandle',[api.base+handleOff,api.base+idOff]);
+  const handle=(await api.read(handleOff,4)).readUInt32LE(0);
+  const sRes=await api.result('irStatus',[api.base+statusOff,api.base+handleOff]);
+  const status=(await api.read(statusOff,4)).readUInt32LE(0);
+  return {handle,status,handleResult:hRes,statusResult:sRes};
  },async close(){
   if(closed)return;closed=true;let failure;
   try{await stopMotion();}catch(error){failure=error;}

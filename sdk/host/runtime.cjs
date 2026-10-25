@@ -1,12 +1,12 @@
 const L=require('./layout.cjs');
-const SUPPORTED_CAPABILITIES = ['vibration','nfc','udp','time','system','display','fs'];
+const SUPPORTED_CAPABILITIES = ['vibration','nfc','udp','hid','time','system','display','fs','net','irsensor','audio'];
 function validateManifest(value){
  if(!value)return {capabilities:SUPPORTED_CAPABILITIES,endpoints:[]};
  const endpoints=Array.isArray(value.endpoints)?value.endpoints.slice(0,8).map(require('./helpers/network.cjs').endpoint):[];
  return {capabilities:SUPPORTED_CAPABILITIES,endpoints};
 }
 async function create({rpc,mapped,directory,hardware:providedHardware}){
-  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,httpServer,netSockets,lastSequence=0,lastPoll=0;
+  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,httpServer,netSockets,timeService,lastSequence=0,lastPoll=0;
   const base=mapped+L.OFFSET;
  return {hardware,async atBoundary(app=null){
   if(!lastPoll||Date.now()-lastPoll>5000){await rpc.write(base,(await hardware.poll()).subarray(0,128));lastPoll=Date.now();}
@@ -30,12 +30,40 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
    }else if(op===L.OP.udp){
     const index=request.readUInt32LE(8),length=request.readUInt32LE(12);if(index>=config.endpoints.length||length<1||length>1024){status=L.STATUS.invalid;}
     else{network??=await require('./helpers/network.cjs').create(rpc,directory);payload=await network.exchange(config.endpoints[index],request.subarray(32,32+length));}
+   }else if(op===L.OP.hid){
+    const npadId=request.readUInt32LE(8)===0&&request.readUInt32LE(12)===0?32:request.readUInt32LE(8);
+    const details=await hardware.queryPadDetails(npadId);
+    payload=Buffer.alloc(40);
+    payload.writeUInt32LE(details.styleSet>>>0,0);
+    payload.writeUInt32LE(details.bodyColor>>>0,4);
+    payload.writeUInt32LE(details.buttonColor>>>0,8);
+    payload.writeUInt32LE(details.ledPattern>>>0,12);
+    payload.writeUInt32LE(details.vibPermitted>>>0,16);
+    details.actualVib.copy(payload,20);
    }else if(op===L.OP.time){
-    const timeModule=require('./time.cjs');
-    const t=await (await timeModule.create(rpc)).now();
-    payload=Buffer.alloc(8);payload.writeBigUInt64LE(BigInt(t));
+    timeService??=await require('./time.cjs').create(rpc);
+    const t=await timeService.now();
+    payload=Buffer.alloc(48);
+    payload.writeBigUInt64LE(BigInt(t.steadyTick),0);
+    payload.writeBigUInt64LE(BigInt(t.steadyFreq),8);
+    payload.writeBigUInt64LE(BigInt(t.posixSeconds),16);
+    payload.writeUInt32LE(t.year>>>0,24);
+    payload.writeUInt32LE(t.month>>>0,28);
+    payload.writeUInt32LE(t.day>>>0,32);
+    payload.writeUInt32LE(t.hour>>>0,36);
+    payload.writeUInt32LE(t.minute>>>0,40);
+    payload.writeUInt32LE(t.second>>>0,44);
    }else if(op===L.OP.system){
-    payload=Buffer.alloc(8);payload.writeBigUInt64LE(BigInt(process.pid));
+    timeService??=await require('./time.cjs').create(rpc);
+    const sys=await timeService.systemInfo();
+    payload=Buffer.alloc(48);
+    payload.writeBigUInt64LE(BigInt(sys.aruid),0);
+    payload.writeBigUInt64LE(BigInt(sys.steadyTick),8);
+    payload.writeUInt32LE(sys.steadyFreq>>>0,16);
+    payload.writeInt32LE(sys.threadPriority,20);
+    payload.writeBigUInt64LE(BigInt(sys.mainBase),24);
+    payload.writeBigUInt64LE(BigInt(sys.sdkBase),32);
+    payload.writeUInt32LE(sys.hostPid>>>0,40);
    }else if(op===L.OP.fs){
     fsService??=await require('./fs.cjs').create(rpc);
     const subOp=request.readUInt32LE(8);
@@ -193,6 +221,22 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
      payload=Buffer.alloc(16);
      payload.writeUInt32LE(rn.result===0?1:0,0);
      payload.writeUInt32LE(rn.result>>>0,12);
+    }else if(subOp===18){
+     const oldLen=Math.min(request.readUInt32LE(12)||1,64);
+     const newLen=Math.min(request.readUInt32LE(16)||1,64);
+     const oldPath=request.subarray(32,32+oldLen).toString('utf8').replace(/\0.*$/, '');
+     const newPath=request.subarray(32+64,32+64+newLen).toString('utf8').replace(/\0.*$/, '');
+     const rn=await fsService.renameDirPath(oldPath,newPath);
+     payload=Buffer.alloc(16);
+     payload.writeUInt32LE(rn.result===0?1:0,0);
+     payload.writeUInt32LE(rn.result>>>0,12);
+    }else if(subOp===19){
+     const mountLen=Math.min(request.readUInt32LE(16)||4,64);
+     const mountName=request.subarray(32,32+mountLen).toString('utf8').replace(/\0.*$/, '')||'save';
+     const cm=await fsService.commitMount(mountName);
+     payload=Buffer.alloc(16);
+     payload.writeUInt32LE(cm.result===0?1:0,0);
+     payload.writeUInt32LE(cm.result>>>0,12);
     }else{
      status=L.STATUS.invalid;
     }
@@ -246,8 +290,44 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
      const cl=await netSockets.closeSocket(fd);
      payload=Buffer.alloc(16);
      payload.writeInt32LE(cl.result,0);
+    }else if(subOp===7){
+     const ipWord=request.readUInt32LE(12);
+     const port=request.readUInt32LE(16)||80;
+     const cn=await netSockets.connectTcp(ipWord,port);
+     payload=Buffer.alloc(16);
+     payload.writeInt32LE(cn.fd,0);
+     payload.writeUInt32LE(port>>>0,4);
+     payload.writeUInt32LE(cn.errno>>>0,8);
+    }else if(subOp===8){
+     const fd=request.readInt32LE(12);
+     const sn=await netSockets.getSockName(fd);
+     payload=Buffer.alloc(16);
+     payload.writeUInt32LE(sn.localIp>>>0,0);
+     payload.writeUInt32LE(sn.localPort>>>0,4);
+     payload.writeUInt32LE(sn.errno>>>0,8);
+    }else if(subOp===9){
+     const er=await netSockets.getLastErrno();
+     payload=Buffer.alloc(16);
+     payload.writeUInt32LE(er.errno>>>0,0);
     }else{
      status=L.STATUS.invalid;
+    }
+   }else if(op===L.OP.irsensor){
+    const npadId=request.readUInt32LE(8)===0&&request.readUInt32LE(12)===0?32:request.readUInt32LE(8);
+    const ir=await hardware.queryIrStatus(npadId);
+    payload=Buffer.alloc(16);
+    payload.writeUInt32LE(ir.handle>>>0,0);
+    payload.writeUInt32LE(ir.status>>>0,4);
+    payload.writeUInt32LE(ir.handleResult>>>0,8);
+    payload.writeUInt32LE(ir.statusResult>>>0,12);
+   }else if(op===L.OP.audio){
+    timeService??=await require('./time.cjs').create(rpc);
+    const maxCount=request.readUInt32LE(8)||8;
+    const au=await timeService.listAudioInputs(maxCount);
+    payload=Buffer.alloc(16+au.names.length*64);
+    payload.writeUInt32LE(au.count>>>0,0);
+    for(let i=0;i<au.names.length;i++){
+     payload.write(au.names[i].substring(0,63),16+i*64,64,'utf8');
     }
    }
   }catch(error){

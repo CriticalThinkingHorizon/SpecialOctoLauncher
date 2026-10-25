@@ -9,26 +9,26 @@ const uint PATH_LEN = 12u;
 const uint PATH_CHARS[12] = uint[12](116u,109u,112u,58u,47u,116u,109u,112u,116u,101u,115u,116u);
 
 void writeTargetPath(){
- for(uint i=0u;i<64u;i++)hbFsPathByte(i,i<PATH_LEN?PATH_CHARS[i]:0u);
+ for(uint i=0u;i<64u;i++)nnFsSetPathByte(i,i<PATH_LEN?PATH_CHARS[i]:0u);
 }
 
 void main(){
- uint pressed=hbPressed();
+ uint pressed=nnHidGetNpadPressed();
 
- // State machine driven entirely by generic hbFsStat() and hbFsDelete() primitives:
- // c.game.z = 0: Issue hbFsStat("tmp:/tmptest")
- // c.game.z = 1: Waiting for Stat response
- // c.game.z = 2: Stat completed -> if file exists, issue hbFsDelete("tmp:/tmptest"), else go to Done (4)
- // c.game.z = 3: Waiting for Delete response -> go to Done (4)
+ // State machine driven by official-aligned nnFsGetEntryType() and nnFsDeleteFile() primitives:
+ // c.game.z = 0: Issue nnFsGetEntryType("tmp:/tmptest")
+ // c.game.z = 1: Waiting for GetEntryType response
+ // c.game.z = 2: If file exists, issue nnFsDeleteFile("tmp:/tmptest"), else go to Done (4)
+ // c.game.z = 3: Waiting for DeleteFile response -> go to Done (4)
  // c.game.z = 4: Done (c.piece.x = existedBefore, c.piece.y = statResult, c.piece.z = deleteAttempted, c.piece.w = deleteResult)
 
  if(c.game.z==0u&&!hbBusy()){
   writeTargetPath();
-  if(hbFsStat(PATH_LEN))c.game.z=1u;
+  if(nnFsGetEntryType(PATH_LEN))c.game.z=1u;
  }else if(c.game.z==1u&&!hbBusy()){
-  bool exists=hbFsStatExists();
+  bool exists=nnFsResultExists();
   c.piece.x=exists?1:0;
-  c.piece.y=int(hbFsNativeResult());
+  c.piece.y=int(nnFsResultCode());
   if(exists){
    c.game.z=2u;
   }else{
@@ -38,12 +38,12 @@ void main(){
   }
  }else if(c.game.z==2u&&!hbBusy()){
   writeTargetPath();
-  if(hbFsDelete(PATH_LEN)){
+  if(nnFsDeleteFile(PATH_LEN)){
    c.piece.z=1;
    c.game.z=3u;
   }
  }else if(c.game.z==3u&&!hbBusy()){
-  c.piece.w=int(hbFsNativeResult());
+  c.piece.w=int(nnFsResultCode());
   c.game.z=4u;
  }
 
@@ -52,6 +52,6 @@ void main(){
   c.game.z=0u;
  }
 
- if(((pressed|hbButtons())&HB_MINUS)!=0u)hbExit();
+ if(((pressed|nnHidGetNpadButtons())&HB_MINUS)!=0u)hbExit();
  hbEndFrame();
 }
