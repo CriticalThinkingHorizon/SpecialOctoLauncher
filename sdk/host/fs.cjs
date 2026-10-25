@@ -1,3 +1,4 @@
+const zlib = require('node:zlib');
 const nativeClient = require('../native/client.cjs');
 const ftpDefs = require('../native/ftp-functions.json');
 
@@ -55,6 +56,18 @@ async function create(rpc) {
       return await client.call('CloseDirectory', [handle]);
     },
     async listDirectory(pathStr, maxEntries = 8, startOffset = 0) {
+      if (!pathStr || pathStr === '/') {
+        const roots = [
+          { name: 'rom:', type: 'dir', size: 0 },
+          { name: 'save:', type: 'dir', size: 0 },
+          { name: 'tmp:', type: 'dir', size: 0 }
+        ];
+        return {
+          result: 0,
+          total: roots.length,
+          entries: roots.slice(startOffset, startOffset + maxEntries)
+        };
+      }
       const pathOff = 0x1000;
       const handleOff = 0x2000;
       const countOff = 0x2010;
@@ -141,14 +154,22 @@ async function create(rpc) {
         return { result: readResult, totalLines: 0, lines: [] };
       }
 
-      // Skip 112-byte SmileBASIC4 container header if present (magic 0x00000004 and "SmileBoom" at +20)
+      // Skip 112-byte SmileBASIC4 container header if present (magic 0x00000004, type 2 = TXT/PRG)
       let payloadBuf = rawBuf;
-      if (
-        rawBuf.length >= 112 &&
-        rawBuf.readUInt32LE(0) === 4 &&
-        rawBuf.subarray(20, 29).toString('ascii') === 'SmileBoom'
-      ) {
+      if (rawBuf.length >= 112 && rawBuf.readUInt32LE(0) === 4 && rawBuf.readUInt16LE(6) === 2) {
+        const compressed = rawBuf.readUInt16LE(4) === 1;
         payloadBuf = rawBuf.subarray(112);
+        if (compressed && payloadBuf.length > 2) {
+          try {
+            payloadBuf = zlib.inflateSync(payloadBuf, { finishFlush: zlib.constants.Z_SYNC_FLUSH });
+          } catch {
+            try {
+              if (payloadBuf.length > 20) {
+                payloadBuf = zlib.inflateSync(payloadBuf.subarray(0, payloadBuf.length - 20));
+              }
+            } catch {}
+          }
+        }
       }
 
       // Convert to printable ASCII lines (replace tabs with spaces, non-ASCII with '.')

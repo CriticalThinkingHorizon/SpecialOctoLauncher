@@ -46,8 +46,8 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
      const param=request.readUInt32LE(12);
      const maxEntries=Math.min((param&0xffff)||15,15);
      const startOffset=(param>>>16)&0xffff;
-     const pathLen=Math.min(request.readUInt32LE(16)||6,64);
-     const pathStr=request.subarray(32,32+pathLen).toString('utf8').replace(/\0.*$/, '')||'rom:/';
+     const pathLen=Math.min(request.readUInt32LE(16)||1,64);
+     const pathStr=request.subarray(32,32+pathLen).toString('utf8').replace(/\0.*$/, '')||'/';
      const {result,total,entries}=await fsService.listDirectory(pathStr,maxEntries,startOffset);
      if(result!==0){
       status=L.STATUS.native;

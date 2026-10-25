@@ -24,7 +24,7 @@ async function main() {
     CloseDirectory: ftpDefs.closeDirectory
   });
 
-  const mounts = ['rom:/'];
+  const mounts = ['rom:/', 'save:/', 'tmp:/'];
   const allEntries = [];
   const entryBytes = MAX_ENTRIES * ENTRY_STRIDE;
 
