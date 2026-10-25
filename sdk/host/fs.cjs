@@ -59,7 +59,7 @@ async function create(rpc) {
       const handleOff = 0x2000;
       const countOff = 0x2010;
       const entryOff = 0x4000;
-      const maxTotal = 64;
+      const maxTotal = 32;
       const pathBuf = Buffer.from(pathStr + '\0', 'utf8');
 
       await client.write(pathOff, pathBuf);

@@ -106,9 +106,14 @@ void main(){
   if(c.game.z==0u&&!hbBusy()){
    if(requestTextRead())c.game.z=1u;
   }
-  if(c.game.z==1u&&!hbBusy()&&hbResult()==0u&&hbResponseBytes()>=16u){
-   c.game.z=2u;
-   c.game.w=min(hbFsTextLineCount(),12u);
+  if(c.game.z==1u&&!hbBusy()){
+   if(hbResult()==0u&&hbResponseBytes()>=16u){
+    c.game.z=2u;
+    c.game.w=min(hbFsTextLineCount(),12u);
+   }else{
+    c.game.z=3u;
+    c.game.w=0u;
+   }
   }
   if(c.game.z==2u&&!hbBusy()){
    int total=int(hbFsTextTotalLines());
@@ -135,11 +140,16 @@ void main(){
  }
 
  uint count=1u;
- if(c.game.z==1u&&!hbBusy()&&hbResult()==0u&&hbResponseBytes()>=8u){
-  c.game.z=2u;
-  count=max(hbFsEntryCount(),1u);
-  if(count>8u)count=8u;
-  c.game.w=count;
+ if(c.game.z==1u&&!hbBusy()){
+  if(hbResult()==0u&&hbResponseBytes()>=8u){
+   c.game.z=2u;
+   count=max(hbFsEntryCount(),1u);
+   if(count>8u)count=8u;
+   c.game.w=count;
+  }else{
+   c.game.z=3u;
+   c.game.w=1u;
+  }
  }else if(c.game.w!=0u){
   count=c.game.w;
  }
