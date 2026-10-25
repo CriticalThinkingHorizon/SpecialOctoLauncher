@@ -12,50 +12,130 @@ void setPathByte(uint i,uint v){
 }
 void setPathLen(uint n){c.piece.x=int(min(n,63u));}
 
+uint upperAscii(uint ch){return (ch>=97u&&ch<=122u)?(ch-32u):ch;}
+
+// Checks whether the directory entry at `entry` ends with .TXT or .PRG (case-insensitive).
+bool isReadableTextEntry(uint entry){
+ uint len=0u;
+ for(uint i=0u;i<47u;i++){
+  if(hbFsEntryByte(entry,i)==0u)break;
+  len=i+1u;
+ }
+ if(len<5u)return false;
+ uint c0=hbFsEntryByte(entry,len-4u);
+ uint c1=upperAscii(hbFsEntryByte(entry,len-3u));
+ uint c2=upperAscii(hbFsEntryByte(entry,len-2u));
+ uint c3=upperAscii(hbFsEntryByte(entry,len-1u));
+ if(c0!=46u)return false;
+ bool isTxt=(c1==84u&&c2==88u&&c3==84u);
+ bool isPrg=(c1==80u&&c2==82u&&c3==71u);
+ return isTxt||isPrg;
+}
+
 void initPath(){
  setPathByte(0u,114u);setPathByte(1u,111u);setPathByte(2u,109u);
  setPathByte(3u,58u);setPathByte(4u,47u);setPathLen(5u);
+ c.piece.y=0;c.piece.z=0;c.piece.w=0;
 }
 
 bool requestListing(){
  uint n=pathLen();
  for(uint i=0u;i<64u;i++)hbFsPathByte(i,i<n?pathByte(i):0u);
- return hbFsListDir(8u,n);
+ return hbFsListDirOffset(8u,uint(max(c.piece.w,0)),n);
+}
+
+bool requestTextRead(){
+ uint n=pathLen();
+ for(uint i=0u;i<64u;i++)hbFsPathByte(i,i<n?pathByte(i):0u);
+ return hbFsReadText(uint(max(c.piece.z,0)),n);
 }
 
 void enterSelected(){
  uint sel=c.game.y;
- if(hbFsEntryType(sel)!=1u)return;
- uint n=pathLen();
- if(n==0u||pathByte(n-1u)!=47u){setPathByte(n,47u);n++;}
- for(uint i=0u;i<47u;i++){
-  uint ch=hbFsEntryByte(sel,i);
-  if(ch==0u)break;
-  if(n>=62u)break;
-  setPathByte(n,ch);n++;
+ uint etype=hbFsEntryType(sel);
+ if(etype==1u){
+  uint n=pathLen();
+  if(n==0u||pathByte(n-1u)!=47u){setPathByte(n,47u);n++;}
+  for(uint i=0u;i<47u;i++){
+   uint ch=hbFsEntryByte(sel,i);
+   if(ch==0u)break;
+   if(n>=62u)break;
+   setPathByte(n,ch);n++;
+  }
+  if(n==0u||pathByte(n-1u)!=47u){setPathByte(n,47u);n++;}
+  setPathLen(n);
+  c.piece.y=0;c.piece.z=0;c.piece.w=0;
+  c.game.y=0u;c.game.z=0u;c.game.w=0u;
+ }else if(isReadableTextEntry(sel)){
+  uint n=pathLen();
+  if(n==0u||pathByte(n-1u)!=47u){setPathByte(n,47u);n++;}
+  for(uint i=0u;i<47u;i++){
+   uint ch=hbFsEntryByte(sel,i);
+   if(ch==0u)break;
+   if(n>=63u)break;
+   setPathByte(n,ch);n++;
+  }
+  setPathLen(n);
+  c.piece.y=1;c.piece.z=0;
+  c.game.z=0u;c.game.w=0u;
  }
- if(n==0u||pathByte(n-1u)!=47u){setPathByte(n,47u);n++;}
- setPathLen(n);c.game.y=0u;c.game.z=0u;c.game.w=0u;
 }
 
 void goBack(){
  uint n=pathLen();
+ if(c.piece.y==1){
+  while(n>5u&&pathByte(n-1u)!=47u)n--;
+  setPathLen(n);
+  c.piece.y=0;c.piece.z=0;
+  c.game.z=0u;c.game.w=0u;
+  return;
+ }
  if(n<=5u){if(hbConnected())hbExit();return;}
  if(n>0u&&pathByte(n-1u)==47u)n--;
  while(n>5u&&pathByte(n-1u)!=47u)n--;
- setPathLen(n);c.game.y=0u;c.game.z=0u;c.game.w=0u;
+ setPathLen(n);
+ c.piece.y=0;c.piece.z=0;c.piece.w=0;
+ c.game.y=0u;c.game.z=0u;c.game.w=0u;
 }
 
 void main(){
  uint pressed=hbPressed();
  if(pathLen()==0u)initPath();
 
+ if(c.piece.y==1){
+  if(c.game.z==0u&&!hbBusy()){
+   if(requestTextRead())c.game.z=1u;
+  }
+  if(c.game.z==1u&&!hbBusy()&&hbResult()==0u&&hbResponseBytes()>=16u){
+   c.game.z=2u;
+   c.game.w=min(hbFsTextLineCount(),12u);
+  }
+  if(c.game.z==2u&&!hbBusy()){
+   int total=int(hbFsTextTotalLines());
+   int maxStart=max(0,total-12);
+   int cur=max(c.piece.z,0);
+   int next=cur;
+   if((pressed&HB_DOWN)!=0u)next=min(cur+1,maxStart);
+   if((pressed&HB_UP)!=0u)next=max(cur-1,0);
+   if((pressed&HB_RIGHT)!=0u)next=min(cur+12,maxStart);
+   if((pressed&HB_LEFT)!=0u)next=max(cur-12,0);
+   if(next!=cur){
+    c.piece.z=next;
+    c.game.z=0u;
+   }
+  }
+  if((pressed&HB_B)!=0u&&!hbBusy())goBack();
+  if((pressed&HB_MINUS)!=0u&&hbConnected())hbExit();
+  hbEndFrame();
+  return;
+ }
+
  if(c.game.z==0u&&!hbBusy()){
   if(requestListing())c.game.z=1u;
  }
 
  uint count=1u;
- if(c.game.z!=0u&&!hbBusy()&&hbResult()==0u&&hbResponseBytes()>=8u){
+ if(c.game.z==1u&&!hbBusy()&&hbResult()==0u&&hbResponseBytes()>=8u){
   c.game.z=2u;
   count=max(hbFsEntryCount(),1u);
   if(count>8u)count=8u;
@@ -64,8 +144,49 @@ void main(){
   count=c.game.w;
  }
  if(c.game.y>=count)c.game.y=0u;
- if((pressed&HB_DOWN)!=0u)c.game.y=(c.game.y+1u)%count;
- if((pressed&HB_UP)!=0u)c.game.y=(c.game.y+count-1u)%count;
+
+ if((pressed&HB_DOWN)!=0u){
+  uint total=hbFsEntryTotal();
+  uint startOff=uint(max(c.piece.w,0));
+  if(c.game.y+1u<count){
+   c.game.y++;
+  }else if(startOff+8u<total&&!hbBusy()){
+   c.piece.w=int(startOff+8u);
+   c.game.y=0u;
+   c.game.z=0u;
+  }else{
+   c.game.y=0u;
+  }
+ }
+ if((pressed&HB_UP)!=0u){
+  uint startOff=uint(max(c.piece.w,0));
+  if(c.game.y>0u){
+   c.game.y--;
+  }else if(startOff>=8u&&!hbBusy()){
+   c.piece.w=int(startOff-8u);
+   c.game.y=7u;
+   c.game.z=0u;
+  }else{
+   c.game.y=count-1u;
+  }
+ }
+ if((pressed&HB_RIGHT)!=0u&&!hbBusy()){
+  uint total=hbFsEntryTotal();
+  uint startOff=uint(max(c.piece.w,0));
+  if(startOff+8u<total){
+   c.piece.w=int(startOff+8u);
+   c.game.y=0u;
+   c.game.z=0u;
+  }
+ }
+ if((pressed&HB_LEFT)!=0u&&!hbBusy()){
+  uint startOff=uint(max(c.piece.w,0));
+  if(startOff>=8u){
+   c.piece.w=int(startOff-8u);
+   c.game.y=0u;
+   c.game.z=0u;
+  }
+ }
  if((pressed&HB_A)!=0u&&c.game.z==2u&&!hbBusy())enterSelected();
  if((pressed&HB_B)!=0u&&!hbBusy())goBack();
  if((pressed&HB_MINUS)!=0u&&hbConnected())hbExit();
