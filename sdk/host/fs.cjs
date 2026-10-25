@@ -29,6 +29,74 @@ async function create(rpc) {
   const TYPE_OFFSET = 0x304;
   const SIZE_OFFSET = 0x308;
 
+  let exefsCache = null;
+
+  async function getExefsEntries() {
+    if (exefsCache) return exefsCache;
+    const codeBases = [];
+    for (let address = 0; address < 2 ** 39;) {
+      const region = await rpc.query(address);
+      const next = region.address + region.size;
+      if (region.type === 3 && region.permissions === 5 && !region.ipcReferences) {
+        codeBases.push(region);
+      }
+      if (next <= address) break;
+      address = next;
+    }
+
+    const modules = [];
+    let subsdkCount = 0;
+    for (let i = 0; i < codeBases.length; i++) {
+      const codeReg = codeBases[i];
+      let name = `module${i}`;
+      if (codeReg.address === rpc.a.main) {
+        name = 'main';
+      } else if (codeReg.address === rpc.a.sdk) {
+        name = 'sdk';
+      } else if (i === 0 && codeReg.address < rpc.a.main) {
+        name = 'rtld';
+      } else {
+        name = `subsdk${subsdkCount++}`;
+      }
+
+      // Compute total contiguous module span (code + rodata + data) up to next code module
+      const nextCodeAddr = i + 1 < codeBases.length ? codeBases[i + 1].address : Infinity;
+      let totalSize = 0;
+      let textSize = codeReg.size;
+      let rodataSize = 0;
+      let dataSize = 0;
+      let cur = codeReg.address;
+      for (let seg = 0; seg < 6 && cur < nextCodeAddr; seg++) {
+        const r = seg === 0 ? codeReg : await rpc.query(cur);
+        if (![3, 4].includes(r.type) || !(r.permissions & 1) || r.ipcReferences) break;
+        if (seg > 0 && r.permissions === 5) break;
+        totalSize += r.size;
+        if (r.permissions === 1) rodataSize += r.size;
+        else if ((r.permissions & 3) === 3) dataSize += r.size;
+        cur = r.address + r.size;
+      }
+
+      modules.push({
+        name,
+        type: 'dir',
+        size: totalSize,
+        children: [
+          { name: `${name}.nso`, type: 'file', size: totalSize },
+          { name: '.text', type: 'file', size: textSize },
+          ...(rodataSize > 0 ? [{ name: '.rodata', type: 'file', size: rodataSize }] : []),
+          ...(dataSize > 0 ? [{ name: '.data', type: 'file', size: dataSize }] : []),
+          { name: `base_0x${codeReg.address.toString(16)}`, type: 'file', size: 0 }
+        ]
+      });
+    }
+
+    exefsCache = [
+      ...modules,
+      { name: 'main.npdm', type: 'file', size: 0 }
+    ];
+    return exefsCache;
+  }
+
   return {
     client,
     async OpenFile(handleOut, path, mode) {
@@ -60,12 +128,32 @@ async function create(rpc) {
         const roots = [
           { name: 'rom:', type: 'dir', size: 0 },
           { name: 'save:', type: 'dir', size: 0 },
-          { name: 'tmp:', type: 'dir', size: 0 }
+          { name: 'tmp:', type: 'dir', size: 0 },
+          { name: 'exefs:', type: 'dir', size: 0 }
         ];
         return {
           result: 0,
           total: roots.length,
           entries: roots.slice(startOffset, startOffset + maxEntries)
+        };
+      }
+      if (pathStr.startsWith('exefs:')) {
+        const exefsEntries = await getExefsEntries();
+        const sub = pathStr.slice('exefs:'.length).replace(/^\/+|\/+$/g, '');
+        if (!sub) {
+          const top = exefsEntries.map(({ name, type, size }) => ({ name, type, size }));
+          return {
+            result: 0,
+            total: top.length,
+            entries: top.slice(startOffset, startOffset + maxEntries)
+          };
+        }
+        const mod = exefsEntries.find(m => m.type === 'dir' && m.name === sub);
+        const list = mod?.children ?? [];
+        return {
+          result: 0,
+          total: list.length,
+          entries: list.slice(startOffset, startOffset + maxEntries)
         };
       }
       const pathOff = 0x1000;
