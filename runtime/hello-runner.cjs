@@ -187,15 +187,23 @@ async function main(directory, attempt = 'auto') {
       capture: report.capture
     };
 
-    console.log('Preparing Hello World GPU app via gpu-app.cjs...');
-    const appPrep = await prepare(rpc, menuObj, app, directory);
+    const appNames = ['file-explorer', 'hello-world'];
+    let currentIdx = Math.max(0, appNames.indexOf(appName));
+    const preparedApps = {};
+    for (const name of appNames) {
+      const loadedApp = name === appName ? app : await catalogTools.readApp(path.join(__dirname, '../apps', name));
+      console.log(`Preparing ${name} GPU app via gpu-app.cjs...`);
+      const prep = await prepare(rpc, menuObj, loadedApp, directory);
+      preparedApps[name] = { app: loadedApp, prep };
+    }
+    const appPrep = preparedApps[appNames[currentIdx]].prep;
     report.pipeline = appPrep.pipeline;
     report.computePipeline = appPrep.computePipeline;
     report.computePipelines = appPrep.computePipelines;
     report.commands = appPrep.commands;
     report.ready = true;
     await save();
-    console.log('Hello World GPU app prepared successfully.');
+    console.log('GPU apps prepared successfully (press PLUS or MINUS on console to switch apps).');
 
     // Start continuous frame loop
     const inputInspection = JSON.parse(await fs.readFile(path.join(directory, 'input-inspection.json')));
@@ -306,11 +314,35 @@ async function main(directory, attempt = 'auto') {
     process.on('SIGINT', () => stop = true);
     process.on('SIGTERM', () => stop = true);
 
-    // Service SDK requests (fs, vibration, etc.) while the native frame loop runs.
-    const sdkApp = {fingerprint: 'file-explorer', manifest: JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '../apps/file-explorer/app.json'), 'utf8'))};
+    const applyApp = async (name) => {
+      const { app: targetApp, prep } = preparedApps[name];
+      for (let phase = 0; phase < prep.commands.length; phase++) {
+        const o = 0x1000 + phase * 0x100, obj = control + o;
+        u64(o + 0x50, obj + 0x60);
+        prep.commands[phase].forEach((v, i) => u64(o + 0x60 + i * 8, v));
+        putCtrl(o + 0x80, struct(72, 4, {16: 1, 40: 1, 56: 1}, {24: control + 0x200, 32: control + 0x210, 48: obj + 0x28, 64: semObject + 0x28}));
+      }
+      await rpc.write(control + 0x1000, data.subarray(0x1000, 0x1000 + prep.commands.length * 0x100));
+
+      const appRegion = Buffer.alloc(0x7f0000 - 784);
+      targetApp.files.state.bytes.subarray(784, 1024).copy(appRegion, 0);
+      targetApp.files.data.bytes.copy(appRegion, 1024 - 784);
+      appRegion.writeFloatLE(1, 960 - 784);
+      await rpc.write(mapped + 784, appRegion);
+    };
+
+    // Service SDK requests (fs, vibration, etc.) and app switch flag (c.reserved.z at offset 1016) while the native frame loop runs.
     while (!stop) {
       try {
-        await sdkRuntime.atBoundary(sdkApp);
+        const currentEntry = preparedApps[appNames[currentIdx]];
+        await sdkRuntime.atBoundary({ fingerprint: currentEntry.app.id, manifest: currentEntry.app.manifest });
+        const exitFlag = (await rpc.read(mapped + 1016, 4)).readUInt32LE(0);
+        if (exitFlag !== 0) {
+          currentIdx = (currentIdx + 1) % appNames.length;
+          const nextName = appNames[currentIdx];
+          console.log(`[APP SWITCH] Switching active app to: ${nextName}`);
+          await applyApp(nextName);
+        }
       } catch (error) {
         console.error('[SDK] request failed:', error.message);
       }

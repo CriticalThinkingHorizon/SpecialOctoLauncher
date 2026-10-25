@@ -9,6 +9,6 @@ void main(){
  c.game.x=buttons;
  c.motion.x+=1.0/60.0;c.state.z++;
  c.transition.x=max(0.0,c.transition.x-1.0/15.0);
- if(hbConnected() && (pressed&(HB_B|HB_MINUS))!=0u)hbExit();
+ if(hbConnected() && (pressed&(HB_B|HB_MINUS|HB_PLUS))!=0u)hbExit();
  hbEndFrame();
 }

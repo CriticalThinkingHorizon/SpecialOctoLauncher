@@ -145,7 +145,9 @@ async function main() {
       py.once('close', code => code === 0 ? resolve() : reject(Error(`assets.py exited with code ${code}`)));
     });
 
-    const targetApp = process.argv[3] || 'file-explorer';
+    const argApp = process.argv.slice(2).find(a => a.startsWith('--app='))?.split('=')[1]
+      || process.argv.slice(3).find(a => !a.startsWith('-'));
+    const targetApp = argApp || 'file-explorer';
     console.log(`\n--- Starting ${targetApp} Direct Execution Loop ---`);
     const loopChild = spawn(process.execPath, [path.join(__dirname, 'runtime/hello-runner.cjs'), directory, 'auto', targetApp], {
       cwd: __dirname,

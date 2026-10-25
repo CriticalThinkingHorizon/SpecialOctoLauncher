@@ -34,6 +34,14 @@ bool hbBusy(){return hbWord(2048u)!=hbWord(4096u);}
 uint hbResult(){return hbWord(4100u);}
 uint hbResponseBytes(){return min(hbWord(4104u),1024u);}
 uint hbResponseByte(uint index){return index<hbResponseBytes()?(hbWord(4128u+(index/4u)*4u)>>((index%4u)*8u))&255u:0u;}
+uint hbFsEntryCount(){return hbWord(4128u);}
+uint hbFsEntryTotal(){return hbWord(4132u);}
+uint hbFsEntryByte(uint entry,uint byteIndex){return entry<15u&&byteIndex<48u?hbResponseByte(8u+entry*64u+byteIndex):0u;}
+uint hbFsEntryType(uint index){return index<15u?hbWord(4128u+8u+index*64u+48u):0u;}
+uint hbFsTextLineCount(){return hbWord(4128u);}
+uint hbFsTextTotalLines(){return hbWord(4132u);}
+uint hbFsTextLineStart(){return hbWord(4136u);}
+uint hbFsTextByte(uint line,uint col){return line<20u&&col<48u?hbResponseByte(16u+line*48u+col):0u;}
 // Native optical ring: 8 players x 2 sides. Side 0/1 matches Jcms handles.
 // Keep a separate previous sequence for each player/side in your app state.
 vec2 hbJoyMouseDelta(uint player,uint side,inout uint previous){
@@ -73,5 +81,9 @@ bool hbScanNfc(){return hbRequest(2u,0u,0u,0u);}
 // Fill request payload before hbSendUdp. Call only when !hbBusy().
 void hbRequestByte(uint index,uint value){if(index>=1024u||hbBusy())return;uint o=HB_EXT+(2080u/4u)+index/4u,shift=(index%4u)*8u;c.atlas[o]=(c.atlas[o]&~(255u<<shift))|((value&255u)<<shift);}
 bool hbSendUdp(uint endpoint,uint bytes){return bytes>0u&&bytes<=1024u&&hbRequest(3u,endpoint,bytes,0u);}
+bool hbFsListDir(uint maxEntries,uint pathLen){return hbRequest(9u,1u,maxEntries,pathLen);}
+bool hbFsListDirOffset(uint maxEntries,uint startOffset,uint pathLen){return hbRequest(9u,1u,(maxEntries&65535u)|((startOffset&65535u)<<16u),pathLen);}
+bool hbFsReadText(uint lineStart,uint pathLen){return hbRequest(9u,2u,lineStart,pathLen);}
+void hbFsPathByte(uint index,uint value){if(index>=64u||hbBusy())return;uint o=HB_EXT+(2048u+32u)/4u+index/4u,shift=(index%4u)*8u;c.atlas[o]=(c.atlas[o]&~(255u<<shift))|((value&255u)<<shift);}
 #endif
 #endif
