@@ -4,23 +4,47 @@ layout(local_size_x=1) in;
 #include "abi.glsl"
 #include "hb.glsl"
 
+// Target path: "tmp:/tmptest" (12 chars)
+const uint PATH_LEN = 12u;
+const uint PATH_CHARS[12] = uint[12](116u,109u,112u,58u,47u,116u,109u,112u,116u,101u,115u,116u);
+
+void writeTargetPath(){
+ for(uint i=0u;i<64u;i++)hbFsPathByte(i,i<PATH_LEN?PATH_CHARS[i]:0u);
+}
+
 void main(){
  uint pressed=hbPressed();
 
- // c.game.z: 0 = request needed, 1 = waiting for RPC, 2 = result ready
- if(c.game.z==0u&&!hbBusy()){
-  if(hbFsTestTmp(2u)){
-   c.game.z=1u;
-  }
- }
+ // State machine driven entirely by generic hbFsStat() and hbFsDelete() primitives:
+ // c.game.z = 0: Issue hbFsStat("tmp:/tmptest")
+ // c.game.z = 1: Waiting for Stat response
+ // c.game.z = 2: Stat completed -> if file exists, issue hbFsDelete("tmp:/tmptest"), else go to Done (4)
+ // c.game.z = 3: Waiting for Delete response -> go to Done (4)
+ // c.game.z = 4: Done (c.piece.x = existedBefore, c.piece.y = statResult, c.piece.z = deleteAttempted, c.piece.w = deleteResult)
 
- if(c.game.z==1u&&!hbBusy()){
-  if(hbResult()==0u&&hbResponseBytes()>=16u){
+ if(c.game.z==0u&&!hbBusy()){
+  writeTargetPath();
+  if(hbFsStat(PATH_LEN))c.game.z=1u;
+ }else if(c.game.z==1u&&!hbBusy()){
+  bool exists=hbFsStatExists();
+  c.piece.x=exists?1:0;
+  c.piece.y=int(hbFsNativeResult());
+  if(exists){
    c.game.z=2u;
-   c.game.w=min(hbFsTextLineCount(),20u);
   }else{
-   c.game.z=0u;
+   c.piece.z=0;
+   c.piece.w=0;
+   c.game.z=4u;
   }
+ }else if(c.game.z==2u&&!hbBusy()){
+  writeTargetPath();
+  if(hbFsDelete(PATH_LEN)){
+   c.piece.z=1;
+   c.game.z=3u;
+  }
+ }else if(c.game.z==3u&&!hbBusy()){
+  c.piece.w=int(hbFsNativeResult());
+  c.game.z=4u;
  }
 
  // Press A to re-run the check & delete

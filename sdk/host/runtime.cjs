@@ -6,7 +6,7 @@ function validateManifest(value){
  return {capabilities:SUPPORTED_CAPABILITIES,endpoints};
 }
 async function create({rpc,mapped,directory,hardware:providedHardware}){
-  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,httpServer,lastSequence=0,lastPoll=0;
+  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,httpServer,netSockets,lastSequence=0,lastPoll=0;
   const base=mapped+L.OFFSET;
  return {hardware,async atBoundary(app=null){
   if(!lastPoll||Date.now()-lastPoll>5000){await rpc.write(base,(await hardware.poll()).subarray(0,128));lastPoll=Date.now();}
@@ -121,6 +121,131 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
      for(let i=0;i<res.lines.length;i++){
       payload.write(res.lines[i].substring(0,47),16+i*48,48,'utf8');
      }
+    }else if(subOp===10){
+     const pathLen=Math.min(request.readUInt32LE(16)||1,64);
+     const pathStr=request.subarray(32,32+pathLen).toString('utf8').replace(/\0.*$/, '');
+     const st=await fsService.statPath(pathStr);
+     payload=Buffer.alloc(16);
+     payload.writeUInt32LE(st.exists,0);
+     payload.writeUInt32LE(st.entryType>>>0,4);
+     payload.writeUInt32LE(st.fileSize>>>0,8);
+     payload.writeUInt32LE(st.result>>>0,12);
+    }else if(subOp===11){
+     const initialSize=request.readUInt32LE(12)||0;
+     const pathLen=Math.min(request.readUInt32LE(16)||1,64);
+     const pathStr=request.subarray(32,32+pathLen).toString('utf8').replace(/\0.*$/, '');
+     const cr=await fsService.createPath(pathStr,initialSize);
+     payload=Buffer.alloc(16);
+     payload.writeUInt32LE(cr.result===0?1:0,0);
+     payload.writeUInt32LE(cr.result>>>0,12);
+    }else if(subOp===12){
+     const pathLen=Math.min(request.readUInt32LE(16)||1,64);
+     const pathStr=request.subarray(32,32+pathLen).toString('utf8').replace(/\0.*$/, '');
+     const dl=await fsService.deletePath(pathStr);
+     payload=Buffer.alloc(16);
+     payload.writeUInt32LE(dl.result===0?1:0,0);
+     payload.writeUInt32LE(dl.result>>>0,12);
+    }else if(subOp===13){
+     const offset=request.readUInt32LE(12)||0;
+     const packed=request.readUInt32LE(16)||1;
+     const pathLen=Math.min(packed&0xffff,64);
+     const reqBytes=Math.min((packed>>>16)||960,960);
+     const pathStr=request.subarray(32,32+pathLen).toString('utf8').replace(/\0.*$/, '');
+     const rd=await fsService.readBytesAt(pathStr,offset,reqBytes);
+     payload=Buffer.alloc(16+rd.data.length);
+     payload.writeUInt32LE(rd.data.length,0);
+     payload.writeUInt32LE(rd.fileSize>>>0,4);
+     payload.writeUInt32LE(offset>>>0,8);
+     payload.writeUInt32LE(rd.result>>>0,12);
+     rd.data.copy(payload,16);
+    }else if(subOp===14){
+     const offset=request.readUInt32LE(12)||0;
+     const packed=request.readUInt32LE(16)||1;
+     const pathLen=Math.min(packed&0xffff,64);
+     const dataLen=Math.min((packed>>>16)&0xffff,960);
+     const pathStr=request.subarray(32,32+pathLen).toString('utf8').replace(/\0.*$/, '');
+     const dataBuf=request.subarray(32+64,32+64+dataLen);
+     const wr=await fsService.writeBytesAt(pathStr,offset,dataBuf);
+     payload=Buffer.alloc(16);
+     payload.writeUInt32LE(wr.bytesWritten>>>0,0);
+     payload.writeUInt32LE(offset>>>0,8);
+     payload.writeUInt32LE(wr.result>>>0,12);
+    }else if(subOp===15){
+     const pathLen=Math.min(request.readUInt32LE(16)||1,64);
+     const pathStr=request.subarray(32,32+pathLen).toString('utf8').replace(/\0.*$/, '');
+     const mk=await fsService.mkdirPath(pathStr);
+     payload=Buffer.alloc(16);
+     payload.writeUInt32LE(mk.result===0?1:0,0);
+     payload.writeUInt32LE(mk.result>>>0,12);
+    }else if(subOp===16){
+     const pathLen=Math.min(request.readUInt32LE(16)||1,64);
+     const pathStr=request.subarray(32,32+pathLen).toString('utf8').replace(/\0.*$/, '');
+     const rm=await fsService.rmdirPath(pathStr);
+     payload=Buffer.alloc(16);
+     payload.writeUInt32LE(rm.result===0?1:0,0);
+     payload.writeUInt32LE(rm.result>>>0,12);
+    }else if(subOp===17){
+     const oldLen=Math.min(request.readUInt32LE(12)||1,64);
+     const newLen=Math.min(request.readUInt32LE(16)||1,64);
+     const oldPath=request.subarray(32,32+oldLen).toString('utf8').replace(/\0.*$/, '');
+     const newPath=request.subarray(32+64,32+64+newLen).toString('utf8').replace(/\0.*$/, '');
+     const rn=await fsService.renamePath(oldPath,newPath);
+     payload=Buffer.alloc(16);
+     payload.writeUInt32LE(rn.result===0?1:0,0);
+     payload.writeUInt32LE(rn.result>>>0,12);
+    }else{
+     status=L.STATUS.invalid;
+    }
+   }else if(op===L.OP.net){
+    netSockets??=await require('./net-sockets.cjs').create(rpc);
+    const subOp=request.readUInt32LE(8);
+    if(subOp===1){
+     const info=await netSockets.getInfo();
+     payload=Buffer.alloc(32);
+     payload.writeUInt32LE(info.ipWord>>>0,0);
+     payload.writeUInt32LE(info.netState>>>0,4);
+     payload.writeUInt32LE(info.sockInit>>>0,8);
+     payload.write(info.ipStr,16,16,'utf8');
+    }else if(subOp===2){
+     const port=request.readUInt32LE(12)||8080;
+     const backlog=request.readUInt32LE(16)||8;
+     const ls=await netSockets.listenTcp(port,backlog);
+     payload=Buffer.alloc(16);
+     payload.writeInt32LE(ls.fd,0);
+     payload.writeUInt32LE(ls.port>>>0,4);
+     payload.writeUInt32LE(ls.errno>>>0,8);
+    }else if(subOp===3){
+     const listenFd=request.readInt32LE(12);
+     const timeoutMs=request.readUInt32LE(16)||0;
+     const ac=await netSockets.acceptTcp(listenFd,timeoutMs);
+     payload=Buffer.alloc(16);
+     payload.writeInt32LE(ac.clientFd,0);
+     payload.writeUInt32LE(ac.peerIp>>>0,4);
+     payload.writeUInt32LE(ac.peerPort>>>0,8);
+     payload.writeUInt32LE(ac.ready>>>0,12);
+    }else if(subOp===4){
+     const fd=request.readInt32LE(12);
+     const packed=request.readUInt32LE(16)||960;
+     const maxBytes=Math.min(packed&0xffff,960);
+     const timeoutMs=(packed>>>16)&0xffff;
+     const rv=await netSockets.recvSocket(fd,maxBytes,timeoutMs);
+     payload=Buffer.alloc(16+rv.data.length);
+     payload.writeUInt32LE(rv.bytesRead>>>0,0);
+     payload.writeUInt32LE(rv.ready>>>0,4);
+     rv.data.copy(payload,16);
+    }else if(subOp===5){
+     const fd=request.readInt32LE(12);
+     const len=Math.min(request.readUInt32LE(16)||0,960);
+     const dataBuf=request.subarray(32,32+len);
+     const sn=await netSockets.sendSocket(fd,dataBuf);
+     payload=Buffer.alloc(16);
+     payload.writeUInt32LE(sn.bytesSent>>>0,0);
+     payload.writeUInt32LE(sn.errno>>>0,4);
+    }else if(subOp===6){
+     const fd=request.readInt32LE(12);
+     const cl=await netSockets.closeSocket(fd);
+     payload=Buffer.alloc(16);
+     payload.writeInt32LE(cl.result,0);
     }else{
      status=L.STATUS.invalid;
     }
@@ -130,6 +255,6 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
    payload=Buffer.from(error.message).subarray(0,1024);
   }
   reply.writeUInt32LE(status,4);reply.writeUInt32LE(payload.length,8);payload.copy(reply,32);await rpc.write(base+L.FIELD.response,reply);
- },async close(){await httpServer?.close();await hardware.close();}};
+ },async close(){await netSockets?.closeAll();await httpServer?.close();await hardware.close();}};
 }
 module.exports={create,validateManifest};

@@ -42,6 +42,19 @@ uint hbFsTextLineCount(){return hbWord(4128u);}
 uint hbFsTextTotalLines(){return hbWord(4132u);}
 uint hbFsTextLineStart(){return hbWord(4136u);}
 uint hbFsTextByte(uint line,uint col){return line<20u&&col<48u?hbResponseByte(16u+line*48u+col):0u;}
+// Generic Filesystem & Socket response accessors
+bool hbFsStatExists(){return hbWord(4128u)==1u;}
+uint hbFsStatType(){return hbWord(4132u);}
+uint hbFsStatSize(){return hbWord(4136u);}
+uint hbFsNativeResult(){return hbWord(4140u);}
+uint hbFsDataBytes(){return hbWord(4128u);}
+uint hbFsDataByte(uint index){return index<960u?hbResponseByte(16u+index):0u;}
+int hbNetSocketFd(){return int(hbWord(4128u));}
+uint hbNetIpWord(){return hbWord(4128u);}
+uint hbNetStatus(){return hbWord(4132u);}
+uint hbNetBytes(){return hbWord(4128u);}
+uint hbNetReady(){return hbWord(4132u);}
+uint hbNetByte(uint index){return index<960u?hbResponseByte(16u+index):0u;}
 // Native optical ring: 8 players x 2 sides. Side 0/1 matches Jcms handles.
 // Keep a separate previous sequence for each player/side in your app state.
 vec2 hbJoyMouseDelta(uint player,uint side,inout uint previous){
@@ -88,5 +101,22 @@ bool hbFsListApps(){return hbRequest(9u,3u,0u,0u);}
 bool hbFsTestTmp(uint action){return hbRequest(9u,4u,action,0u);}
 bool hbFsHttpPoll(uint action){return hbRequest(9u,5u,action,0u);}
 void hbFsPathByte(uint index,uint value){if(index>=64u||hbBusy())return;uint o=HB_EXT+(2048u+32u)/4u+index/4u,shift=(index%4u)*8u;c.atlas[o]=(c.atlas[o]&~(255u<<shift))|((value&255u)<<shift);}
+void hbFsPath2Byte(uint index,uint value){if(index>=64u||hbBusy())return;uint o=HB_EXT+(2048u+96u)/4u+index/4u,shift=(index%4u)*8u;c.atlas[o]=(c.atlas[o]&~(255u<<shift))|((value&255u)<<shift);}
+void hbFsDataWriteByte(uint index,uint value){if(index>=960u||hbBusy())return;uint o=HB_EXT+(2048u+96u)/4u+index/4u,shift=(index%4u)*8u;c.atlas[o]=(c.atlas[o]&~(255u<<shift))|((value&255u)<<shift);}
+bool hbFsStat(uint pathLen){return hbRequest(9u,10u,0u,pathLen);}
+bool hbFsCreate(uint initialSize,uint pathLen){return hbRequest(9u,11u,initialSize,pathLen);}
+bool hbFsDelete(uint pathLen){return hbRequest(9u,12u,0u,pathLen);}
+bool hbFsReadBytes(uint offset,uint maxBytes,uint pathLen){return hbRequest(9u,13u,offset,(pathLen&65535u)|((min(maxBytes,960u)&65535u)<<16u));}
+bool hbFsWriteBytes(uint offset,uint dataLen,uint pathLen){return hbRequest(9u,14u,offset,(pathLen&65535u)|((min(dataLen,960u)&65535u)<<16u));}
+bool hbFsMkdir(uint pathLen){return hbRequest(9u,15u,0u,pathLen);}
+bool hbFsRmdir(uint pathLen){return hbRequest(9u,16u,0u,pathLen);}
+bool hbFsRename(uint oldLen,uint newLen){return hbRequest(9u,17u,oldLen,newLen);}
+// Generic TCP Socket & Network primitives (OP 10)
+bool hbNetGetInfo(){return hbRequest(10u,1u,0u,0u);}
+bool hbNetListen(uint port,uint backlog){return hbRequest(10u,2u,port,backlog);}
+bool hbNetAccept(uint listenFd,uint timeoutMs){return hbRequest(10u,3u,listenFd,timeoutMs);}
+bool hbNetRecv(uint fd,uint maxBytes,uint timeoutMs){return hbRequest(10u,4u,fd,(min(maxBytes,960u)&65535u)|((min(timeoutMs,1000u)&65535u)<<16u));}
+bool hbNetSend(uint fd,uint byteLen){return hbRequest(10u,5u,fd,min(byteLen,960u));}
+bool hbNetClose(uint fd){return hbRequest(10u,6u,fd,0u);}
 #endif
 #endif

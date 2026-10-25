@@ -334,6 +334,125 @@ async function create(rpc) {
       }
       return { result: 0, fileSize, buffer: payloadBuf, isSbContainer };
     },
+    // Generic low-level nn::fs primitives for shader SDK calls (subOp 10..17)
+    async statPath(pathStr) {
+      const pathOff = 0x1000, typeOff = 0x2000, handleOff = 0x2010, sizeOff = 0x2020;
+      await client.write(pathOff, Buffer.from(pathStr + '\0', 'utf8'));
+      await client.write(typeOff, Buffer.alloc(8));
+      const res = await client.result('GetEntryType', [client.base + typeOff, client.base + pathOff]);
+      if (res !== 0) {
+        return { exists: 0, entryType: 0xffffffff, fileSize: 0, result: res };
+      }
+      const rawType = (await client.read(typeOff, 4)).readUInt32LE(0); // nn::fs: 0 = dir, 1 = file
+      const entryType = rawType === 0 ? 1 : 0; // SDK convention: 1 = dir, 0 = file
+      let fileSize = 0;
+      if (rawType === 1) {
+        await client.write(handleOff, Buffer.alloc(8));
+        if ((await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 1])) === 0) {
+          const handle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
+          await client.write(sizeOff, Buffer.alloc(8));
+          if ((await client.result('GetFileSize', [client.base + sizeOff, handle])) === 0) {
+            fileSize = Number((await client.read(sizeOff, 8)).readBigInt64LE(0));
+          }
+          await client.call('CloseFile', [handle]);
+        }
+      }
+      return { exists: 1, entryType, fileSize, result: 0 };
+    },
+    async createPath(pathStr, initialSize = 0) {
+      const pathOff = 0x1000;
+      await client.write(pathOff, Buffer.from(pathStr + '\0', 'utf8'));
+      const res = await client.result('CreateFile', [client.base + pathOff, Math.max(0, initialSize)]);
+      return { result: res };
+    },
+    async deletePath(pathStr) {
+      const pathOff = 0x1000;
+      await client.write(pathOff, Buffer.from(pathStr + '\0', 'utf8'));
+      const res = await client.result('DeleteFile', [client.base + pathOff]);
+      return { result: res };
+    },
+    async mkdirPath(pathStr) {
+      const pathOff = 0x1000;
+      await client.write(pathOff, Buffer.from(pathStr + '\0', 'utf8'));
+      const res = await client.result('CreateDirectory', [client.base + pathOff]);
+      return { result: res };
+    },
+    async rmdirPath(pathStr) {
+      const pathOff = 0x1000;
+      await client.write(pathOff, Buffer.from(pathStr + '\0', 'utf8'));
+      const res = await client.result('DeleteDirectory', [client.base + pathOff]);
+      return { result: res };
+    },
+    async renamePath(oldPath, newPath) {
+      const oldOff = 0x1000, newOff = 0x1400;
+      await client.write(oldOff, Buffer.from(oldPath + '\0', 'utf8'));
+      await client.write(newOff, Buffer.from(newPath + '\0', 'utf8'));
+      const res = await client.result('RenameFile', [client.base + oldOff, client.base + newOff]);
+      return { result: res };
+    },
+    async readBytesAt(pathStr, offset = 0, length = 960) {
+      const pathOff = 0x1000, handleOff = 0x2000, sizeOff = 0x2010, readOff = 0x4000;
+      await client.write(pathOff, Buffer.from(pathStr + '\0', 'utf8'));
+      await client.write(handleOff, Buffer.alloc(8));
+      const openRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 1]);
+      if (openRes !== 0) return { result: openRes, fileSize: 0, data: Buffer.alloc(0) };
+      const handle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
+      await client.write(sizeOff, Buffer.alloc(8));
+      let fileSize = 0;
+      if ((await client.result('GetFileSize', [client.base + sizeOff, handle])) === 0) {
+        fileSize = Number((await client.read(sizeOff, 8)).readBigInt64LE(0));
+      }
+      const avail = Math.max(0, fileSize - offset);
+      const toRead = Math.max(0, Math.min(avail, Math.min(length, 960)));
+      let data = Buffer.alloc(0);
+      let readRes = 0;
+      if (toRead > 0) {
+        await client.write(readOff, Buffer.alloc(toRead));
+        readRes = await client.result('ReadFile', [handle, offset, client.base + readOff, toRead]);
+        if (readRes === 0) data = await client.read(readOff, toRead);
+      }
+      await client.call('CloseFile', [handle]);
+      return { result: readRes, fileSize, data };
+    },
+    async writeBytesAt(pathStr, offset = 0, dataBuf = Buffer.alloc(0)) {
+      const pathOff = 0x1000, typeOff = 0x2000, handleOff = 0x2010, sizeOff = 0x2020, optOff = 0x2030, writeOff = 0x4000;
+      await client.write(pathOff, Buffer.from(pathStr + '\0', 'utf8'));
+      await client.write(typeOff, Buffer.alloc(8));
+      if ((await client.result('GetEntryType', [client.base + typeOff, client.base + pathOff])) !== 0) {
+        const cr = await client.result('CreateFile', [client.base + pathOff, offset + dataBuf.length]);
+        if (cr !== 0) return { result: cr, bytesWritten: 0 };
+      }
+      await client.write(handleOff, Buffer.alloc(8));
+      // Mode 6 = Mode_Write (2) | Mode_AllowAppend (4)
+      let openRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 6]);
+      if (openRes !== 0) {
+        openRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 2]);
+        if (openRes !== 0) return { result: openRes, bytesWritten: 0 };
+      }
+      const handle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
+      let writeRes = 0;
+      try {
+        await client.write(sizeOff, Buffer.alloc(8));
+        if ((await client.result('GetFileSize', [client.base + sizeOff, handle])) === 0) {
+          const curSize = Number((await client.read(sizeOff, 8)).readBigInt64LE(0));
+          if (offset + dataBuf.length > curSize) {
+            await client.result('SetFileSize', [handle, offset + dataBuf.length]);
+          }
+        }
+        if (dataBuf.length > 0) {
+          await client.write(writeOff, dataBuf);
+          const optBuf = Buffer.alloc(4);
+          optBuf.writeUInt32LE(1, 0); // WriteOption::Flush = 1
+          await client.write(optOff, optBuf);
+          // WriteFile has 5 args; pass client.base + optOff in 4th arg (or rely on SetFileSize + FlushFile if 4-arg ABI is used)
+          writeRes = await client.result('WriteFile', [handle, offset, client.base + writeOff, dataBuf.length]);
+        }
+        await client.result('FlushFile', [handle]);
+      } finally {
+        await client.call('CloseFile', [handle]);
+      }
+      return { result: writeRes, bytesWritten: writeRes === 0 ? dataBuf.length : 0 };
+    },
     async testTmpFile(action = 0) {
       const targetPath = 'tmp:/tmptest';
       const pathOff = 0x1000;
