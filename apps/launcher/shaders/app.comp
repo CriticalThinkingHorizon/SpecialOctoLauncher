@@ -6,6 +6,13 @@ layout(local_size_x=1) in;
 
 void main(){
  uint pressed=hbPressed();
+ c.motion.x+=1.0/60.0;
+
+ // If an app launch / exit has been triggered (c.reserved.z != 0), lock menu navigation while loading
+ if(c.reserved.z!=0u){
+  hbEndFrame();
+  return;
+ }
 
  if(c.game.z==0u&&!hbBusy()){
   if(hbFsListApps())c.game.z=1u;
