@@ -277,6 +277,89 @@ async function create(rpc) {
       }
 
       return { result: 0, totalLines, lines };
+    },
+    async testTmpFile(action = 0) {
+      const targetPath = 'tmp:/tmptest';
+      const pathOff = 0x1000;
+      const typeOff = 0x2000;
+      const handleOff = 0x2010;
+      const sizeOff = 0x2020;
+
+      const pathBuf = Buffer.from(targetPath + '\0', 'utf8');
+      await client.write(pathOff, pathBuf);
+
+      const logLines = [];
+      logLines.push('=== TMP:/ PERSISTENCE TEST (tmp:/tmptest) ===');
+      logLines.push('');
+
+      if (action === 1) {
+        logLines.push('[ACTION] Deleting tmp:/tmptest...');
+        const delRes = await client.result('DeleteFile', [client.base + pathOff]);
+        logLines.push(`  nn::fs::DeleteFile("tmp:/tmptest") -> 0x${delRes.toString(16)}`);
+        logLines.push('');
+      }
+
+      // Step 1: Check if tmp:/tmptest exists via GetEntryType
+      await client.write(typeOff, Buffer.alloc(8));
+      const checkRes = await client.result('GetEntryType', [client.base + typeOff, client.base + pathOff]);
+      const existedBefore = (checkRes === 0);
+
+      logLines.push('[STEP 1] Check if tmp:/tmptest exists:');
+      logLines.push(`  GetEntryType("tmp:/tmptest") -> 0x${checkRes.toString(16)}`);
+      if (existedBefore) {
+        const entryType = (await client.read(typeOff, 4)).readUInt32LE(0);
+        logLines.push(`  STATUS: ALREADY EXISTS! (EntryType=${entryType === 1 ? 'File' : 'Dir'})`);
+        logLines.push('  -> File persisted across app/session runs!');
+      } else {
+        logLines.push('  STATUS: DOES NOT EXIST (0x202 = PathNotFound)');
+      }
+      logLines.push('');
+
+      // Step 2: If it doesn't exist, create an empty file (size = 0)
+      let createRes = 0;
+      if (!existedBefore) {
+        logLines.push('[STEP 2] Creating empty file tmp:/tmptest (0 bytes):');
+        createRes = await client.result('CreateFile', [client.base + pathOff, 0]);
+        logLines.push(`  nn::fs::CreateFile("tmp:/tmptest", 0) -> 0x${createRes.toString(16)}`);
+        if (createRes === 0) {
+          logLines.push('  STATUS: CREATED SUCCESSFULLY!');
+        } else {
+          logLines.push('  STATUS: CREATE FAILED!');
+        }
+      } else {
+        logLines.push('[STEP 2] CreateFile skipped (file already exists).');
+      }
+      logLines.push('');
+
+      // Step 3: Verify with OpenFile + GetFileSize + CloseFile
+      await client.write(handleOff, Buffer.alloc(8));
+      const openRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 1]);
+      logLines.push('[STEP 3] Verify file handle & size:');
+      logLines.push(`  nn::fs::OpenFile("tmp:/tmptest", Read) -> 0x${openRes.toString(16)}`);
+      if (openRes === 0) {
+        const handle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
+        await client.write(sizeOff, Buffer.alloc(8));
+        const sizeRes = await client.result('GetFileSize', [client.base + sizeOff, handle]);
+        const fileSize = sizeRes === 0 ? Number((await client.read(sizeOff, 8)).readBigInt64LE(0)) : -1;
+        await client.call('CloseFile', [handle]);
+        logLines.push(`  nn::fs::GetFileSize -> ${fileSize} bytes (CloseFile OK)`);
+      }
+
+      // Step 4: List current contents of tmp:/
+      const dirListing = await this.listDirectory('tmp:/', 10, 0);
+      const names = dirListing.entries.map(e => `${e.name} (${e.size}B)`).join(', ');
+      logLines.push('');
+      logLines.push(`[TMP:/ DIR] ${names || '(empty)'}`);
+      logLines.push('------------------------------------------------');
+      logLines.push('A: Re-run Check   X: Delete tmptest   -: Exit');
+
+      return {
+        result: 0,
+        existedBefore: existedBefore ? 1 : 0,
+        createRes,
+        openRes,
+        lines: logLines
+      };
     }
   };
 }

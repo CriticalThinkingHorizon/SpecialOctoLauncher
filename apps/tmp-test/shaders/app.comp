@@ -1,0 +1,42 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+
+void main(){
+ uint pressed=hbPressed();
+
+ // c.game.z: 0 = request needed, 1 = waiting for RPC, 2 = result ready
+ // c.game.x: action (0 = check & create if missing, 1 = delete then check & create)
+ if(c.game.z==0u&&!hbBusy()){
+  if(hbFsTestTmp(c.game.x)){
+   c.game.z=1u;
+   c.game.x=0u;
+  }
+ }
+
+ if(c.game.z==1u&&!hbBusy()){
+  if(hbResult()==0u&&hbResponseBytes()>=16u){
+   c.game.z=2u;
+   c.game.w=min(hbFsTextLineCount(),20u);
+  }else{
+   c.game.z=0u;
+  }
+ }
+
+ // Press A to re-run the check (which should report ALREADY EXISTS!)
+ if((pressed&HB_A)!=0u&&!hbBusy()){
+  c.game.x=0u;
+  c.game.z=0u;
+ }
+
+ // Press X to delete tmp:/tmptest and re-create it fresh
+ if((pressed&HB_X)!=0u&&!hbBusy()){
+  c.game.x=1u;
+  c.game.z=0u;
+ }
+
+ if(((pressed|hbButtons())&HB_MINUS)!=0u)hbExit();
+ hbEndFrame();
+}

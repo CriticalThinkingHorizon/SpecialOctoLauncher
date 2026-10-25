@@ -96,6 +96,17 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
       payload.writeUInt32LE(r.type,o+48);
       payload.writeBigInt64LE(BigInt(i),o+56);
      }
+    }else if(subOp===4){
+     const action=request.readUInt32LE(12)||0;
+     const res=await fsService.testTmpFile(action);
+     payload=Buffer.alloc(16+res.lines.length*48);
+     payload.writeUInt32LE(res.lines.length,0);
+     payload.writeUInt32LE(res.existedBefore,4);
+     payload.writeUInt32LE(res.createRes>>>0,8);
+     payload.writeUInt32LE(res.openRes>>>0,12);
+     for(let i=0;i<res.lines.length;i++){
+      payload.write(res.lines[i].substring(0,47),16+i*48,48,'utf8');
+     }
     }else{
      status=L.STATUS.invalid;
     }
