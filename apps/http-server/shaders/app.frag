@@ -1,0 +1,65 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(location=0) out vec4 outColor;
+#define STATE_ACCESS readonly
+#define HB_READONLY
+#include "abi.glsl"
+#include "hb.glsl"
+#include "text.glsl"
+#include "draw.glsl"
+
+float drawChar(vec2 p,vec2 origin,uint ch){
+ if(ch<GLYPH_FIRST||ch>=GLYPH_FIRST+GLYPH_COUNT)return 0.0;
+ uint idx=ch-GLYPH_FIRST;
+ ivec4 rect=ivec4(int(idx%uint(GLYPH_COLS))*GLYPH_W,int(idx/uint(GLYPH_COLS))*GLYPH_H,GLYPH_W,GLYPH_H);
+ return text(p,origin,rect);
+}
+
+float drawReportLine(vec2 p,vec2 origin,uint lineIdx){
+ float ink=0.0;
+ for(uint col=0u;col<47u;col++){
+  uint ch=hbFsTextByte(lineIdx,col);
+  if(ch==0u)break;
+  ink=max(ink,drawChar(p,origin+vec2(float(col*uint(GLYPH_W)),0.0),ch));
+ }
+ return ink;
+}
+
+void main(){
+ vec2 p=gl_FragCoord.xy;
+ vec3 bg=mix(vec3(0.03,0.07,0.14),vec3(0.05,0.14,0.24),p.y/1080.0);
+ vec3 color=bg;
+
+ // Main server dashboard card
+ float card=fill(box(p,vec2(960.0,540.0),vec2(860.0,470.0),18.0));
+ float border=line(box(p,vec2(960.0,540.0),vec2(860.0,470.0),18.0),2.5);
+ color=mix(color,vec3(0.06,0.11,0.19),card);
+ color=mix(color,vec3(0.20,0.55,0.80),border*0.6);
+
+ uint listening=hbWord(4132u);
+ vec3 badgeCol=listening==1u?vec3(0.12,0.65,0.42):vec3(0.70,0.22,0.22);
+ float badge=fill(box(p,vec2(960.0,115.0),vec2(820.0,28.0),10.0));
+ color=mix(color,badgeCol,badge*0.45);
+
+ // Animated pulse dot showing active polling on the Switch 2 socket
+ float pulse=0.5+0.5*sin(c.motion.x*5.0);
+ float dot=fill(length(p-vec2(1720.0,115.0))-10.0);
+ color=mix(color,listening==1u?vec3(0.35,1.0,0.65)*pulse:vec3(1.0,0.3,0.3),dot);
+
+ uint lines=min(c.game.w,20u);
+ float lineH=float(GLYPH_H)+8.0;
+ vec2 startPos=vec2(160.0,100.0);
+
+ for(uint i=0u;i<20u;i++){
+  if(i>=lines)break;
+  vec2 origin=startPos+vec2(0.0,float(i)*lineH);
+  float ink=drawReportLine(p,origin,i);
+  vec3 lineCol=vec3(0.90,0.95,1.0);
+  if(i==0u)lineCol=vec3(0.45,0.95,1.0);
+  else if(i==2u)lineCol=vec3(0.50,1.0,0.70); // URL line
+  else if(hbFsTextByte(i,0u)==91u)lineCol=vec3(0.98,0.86,0.42); // '[' header
+  color=mix(color,lineCol,ink);
+ }
+
+ outColor=vec4(color,1.0);
+}

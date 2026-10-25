@@ -6,7 +6,7 @@ function validateManifest(value){
  return {capabilities:SUPPORTED_CAPABILITIES,endpoints};
 }
 async function create({rpc,mapped,directory,hardware:providedHardware}){
-  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,lastSequence=0,lastPoll=0;
+  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,httpServer,lastSequence=0,lastPoll=0;
   const base=mapped+L.OFFSET;
  return {hardware,async atBoundary(app=null){
   if(!lastPoll||Date.now()-lastPoll>5000){await rpc.write(base,(await hardware.poll()).subarray(0,128));lastPoll=Date.now();}
@@ -109,6 +109,18 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
      for(let i=0;i<res.lines.length;i++){
       payload.write(res.lines[i].substring(0,47),16+i*48,48,'utf8');
      }
+    }else if(subOp===5){
+     const action=request.readUInt32LE(12)||0;
+     httpServer??=await require('./http-server.cjs').create(rpc,fsService);
+     const res=await httpServer.step(action);
+     payload=Buffer.alloc(16+res.lines.length*48);
+     payload.writeUInt32LE(res.lines.length,0);
+     payload.writeUInt32LE(res.listening,4);
+     payload.writeUInt32LE(res.port,8);
+     payload.writeUInt32LE(res.requestCount,12);
+     for(let i=0;i<res.lines.length;i++){
+      payload.write(res.lines[i].substring(0,47),16+i*48,48,'utf8');
+     }
     }else{
      status=L.STATUS.invalid;
     }
@@ -118,6 +130,6 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
    payload=Buffer.from(error.message).subarray(0,1024);
   }
   reply.writeUInt32LE(status,4);reply.writeUInt32LE(payload.length,8);payload.copy(reply,32);await rpc.write(base+L.FIELD.response,reply);
- },async close(){await hardware.close();}};
+ },async close(){await httpServer?.close();await hardware.close();}};
 }
 module.exports={create,validateManifest};

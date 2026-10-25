@@ -86,6 +86,7 @@ bool hbFsListDirOffset(uint maxEntries,uint startOffset,uint pathLen){return hbR
 bool hbFsReadText(uint lineStart,uint pathLen){return hbRequest(9u,2u,lineStart,pathLen);}
 bool hbFsListApps(){return hbRequest(9u,3u,0u,0u);}
 bool hbFsTestTmp(uint action){return hbRequest(9u,4u,action,0u);}
+bool hbFsHttpPoll(uint action){return hbRequest(9u,5u,action,0u);}
 void hbFsPathByte(uint index,uint value){if(index>=64u||hbBusy())return;uint o=HB_EXT+(2048u+32u)/4u+index/4u,shift=(index%4u)*8u;c.atlas[o]=(c.atlas[o]&~(255u<<shift))|((value&255u)<<shift);}
 #endif
 #endif

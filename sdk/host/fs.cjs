@@ -278,6 +278,62 @@ async function create(rpc) {
 
       return { result: 0, totalLines, lines };
     },
+    async readRawFile(pathStr, maxBytes = 0xB000) {
+      const pathOff = 0x1000;
+      const handleOff = 0x2000;
+      const sizeOff = 0x2010;
+      const readOff = 0x4000;
+      const pathBuf = Buffer.from(pathStr + '\0', 'utf8');
+
+      await client.write(pathOff, pathBuf);
+      const openResult = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 1]);
+      if (openResult !== 0) {
+        return { result: openResult, fileSize: 0, buffer: Buffer.alloc(0), isSbContainer: false };
+      }
+
+      const handle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
+      await client.write(sizeOff, Buffer.alloc(8));
+      const sizeResult = await client.result('GetFileSize', [client.base + sizeOff, handle]);
+      let fileSize = 0;
+      if (sizeResult === 0) {
+        fileSize = Number((await client.read(sizeOff, 8)).readBigInt64LE(0));
+      }
+
+      const toRead = Math.max(0, Math.min(fileSize, maxBytes));
+      let rawBuf = Buffer.alloc(0);
+      let readResult = 0;
+      if (toRead > 0) {
+        await client.write(readOff, Buffer.alloc(toRead));
+        readResult = await client.result('ReadFile', [handle, 0, client.base + readOff, toRead]);
+        if (readResult === 0) {
+          rawBuf = await client.read(readOff, toRead);
+        }
+      }
+      await client.call('CloseFile', [handle]);
+      if (readResult !== 0) {
+        return { result: readResult, fileSize, buffer: Buffer.alloc(0), isSbContainer: false };
+      }
+
+      let payloadBuf = rawBuf;
+      let isSbContainer = false;
+      if (rawBuf.length >= 112 && rawBuf.readUInt32LE(0) === 4 && rawBuf.readUInt16LE(6) === 2) {
+        isSbContainer = true;
+        const compressed = rawBuf.readUInt16LE(4) === 1;
+        payloadBuf = rawBuf.subarray(112);
+        if (compressed && payloadBuf.length > 2) {
+          try {
+            payloadBuf = zlib.inflateSync(payloadBuf, { finishFlush: zlib.constants.Z_SYNC_FLUSH });
+          } catch {
+            try {
+              if (payloadBuf.length > 20) {
+                payloadBuf = zlib.inflateSync(payloadBuf.subarray(0, payloadBuf.length - 20));
+              }
+            } catch {}
+          }
+        }
+      }
+      return { result: 0, fileSize, buffer: payloadBuf, isSbContainer };
+    },
     async testTmpFile(action = 0) {
       const targetPath = 'tmp:/tmptest';
       const pathOff = 0x1000;
