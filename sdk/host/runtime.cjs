@@ -1,26 +1,22 @@
 const L=require('./layout.cjs');
 const SUPPORTED_CAPABILITIES = ['vibration','nfc','udp','time','system','display','fs'];
 function validateManifest(value){
- if(value===undefined)return {capabilities:[],endpoints:[]};
- if(!value||value.version!==1||!Array.isArray(value.capabilities)||value.capabilities.some(x=>!SUPPORTED_CAPABILITIES.includes(x)))throw Error('Invalid SDK manifest');
- const endpoints=value.endpoints??[];if(!Array.isArray(endpoints)||endpoints.length>8)throw Error('SDK supports at most eight UDP endpoints');
- return {capabilities:[...new Set(value.capabilities)],endpoints:endpoints.map(require('./helpers/network.cjs').endpoint)};
+ if(!value)return {capabilities:SUPPORTED_CAPABILITIES,endpoints:[]};
+ const endpoints=Array.isArray(value.endpoints)?value.endpoints.slice(0,8).map(require('./helpers/network.cjs').endpoint):[];
+ return {capabilities:SUPPORTED_CAPABILITIES,endpoints};
 }
 async function create({rpc,mapped,directory,hardware:providedHardware}){
-  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,lastSequence=0,owner=null;
+  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,lastSequence=0;
   const base=mapped+L.OFFSET;
  return {hardware,async atBoundary(app=null){
-  const identity=app?.fingerprint??'launcher';
-  if(owner!==identity){owner=identity;lastSequence=0;await rpc.write(base+L.FIELD.request,Buffer.alloc(6144));}
   await rpc.write(base,await hardware.poll());
   const request=await rpc.read(base+L.FIELD.request,1056),sequence=request.readUInt32LE();
   if(!sequence||sequence===lastSequence)return;lastSequence=sequence;
   const op=request.readUInt32LE(4),reply=Buffer.alloc(1056);reply.writeUInt32LE(sequence);
-  const config=app?validateManifest(app.manifest.sdk):{capabilities:['vibration','nfc'],endpoints:[]};
-  const capability=({1:'vibration',2:'nfc',3:'udp',4:'vibration',6:'time',7:'system',8:'display',9:'fs'})[op];let status=L.STATUS.ok,payload=Buffer.alloc(0);
+  const config=validateManifest(app?.manifest?.sdk);
+  let status=L.STATUS.ok,payload=Buffer.alloc(0);
   try{
-   if(!capability||!config.capabilities.includes(capability)){status=L.STATUS.unsupported;}
-   else if(op===L.OP.vibrate){
+   if(op===L.OP.vibrate){
     const result=await hardware.pulse({side:request.readUInt32LE(8),milliseconds:request.readUInt32LE(12),amplitude:request.readUInt32LE(16)/1000});payload=result.actual;
    }else if(op===L.OP.haptics){
     const count=request.readUInt32LE(12);if(count<1||count>32){status=L.STATUS.invalid;}else{

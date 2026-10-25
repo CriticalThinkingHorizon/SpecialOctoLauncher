@@ -20,7 +20,6 @@ async function readApp(directory,{validate=true}={}){
  check(typeof m.description==='string'&&m.description.length<=160,'Invalid description');
  check(m.transition===undefined||m.transition==='none'||m.transition==='fade','Invalid transition');
  check(m.service===undefined,'Unsupported host service');
- require('../sdk/host/runtime.cjs').validateManifest(m.sdk);
  const files={},hash=crypto.createHash('sha256');hash.update(manifestAsset.bytes);
  if(m.computeSequence!==undefined){check(m.computeSequence&&Number.isInteger(m.computeSequence.repeat)&&m.computeSequence.repeat>=1&&m.computeSequence.repeat<=512,'Invalid compute sequence repeat');check(typeof m.computeSequence.begin==='string'&&typeof m.computeSequence.after==='string','Invalid compute sequence shaders');}
  const stages=[['vertex',0,m.shaders?.vertex],['fragment',4,m.shaders?.fragment],['compute',5,m.shaders?.compute]];

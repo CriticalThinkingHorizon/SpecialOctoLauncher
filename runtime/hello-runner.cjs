@@ -338,6 +338,16 @@ async function main(directory, attempt = 'auto') {
 
     const applyApp = async (name) => {
       const { app: targetApp, prep } = preparedApps[name];
+      // Clear previous SDK response payload length (offset 4104) while preserving request/response sequence numbers
+      await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(1048));
+
+      // Write app scratch state (784..1024) and data atlas (1024..) first
+      await rpc.write(mapped + 784, targetApp.files.state.bytes.subarray(784, 1024));
+      await rpc.write(mapped + 1024, targetApp.files.data.bytes);
+      const fadeBuf = Buffer.alloc(4);
+      fadeBuf.writeFloatLE(1, 0);
+      await rpc.write(mapped + 960, fadeBuf);
+
       for (let phase = 0; phase < prep.commands.length; phase++) {
         const o = 0x1000 + phase * 0x100, obj = control + o;
         u64(o + 0x50, obj + 0x60);
@@ -346,11 +356,12 @@ async function main(directory, attempt = 'auto') {
       }
       await rpc.write(control + 0x1000, data.subarray(0x1000, 0x1000 + prep.commands.length * 0x100));
 
-      const appRegion = Buffer.alloc(0x7f0000 - 784);
-      targetApp.files.state.bytes.subarray(784, 1024).copy(appRegion, 0);
-      targetApp.files.data.bytes.copy(appRegion, 1024 - 784);
-      appRegion.writeFloatLE(1, 960 - 784);
-      await rpc.write(mapped + 784, appRegion);
+      // Re-zero scratch state (784..1024) after the new command buffers are active so any old shader's last-frame write is wiped
+      await rpc.write(mapped + 784, targetApp.files.state.bytes.subarray(784, 1024));
+      await rpc.write(mapped + 960, fadeBuf);
+      // Preserve current held buttons in c.state.y (mapped + 84) so the held A/B button does not re-trigger in the new app
+      const rawButtons = await rpc.read(mapped + 8, 4);
+      await rpc.write(mapped + 84, rawButtons);
       activeAppId = name;
     };
 

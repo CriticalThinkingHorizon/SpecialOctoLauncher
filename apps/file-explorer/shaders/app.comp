@@ -160,8 +160,7 @@ void main(){
    if(count>DIR_PAGE_SIZE)count=DIR_PAGE_SIZE;
    c.game.w=count;
   }else{
-   c.game.z=3u;
-   c.game.w=1u;
+   c.game.z=0u;
   }
  }else if(c.game.w!=0u){
   count=c.game.w;
