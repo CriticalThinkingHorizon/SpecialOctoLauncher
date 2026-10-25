@@ -143,7 +143,7 @@ void main(){
    }
   }
   if((pressed&HB_B)!=0u&&!hbBusy())goBack();
-  if((pressed&HB_MINUS)!=0u)hbExit();
+  if(((pressed|hbButtons())&HB_MINUS)!=0u)hbExit();
   hbEndFrame();
   return;
  }
@@ -211,6 +211,6 @@ void main(){
  }
  if((pressed&HB_A)!=0u&&c.game.z==2u&&!hbBusy())enterSelected();
  if((pressed&HB_B)!=0u&&!hbBusy())goBack();
- if((pressed&HB_MINUS)!=0u)hbExit();
+ if(((pressed|hbButtons())&HB_MINUS)!=0u)hbExit();
  hbEndFrame();
 }

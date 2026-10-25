@@ -303,12 +303,12 @@ async function main(directory, attempt = 'auto') {
 
     const sdkRuntime = await require('../sdk/host/runtime.cjs').create({rpc, mapped: report.controls.mapped, directory});
     await rpc.write(report.controls.mapped + 0x7f0000, await sdkRuntime.hardware.poll());
-    const hwFrameCalls = sdkRuntime.hardware.frameCalls(report.controls.mapped);
-    for (const hc of hwFrameCalls) {
+    const padCalls = sdkRuntime.hardware.frameCalls(report.controls.mapped).slice(0, 6);
+    for (const hc of padCalls) {
       verified.add(hc.function);
     }
 
-    const frameCount = 60;
+    const frameCount = 30;
     const calls = [];
     const add = (fn, args, expectZero = false) => {
       calls.push({function: fn, args: [...args, ...Array(4 - args.length).fill(0)]});
@@ -318,7 +318,7 @@ async function main(directory, attempt = 'auto') {
       const obj = control + 0x1000 + (f % report.commands.length) * 0x100;
       add(input.target, [report.controls.mapped, control + 0x230]);
       add(touch.target, [report.controls.mapped + 128]);
-      for (const hc of hwFrameCalls) {
+      for (const hc of padCalls) {
         add(hc.function, hc.args);
       }
       add(vkAcquireNextImage2KHR, [device.toString(), control + 0x100, control], true);
@@ -367,9 +367,17 @@ async function main(directory, attempt = 'auto') {
       // Re-zero scratch state (784..1024) after the new command buffers are active so any old shader's last-frame write is wiped
       await rpc.write(mapped + 784, targetApp.files.state.bytes.subarray(784, 1024));
       await rpc.write(mapped + 960, fadeBuf);
-      // Preserve current held buttons in c.state.y (mapped + 84) so the held A/B button does not re-trigger in the new app
-      const rawButtons = await rpc.read(mapped + 8, 4);
-      await rpc.write(mapped + 84, rawButtons);
+      // Combine all held buttons across handheld (mapped + 8) and PAD_SOURCES (mapped + 0x7f0000 + 640) into c.state.y (mapped + 84)
+      let heldButtons = (await rpc.read(mapped + 8, 4)).readUInt32LE(0);
+      const padSrcBuf = await rpc.read(mapped + 0x7f0000 + 640, 320);
+      for (let i = 0; i < 5; i++) {
+        if ((padSrcBuf.readUInt32LE(i * 64 + 32) & 1) !== 0) {
+          heldButtons |= padSrcBuf.readUInt32LE(i * 64 + 8);
+        }
+      }
+      const heldBuf = Buffer.alloc(4);
+      heldBuf.writeUInt32LE(heldButtons >>> 0, 0);
+      await rpc.write(mapped + 84, heldBuf);
       activeAppId = name;
     };
 

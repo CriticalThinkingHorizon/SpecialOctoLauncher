@@ -26,9 +26,13 @@ void main(){
  bool bDown = (buttons & 32768u) != 0u;
  bool bLeft = (buttons & 4096u) != 0u;
  bool bRight = (buttons & 16384u) != 0u;
+ bool bMinus = (buttons & 2048u) != 0u;
+ bool bPlus = (buttons & 1024u) != 0u;
 
  vec2 rightCluster = vec2(1100, 740);
  vec2 leftCluster = vec2(820, 740);
+ vec2 posMinus = vec2(910, 710);
+ vec2 posPlus = vec2(1010, 710);
 
  vec2 posX = rightCluster + vec2(0, -25);
  vec2 posB = rightCluster + vec2(0, 25);
@@ -52,6 +56,8 @@ void main(){
  color = mix(color, bDown ? activeCol : idleCol, fill(length(p - posDown) - 16.0));
  color = mix(color, bLeft ? activeCol : idleCol, fill(length(p - posLeft) - 16.0));
  color = mix(color, bRight ? activeCol : idleCol, fill(length(p - posRight) - 16.0));
+ color = mix(color, bMinus ? activeCol : idleCol, fill(length(p - posMinus) - 10.0));
+ color = mix(color, bPlus ? activeCol : idleCol, fill(length(p - posPlus) - 10.0));
 
  outColor=vec4(color*(1.0-c.transition.x),1);
 }
