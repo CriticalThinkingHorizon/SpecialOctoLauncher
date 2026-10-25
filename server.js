@@ -139,7 +139,11 @@ async function main() {
 
     console.log('\n[6/6] Building File Explorer Assets from S2 Files...');
     const pyCmd = process.platform === 'win32' ? 'python' : 'python3';
-    await runScript(pyCmd, [path.join(__dirname, 'apps/file-explorer/assets.py')]);
+    await new Promise((resolve, reject) => {
+      const py = spawn(pyCmd, [path.join(__dirname, 'apps/file-explorer/assets.py')], {stdio: 'inherit', cwd: __dirname});
+      py.once('error', reject);
+      py.once('close', code => code === 0 ? resolve() : reject(Error(`assets.py exited with code ${code}`)));
+    });
 
     const targetApp = process.argv[3] || 'file-explorer';
     console.log(`\n--- Starting ${targetApp} Direct Execution Loop ---`);

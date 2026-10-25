@@ -2,36 +2,66 @@
 #extension GL_GOOGLE_include_directive : require
 layout(location=0) out vec4 outColor;
 #define STATE_ACCESS readonly
+#define HB_READONLY
 #include "abi.glsl"
+#include "hb.glsl"
 #include "text.glsl"
 #include "draw.glsl"
 
+// Coverage of one glyph, looked up from the font atlas in text.bin.
+float drawChar(vec2 p,vec2 origin,uint ch){
+ if(ch<GLYPH_FIRST||ch>=GLYPH_FIRST+GLYPH_COUNT)return 0.0;
+ uint idx=ch-GLYPH_FIRST;
+ ivec4 rect=ivec4(int(idx%uint(GLYPH_COLS))*GLYPH_W,int(idx/uint(GLYPH_COLS))*GLYPH_H,GLYPH_W,GLYPH_H);
+ return text(p,origin,rect);
+}
+
+// Entry name from the fs response, with a trailing '/' for directories.
+float drawName(vec2 p,vec2 origin,uint entry){
+ float ink=0.0;
+ uint k=0u;
+ for(uint i=0u;i<47u;i++){
+  uint ch=hbFsEntryByte(entry,i);
+  if(ch==0u)break;
+  ink=max(ink,drawChar(p,origin+vec2(float(i*uint(GLYPH_W)),0.0),ch));
+  k=i+1u;
+ }
+ if(hbFsEntryType(entry)==1u)ink=max(ink,drawChar(p,origin+vec2(float(k*uint(GLYPH_W)),0.0),47u));
+ return ink;
+}
+
+// Current path, stored by the compute shader in app scratch.
+float drawPath(vec2 p,vec2 origin){
+ float ink=0.0;
+ uint n=uint(max(c.piece.x,0));
+ for(uint i=0u;i<63u&&i<n;i++){
+  uint ch=(c.rows[i/4u]>>((i%4u)*8u))&255u;
+  ink=max(ink,drawChar(p,origin+vec2(float(i*uint(GLYPH_W)),0.0),ch));
+ }
+ return ink;
+}
+
 void main(){
  vec2 p=gl_FragCoord.xy;
- vec3 color=mix(vec3(.035,.10,.19),vec3(.04,.22,.32),p.y/1080.0);
- 
- float panel=fill(box(p,vec2(960,540),vec2(780,560),32));
- color=mix(color,vec3(.07,.16,.25),panel);
+ float rowH=float(GLYPH_H)+24.0;
+ vec2 left=vec2(120.0,160.0);
+ uint count=c.game.z==2u?min(c.game.w,8u):0u;
+ uint selected=c.game.y;
 
- color=mix(color,vec3(.25,.85,.90),text(p,vec2(960-TEXT_TITLE.z/2,80),TEXT_TITLE));
- color=mix(color,vec3(.84,.91,.96),text(p,vec2(960-TEXT_SUBTITLE.z/2,135),TEXT_SUBTITLE));
- color=mix(color,vec3(.60,.72,.80),text(p,vec2(960-TEXT_HINT.z/2,1000),TEXT_HINT));
+ float ink=drawPath(p,vec2(120.0,100.0));
 
- uint selected = c.game.y;
- float itemHeight = 90.0;
-
- ivec4 items[7] = ivec4[7](ITEM_0, ITEM_1, ITEM_2, ITEM_3, ITEM_4, ITEM_5, ITEM_6);
-
- for(uint i=0u; i<7u; i++) {
-  vec2 itemCenter = vec2(960, 240 + float(i) * itemHeight);
-  float itemBox = fill(box(p, itemCenter, vec2(720, 75), 12.0));
-  vec3 itemBg = (i == selected) ? vec3(0.12, 0.35, 0.5) : vec3(0.05, 0.12, 0.2);
-  color = mix(color, itemBg, itemBox);
-  
-  ivec4 rect = items[i];
-  vec2 textPos = vec2(300, 215 + float(i) * itemHeight);
-  color = mix(color, (i == selected) ? vec3(1,1,1) : vec3(0.7, 0.8, 0.9), text(p, textPos, rect));
+ for(uint i=0u;i<8u;i++){
+  if(i>=count)break;
+  vec2 origin=left+vec2(0.0,float(i)*rowH);
+  float text_ink=drawName(p,origin,i);
+  if(i==selected){
+   float bar=fill(box(p,origin+vec2(900.0,float(GLYPH_H)*0.5),vec2(900.0,float(GLYPH_H)*0.5+8.0),8.0));
+   // White bar with black text on the selected row.
+   ink=max(ink,bar*(1.0-text_ink)+(1.0-bar)*text_ink);
+  }else{
+   ink=max(ink,text_ink);
+  }
  }
 
- outColor=vec4(color*(1.0-c.transition.x),1);
+ outColor=vec4(vec3(ink),1);
 }

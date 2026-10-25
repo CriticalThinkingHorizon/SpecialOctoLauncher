@@ -7,8 +7,8 @@ function validateManifest(value){
  return {capabilities:[...new Set(value.capabilities)],endpoints:endpoints.map(require('./helpers/network.cjs').endpoint)};
 }
 async function create({rpc,mapped,directory,hardware:providedHardware}){
- const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,lastSequence=0,owner=null;
- const base=mapped+L.OFFSET;
+  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,lastSequence=0,owner=null;
+  const base=mapped+L.OFFSET;
  return {hardware,async atBoundary(app=null){
   const identity=app?.fingerprint??'launcher';
   if(owner!==identity){owner=identity;lastSequence=0;await rpc.write(base+L.FIELD.request,Buffer.alloc(6144));}
@@ -39,6 +39,31 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
     payload=Buffer.alloc(8);payload.writeBigUInt64LE(BigInt(t));
    }else if(op===L.OP.system){
     payload=Buffer.alloc(8);payload.writeBigUInt64LE(BigInt(process.pid));
+   }else if(op===L.OP.fs){
+    fsService??=await require('./fs.cjs').create(rpc);
+    const subOp=request.readUInt32LE(8);
+    if(subOp===1){
+     const maxEntries=Math.min(request.readUInt32LE(12)||8,8);
+     const pathLen=Math.min(request.readUInt32LE(16)||6,64);
+     const pathStr=request.subarray(32,32+pathLen).toString('utf8').replace(/\0.*$/, '')||'rom:/';
+     const {result,entries}=await fsService.listDirectory(pathStr,maxEntries);
+     if(result!==0){
+      status=L.STATUS.native;
+      payload=Buffer.alloc(4);payload.writeUInt32LE(result);
+     }else{
+      payload=Buffer.alloc(8+entries.length*64);
+      payload.writeUInt32LE(entries.length,0);
+      payload.writeUInt32LE(result,4);
+      for(let i=0;i<entries.length;i++){
+       const o=8+i*64,e=entries[i];
+       payload.write(e.name.substring(0,47),o,48,'utf8');
+       payload.writeUInt32LE(e.type==='dir'?1:0,o+48);
+       payload.writeBigInt64LE(BigInt(e.size),o+56);
+      }
+     }
+    }else{
+     status=L.STATUS.invalid;
+    }
    }
   }catch(error){
    status=error.code==='ETIMEDOUT'?L.STATUS.timeout:L.STATUS.native;

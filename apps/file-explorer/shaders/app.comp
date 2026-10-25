@@ -3,21 +3,71 @@
 layout(local_size_x=1) in;
 #include "abi.glsl"
 #include "hb.glsl"
+
+uint pathLen(){return uint(max(c.piece.x,0));}
+uint pathByte(uint i){return (c.rows[i/4u]>>((i%4u)*8u))&255u;}
+void setPathByte(uint i,uint v){
+ uint idx=i/4u,shift=(i%4u)*8u;
+ c.rows[idx]=(c.rows[idx]&~(255u<<shift))|((v&255u)<<shift);
+}
+void setPathLen(uint n){c.piece.x=int(min(n,63u));}
+
+void initPath(){
+ setPathByte(0u,114u);setPathByte(1u,111u);setPathByte(2u,109u);
+ setPathByte(3u,58u);setPathByte(4u,47u);setPathLen(5u);
+}
+
+bool requestListing(){
+ uint n=pathLen();
+ for(uint i=0u;i<64u;i++)hbFsPathByte(i,i<n?pathByte(i):0u);
+ return hbFsListDir(8u,n);
+}
+
+void enterSelected(){
+ uint sel=c.game.y;
+ if(hbFsEntryType(sel)!=1u)return;
+ uint n=pathLen();
+ if(n==0u||pathByte(n-1u)!=47u){setPathByte(n,47u);n++;}
+ for(uint i=0u;i<47u;i++){
+  uint ch=hbFsEntryByte(sel,i);
+  if(ch==0u)break;
+  if(n>=62u)break;
+  setPathByte(n,ch);n++;
+ }
+ if(n==0u||pathByte(n-1u)!=47u){setPathByte(n,47u);n++;}
+ setPathLen(n);c.game.y=0u;c.game.z=0u;c.game.w=0u;
+}
+
+void goBack(){
+ uint n=pathLen();
+ if(n<=5u){if(hbConnected())hbExit();return;}
+ if(n>0u&&pathByte(n-1u)==47u)n--;
+ while(n>5u&&pathByte(n-1u)!=47u)n--;
+ setPathLen(n);c.game.y=0u;c.game.z=0u;c.game.w=0u;
+}
+
 void main(){
  uint pressed=hbPressed();
- uint buttons=hbButtons();
- c.game.x=buttons;
- 
- uint itemCount = 7u;
- if((pressed & HB_DOWN) != 0u) {
-  c.game.y = (c.game.y + 1u) % itemCount;
- }
- if((pressed & HB_UP) != 0u) {
-  c.game.y = (c.game.y + itemCount - 1u) % itemCount;
+ if(pathLen()==0u)initPath();
+
+ if(c.game.z==0u&&!hbBusy()){
+  if(requestListing())c.game.z=1u;
  }
 
- c.motion.x+=1.0/60.0;c.state.z++;
- c.transition.x=max(0.0,c.transition.x-1.0/15.0);
- if(hbConnected() && (pressed&(HB_B|HB_MINUS))!=0u)hbExit();
+ uint count=1u;
+ if(c.game.z!=0u&&!hbBusy()&&hbResult()==0u&&hbResponseBytes()>=8u){
+  c.game.z=2u;
+  count=max(hbFsEntryCount(),1u);
+  if(count>8u)count=8u;
+  c.game.w=count;
+ }else if(c.game.w!=0u){
+  count=c.game.w;
+ }
+ if(c.game.y>=count)c.game.y=0u;
+ if((pressed&HB_DOWN)!=0u)c.game.y=(c.game.y+1u)%count;
+ if((pressed&HB_UP)!=0u)c.game.y=(c.game.y+count-1u)%count;
+ if((pressed&HB_A)!=0u&&c.game.z==2u&&!hbBusy())enterSelected();
+ if((pressed&HB_B)!=0u&&!hbBusy())goBack();
+ if((pressed&HB_MINUS)!=0u&&hbConnected())hbExit();
  hbEndFrame();
 }

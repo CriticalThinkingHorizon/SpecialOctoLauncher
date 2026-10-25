@@ -306,8 +306,15 @@ async function main(directory, attempt = 'auto') {
     process.on('SIGINT', () => stop = true);
     process.on('SIGTERM', () => stop = true);
 
+    // Service SDK requests (fs, vibration, etc.) while the native frame loop runs.
+    const sdkApp = {fingerprint: 'file-explorer', manifest: JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '../apps/file-explorer/app.json'), 'utf8'))};
     while (!stop) {
-      await new Promise(r => setTimeout(r, 100));
+      try {
+        await sdkRuntime.atBoundary(sdkApp);
+      } catch (error) {
+        console.error('[SDK] request failed:', error.message);
+      }
+      await new Promise(r => setTimeout(r, 16));
     }
 
     await program.stop();
