@@ -35,13 +35,22 @@ void main(){
   c.game.z=0u;
  }
 
- // Press A to launch the selected app or trigger the [UPDATE] row
+ // Press MINUS in launcher to close Vulkan layer & return to SmileBASIC
+ if((pressed&HB_MINUS)!=0u&&!hbBusy()){
+  c.reserved.w=98u;
+  hbExit();
+ }
+
+ // Press A to launch the selected app, trigger [UPDATE], or trigger [EXIT]
  if((pressed&HB_A)!=0u&&c.game.z==2u&&!hbBusy()){
   uint sel=c.game.y;
   uint rowType=hbFsEntryType(sel);
   if(rowType==2u){
    c.reserved.w=99u;
    c.game.z=0u;
+  }else if(rowType==3u){
+   c.reserved.w=98u;
+   hbExit();
   }else{
    c.reserved.w=sel+1u;
    hbExit();

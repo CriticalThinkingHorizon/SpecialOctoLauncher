@@ -57,11 +57,11 @@ void main(){
   vec2 origin=left+vec2(0.0,float(i)*rowH);
   float textInk=drawRowTitle(p,origin,i);
   uint rowType=hbFsEntryType(i);
-  vec3 textCol=rowType==2u?vec3(0.4,1.0,0.6):vec3(0.92,0.96,1.0);
+  vec3 textCol=rowType==3u?vec3(1.0,0.45,0.45):(rowType==2u?vec3(0.4,1.0,0.6):vec3(0.92,0.96,1.0));
   if(i==selected){
    float bar=fill(box(p,origin+vec2(520.0,float(GLYPH_H)*0.5),vec2(540.0,float(GLYPH_H)*0.5+10.0),10.0));
-   vec3 barCol=rowType==2u?vec3(0.15,0.65,0.40):vec3(0.88,0.95,1.0);
-   vec3 selTextCol=rowType==2u?vec3(1.0):vec3(0.05,0.10,0.18);
+   vec3 barCol=rowType==3u?vec3(0.70,0.18,0.22):(rowType==2u?vec3(0.15,0.65,0.40):vec3(0.88,0.95,1.0));
+   vec3 selTextCol=(rowType==2u||rowType==3u)?vec3(1.0):vec3(0.05,0.10,0.18);
    color=mix(color,barCol,bar);
    color=mix(color,selTextCol,textInk);
   }else{

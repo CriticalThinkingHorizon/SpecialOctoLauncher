@@ -397,6 +397,8 @@ async function main(directory, attempt = 'auto') {
       activeAppId = name;
     };
 
+    let closeLayerRequested = false;
+
     // Service SDK requests and launcher app selection / live reload while the native frame loop runs.
     while (!stop) {
       try {
@@ -414,6 +416,12 @@ async function main(directory, attempt = 'auto') {
           console.log('[LIVE UPDATE] Catalog updated:', launchableIds.join(', '));
         } else if (exitFlag !== 0) {
           if (activeAppId === 'launcher') {
+            if (actionCode === 98) {
+              console.log('[EXIT] Closing Vulkan layer and returning to SmileBASIC...');
+              closeLayerRequested = true;
+              stop = true;
+              break;
+            }
             const idx = actionCode > 0 ? actionCode - 1 : 0;
             const targetId = launchableIds[idx] || launchableIds[0];
             if (targetId && preparedApps[targetId]) {
@@ -434,7 +442,28 @@ async function main(directory, attempt = 'auto') {
     }
 
     await program.stop();
+    const until = Date.now() + 5000;
+    while (Date.now() < until) {
+      const state = (await rpc.callAddress(sdk + code.tryWait.offset, [thread])).result;
+      if (state === 1n) break;
+      await new Promise(r => setTimeout(r, 10));
+    }
+    await rpc.callAddress(sdk + code.join.offset, [thread, base + 8]);
     await sdkRuntime.close();
+
+    if (closeLayerRequested && r.layer) {
+      try {
+        console.log('[EXIT] Waiting for Vulkan queue idle and closing nn::vi::Layer...');
+        await call('vkQueueWaitIdle', queue);
+        await call('_ZN2nn2vi5Layer5CloseEb', Number(r.layer), 0);
+        if (r.display) {
+          await call('_ZN2nn2vi12CloseDisplayEPNS0_7DisplayE', BigInt(r.display));
+        }
+        console.log('[EXIT] Vulkan overlay layer closed cleanly.');
+      } catch (closeErr) {
+        console.warn('[EXIT] Layer teardown warning:', closeErr.message);
+      }
+    }
 
   } catch (e) {
     report.error = e.stack;
