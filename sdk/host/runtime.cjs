@@ -6,12 +6,13 @@ function validateManifest(value){
  return {capabilities:SUPPORTED_CAPABILITIES,endpoints};
 }
 async function create({rpc,mapped,directory,hardware:providedHardware}){
-  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,lastSequence=0;
+  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,lastSequence=0,lastPoll=0;
   const base=mapped+L.OFFSET;
  return {hardware,async atBoundary(app=null){
-  await rpc.write(base,await hardware.poll());
-  const request=await rpc.read(base+L.FIELD.request,1056),sequence=request.readUInt32LE();
+  if(!lastPoll||Date.now()-lastPoll>5000){await rpc.write(base,(await hardware.poll()).subarray(0,128));lastPoll=Date.now();}
+  const hdr=await rpc.read(base+L.FIELD.request,32),sequence=hdr.readUInt32LE();
   if(!sequence||sequence===lastSequence)return;lastSequence=sequence;
+  const request=await rpc.read(base+L.FIELD.request,1056);
   const op=request.readUInt32LE(4),reply=Buffer.alloc(1056);reply.writeUInt32LE(sequence);
   const config=validateManifest(app?.manifest?.sdk);
   let status=L.STATUS.ok,payload=Buffer.alloc(0);

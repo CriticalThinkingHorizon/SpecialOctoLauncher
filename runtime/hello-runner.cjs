@@ -302,6 +302,11 @@ async function main(directory, attempt = 'auto') {
     await rpc.callAddress(lookup, [semObject, last]);
 
     const sdkRuntime = await require('../sdk/host/runtime.cjs').create({rpc, mapped: report.controls.mapped, directory});
+    await rpc.write(report.controls.mapped + 0x7f0000, await sdkRuntime.hardware.poll());
+    const hwFrameCalls = sdkRuntime.hardware.frameCalls(report.controls.mapped);
+    for (const hc of hwFrameCalls) {
+      verified.add(hc.function);
+    }
 
     const frameCount = 60;
     const calls = [];
@@ -313,6 +318,9 @@ async function main(directory, attempt = 'auto') {
       const obj = control + 0x1000 + (f % report.commands.length) * 0x100;
       add(input.target, [report.controls.mapped, control + 0x230]);
       add(touch.target, [report.controls.mapped + 128]);
+      for (const hc of hwFrameCalls) {
+        add(hc.function, hc.args);
+      }
       add(vkAcquireNextImage2KHR, [device.toString(), control + 0x100, control], true);
       add(lookup, [obj, {u32: control}]);
       add(lookup, [semObject, {u32: control}]);
