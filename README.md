@@ -1,12 +1,12 @@
 # HelloWorldS2
 
-A simplified, cross-platform host project for running **Hello World** on **SmileBASIC / S2**, without requiring the Raspberry Pi Pico keyboard server.
+A cross-platform host & GPU-driven homebrew runtime for **Nintendo Switch 2 (S2)** via **SmileBASIC 4.4.9** (`HOS 23.0.1`), featuring an interactive **Homebrew Launcher**, **File Explorer**, **On-Console HTTP File Server (`:8080`)**, **`tmp:/` Write & Persistence Tools**, and a comprehensive **official-aligned `nn::*` GLSL SDK**—all without requiring a Raspberry Pi Pico keyboard server.
 
 ---
 
 ## ⚠️ Risk Warning
 
-**Running homebrew software, custom native code execution, and memory RPC tools on proprietary console hardware carries inherent risks.** Improper usage, incorrect memory writes, network configuration issues, or incompatible firmware states can cause system instability, crashes, system freezes, or unresponsiveness. 
+**Running homebrew software, custom native code execution, and memory RPC tools on proprietary console hardware carries inherent risks.** Improper usage, incorrect memory writes, network configuration issues, or incompatible firmware states can cause system instability, crashes, system freezes, or unresponsiveness.
 
 We (Main developer and contributors) are not responsible for any damage to your S2, PC, or other hardware; data loss; corrupted saves; or any other consequences arising from the use of this software. Always back up important data before making modifications. This software is provided as-is, without warranties of any kind. Use at your own risk and discretion.
 
@@ -14,87 +14,111 @@ We (Main developer and contributors) are not responsible for any damage to your 
 
 ## Overview & Version Support
 
-- **Supported Environment:** This software has been proven and validated exclusively on **HOS 23.0.1** and **SmileBASIC 4.4.9**. No other versions have been validated.
-- **Platform Compatibility:** Primarily tested and developed on **Windows**, with community bug-fix corrections integrated to improve compatibility across both **Windows** and **macOS**.
-- **Host PC:** Hosts the RPC bridge server, handles console qualification, performs module inspections, and runs the Hello World GPU app.
-- **Console (S2):** You manually set up the bootstrap script and execute the connection sequence in SmileBASIC.
+- **Supported Environment:** Proven and validated exclusively on **HOS 23.0.1** and **SmileBASIC 4.4.9**.
+- **Platform Compatibility:** Primarily tested and developed on **Windows**, with cross-platform support for **macOS** and **Linux**.
+- **Architecture:**
+  - **Console-Side Autonomous 60 FPS Loop:** Runs an independent `nn::vi::Layer` + Vulkan 1.4 swapchain (`1920×1080`) driven by a native `pthread` executing a self-restoring `setcontext`/`longjmp` frame loop on the Switch 2. Controller/touch polling (`nn::hid`) and GPU compute/fragment shader rendering run at 60 FPS directly on the console.
+  - **Host-Side RPC Bridge & On-Demand App Loader:** The PC host (`server.js` + `runtime/hello-runner.cjs`) qualifies the native session, prepares Vulkan pipelines **on-demand** when apps are launched, and services asynchronous SDK mailbox requests (`nn::fs`, `nn::socket`, `nn::nifm`, `nn::hid`, `nn::time`, `nn::os`, `nn::irsensor`, `nn::nfc`, `nn::audio`).
 
 ---
 
-## Prerequisites & Dependency Explanations
+## Included Homebrew Applications (`apps/`)
 
-1. **Node.js (v22+)**
-   - *Why:* Serves as the core host runtime environment. It executes `server.js`, manages the TCP connection listener (`node:net`), hosts the local bridge HTTP server (`node:http`), and orchestrates the inspection and pipeline scripts.
+By default, `node server.js` boots into the **Homebrew Launcher** (`apps/launcher`), where you can launch any compiled app on demand, rescan the server catalog live, or close the Vulkan overlay layer cleanly.
 
-2. **Python 3**
-   - *Why:* Used to execute the asset rasterization script (`catalog-assets.py`) during menu preparation.
+> **Navigation Rule:** Across all apps, **`-` (MINUS)** is reserved exclusively as the **Exit to Homebrew Launcher** button so apps can freely use `A`, `B`, `X`, `Y`, `L`, `R`, `+`, and D-Pad without conflict.
 
-3. **Pillow (`PIL` - Python Imaging Library)**
-   - *Why:* Used by `catalog-assets.py` to process homebrew application assets. It opens app icons, resizes them (`ImageOps.contain`), rasterizes application titles and descriptions into text bitmap tiles (`ImageDraw.Draw`), and packs them into a fixed GPU texture atlas (`catalog.bin`) so the S2 console can correctly render app thumbnails and menu labels in the homebrew interface. *(Note: `server.js` automatically checks for Pillow and installs it via `pip` if missing).*
+| App ID | Name | Description & Controls |
+| --- | --- | --- |
+| `launcher` | **Homebrew Launcher** | Interactive app picker with animated loading modal, live server catalog rescan (`X` or `[UPDATE]` row), and clean `nn::vi::Layer` teardown (`-` or `[EXIT]` row to close the Vulkan layer and return to SmileBASIC). |
+| `file-explorer` | **File Explorer** | Read-only S2 filesystem browser across `rom:/`, `save:/`, `tmp:/`, and virtual `exefs:/` (loaded process modules & sections). Supports 15-entry 2-column directory pages and a 20-line `.TXT`/`.PRG`/`T*` viewer with automatic SmileBASIC 4 container header stripping and `zlib` decompression. (`A`: Open/Read, `B`: Parent/Close File, `D-Pad`: Navigate/Scroll, `-`: Exit). |
+| `http-server` | **On-Console HTTP File Server (`:8080`)** | Binds a listening TCP socket (`nn::socket`) directly on the Switch 2's LAN IP (`http://<switch2-ip>:8080/`). Open the URL on any PC or phone browser to browse `rom:/`, `save:/`, `tmp:/`, and `exefs:/`, preview decompressed `.PRG`/`.TXT` or hex dumps, and download files directly from the console. (`X`: Restart Socket, `-`: Exit). |
+| `hello-world` | **Hello World** | Interactive controller visualizer displaying real-time button states (including `-` and `+`) for attached and detached Joy-Con controllers. (`-`: Exit). |
+| `tmp-test` | **TMP Write & Persistence Test** | Verifies `nn::fs::GetEntryType` and `nn::fs::CreateFile` on SmileBASIC's `tmp:/` (`MountCacheStorage`) mount by checking and creating `tmp:/tmptest` and reporting persistence across runs. (`A`: Re-check, `X`: Delete & Recreate, `-`: Exit). |
+| `tmp-delete` | **TMP Cleaner (`Delete tmptest`)** | Built using pure shader-side `nnFsGetEntryType` + `nnFsDeleteFile` SDK primitives to check for `tmp:/tmptest` and remove it if present. (`A`: Re-check & Delete, `-`: Exit). |
 
-4. **Network Access**
-   - *Why:* Inbound TCP port **39380** must be open/allowed through your firewall so the S2 console can connect to the host PC's RPC server.
+---
+
+## Official-Aligned GLSL SDK (`sdk/include/hb.glsl`)
+
+All apps have unrestricted access to the full native SDK mailbox (`mapped + 0x7f0000`). Functions in [`sdk/include/hb.glsl`](sdk/include/hb.glsl) use official Nintendo SDK (`nn::*`) naming conventions (with concise `hb*` aliases preserved):
+
+### 1. `nn::fs` — Complete 18-Function Filesystem Suite (`OP.fs = 9`)
+- **Path & Payload Staging:** `nnFsSetPathByte(i, ch)`, `nnFsSetSecondPathByte(i, ch)`, `nnFsSetWriteByte(i, val)`
+- **File & Directory Primitives:**
+  - `nnFsGetEntryType(pathLen)` → `nnFsResultExists()`, `nnFsResultEntryType()`, `nnFsResultFileSize()`, `nnFsResultCode()`
+  - `nnFsCreateFile(initialSize, pathLen)` / `nnFsDeleteFile(pathLen)` / `nnFsRenameFile(oldLen, newLen)`
+  - `nnFsReadFile(offset, maxBytes, pathLen)` → `nnFsResultBytesTransferred()`, `nnFsResultByte(i)`
+  - `nnFsWriteFile(offset, dataLen, pathLen)` (auto-creates/resizes, writes, flushes, and closes)
+  - `nnFsCreateDirectory(pathLen)` / `nnFsDeleteDirectory(pathLen)` / `nnFsRenameDirectory(oldLen, newLen)`
+  - `nnFsCommitSaveData(mountLen)`
+- **High-Level Helpers:** `nnFsReadDirectory(maxEntries, startOffset, pathLen)`, `nnFsReadTextLines(lineStart, pathLen)`
+
+### 2. `nn::socket` & `nn::nifm` — TCP & UDP Networking (`OP.net = 10`, `OP.udp = 3`)
+- **Interface Status:** `nnNifmGetCurrentPrimaryIpAddress()` → `nnNifmResultIpAddress()`, `nnNifmResultConnectionStatus()`
+- **TCP Server & Client:**
+  - `nnSocketListenTcp(port, backlog)` → `nnSocketResultFd()`
+  - `nnSocketAccept(listenFd, timeoutMs)` → `nnSocketResultFd()`, `nnSocketResultReady()`
+  - `nnSocketConnect(ipv4BigEndian, port)` → `nnSocketResultFd()`
+  - `nnSocketRecv(fd, maxBytes, timeoutMs)` → `nnSocketResultBytes()`, `nnSocketResultReady()`, `nnSocketResultByte(i)`
+  - `nnSocketSetSendByte(i, val)` + `nnSocketSend(fd, byteLen)`
+  - `nnSocketClose(fd)`, `nnSocketGetSockName(fd)`, `nnSocketGetLastErrno()`
+- **UDP Datagram Exchange:** `nnSocketSendToUdpEndpoint(endpoint, bytes)`
+
+### 3. `nn::hid` & `nn::hid::detail` — Controllers, SixAxis, Colors, LEDs & Haptics
+- **Input Polling:** `nnHidGetNpadButtons()`, `nnHidGetNpadPressed()`, `nnHidGetNpadSourceButtons(slot)`, `nnHidGetAnalogStick(right)`, `nnHidGetTouchScreenCount()`, `nnHidGetTouchScreenPoint(i)`, `nnHidGetKeyboardKey(usage)`, `nnHidGetMousePosition()`, `nnHidGetMouseButtons()`
+- **6-Axis IMU:** `nnHidGetSixAxisSensorCount()`, `nnHidGetSixAxisAcceleration(i)`, `nnHidGetSixAxisGyroscope(i)`, `nnHidGetSixAxisDirection(i)`
+- **Hardware Metadata & Haptics:** `nnHidGetNpadBodyColor()`, `nnHidGetNpadButtonColor()`, `nnHidGetPlayerLedPattern()`, `nnHidIsVibrationPermitted()`, `nnHidGetNpadControllerInfo(npadId)`, `nnHidSendVibrationPulse(...)`, `nnHidSendVibrationPattern(...)`
+
+### 4. `nn::time`, `nn::os`, `nn::irsensor::detail`, `nn::nfc`, `nn::audio`
+- **Clocks & System Info:** `nnTimeStandardSteadyClockNow()` (64-bit ARM `CNTPCT_EL0` tick, `19.2 MHz` frequency, POSIX seconds, and calendar fields), `nnOsGetSystemInfo()` (process `aruid`, steady tick, thread priority, `main`/`sdk` module bases)
+- **Peripherals:** `nnIrSensorGetCameraStatus(npadId)`, `nnNfcScanTag()`, `nnAudioListAudioIns(maxCount)`
+
+---
+
+## Prerequisites & Dependencies
+
+1. **Node.js (v22+)** — Runs `server.js`, the TCP RPC listener, and the Vulkan/SDK host runtime.
+2. **Python 3 + Pillow (`PIL`)** — Used by each app's `assets.py` to generate glyph atlases (`text.bin`) and icons (`server.js` automatically verifies and installs Pillow if missing).
+3. **Vulkan SDK (`glslangValidator` & `spirv-val`)** — Used when manually compiling app shaders via `sdk/build.cjs`.
+4. **Network Access** — Inbound TCP port **39380** must be allowed through your firewall so the Switch 2 can connect to your PC.
 
 ---
 
 ## Console Bootstrap Setup (Required)
 
-Before connecting from your PC, you must set up the console-side RPC server script:
 1. Retrieve the content of `bootstrap.bas` from the [ns2jb repository](https://gitlab.com/pepsipu/ns2jb/-/tree/main?ref_type=heads).
-2. Save/load it into SmileBASIC on your console as `TXT:NS2` on the default workspace. This script acts as the core console-side RPC bridge handler.
+2. Save it in SmileBASIC on your Switch 2 as `TXT:NS2` in the default workspace.
 
 ---
 
 ## Getting Started
 
-1. Start the RPC server on your host PC:
-   ```cmd
-   node server.js
+1. **Start the RPC Server on your PC:**
+   ```bash
+   node server.js [host-ip]
    ```
-   *(Optional Arguments & Flags)*:
-   - `[private-ip]` (Optional positional argument): Specify your host's local private IP address directly (e.g. `node server.js 192.168.1.50`). If omitted, the server will automatically detect available network interfaces or prompt you to select one.
-   - `--verbose` or `--debug`: Enable low-level RPC and native exchange logs.
-   - `--pairingCode <n1,n2,n3,n4>` (or `-p`): Specify a custom 4-part numeric pairing code (e.g. `node server.js --pairingCode 1234,5678,9012,3456`).  
-   
-   > **Note on Pairing Code:** By default, the pairing code is set to `[0, 0, 0, 0]`. We default this because we expect this software to be run on a **local private network**, not on public Wi-Fi where anyone can reach your host. However, if you prefer to define your own custom pairing code, you can supply it via `--pairingCode`, and it will be automatically reflected in the generated `V=START(...)` connection command.
+   *(Optional flags: `--app=<app-id>` to boot directly into a specific app instead of `launcher`, `--verbose` for low-level RPC transfer logs, `--pairingCode n1,n2,n3,n4`)*
 
-2. The script will display your computer's local IP address and the exact `V=START(...)` command for SmileBASIC.
-
-3. On your S2 console running SmileBASIC Direct mode, execute the complete connection sequence:
+2. **Connect from SmileBASIC Direct Mode on your Switch 2:**
    ```basic
    LOAD "TXT:NS2"
    RUN
    REMOVE NSR,&H60000000,&H3FFFFFFF
+   V=START(39380,10,0,0,2,0,0,0,0)
    ```
-   *Line-by-line explanation:*
-   - `LOAD "TXT:NS2"` — Loads the bootstrap script from text storage into the active SmileBASIC workspace.
-   - `RUN` — Executes the bootstrap script, initializing network communication and establishing the console-side RPC server bridge.
-   - `REMOVE NSR,&H60000000,&H3FFFFFFF` — Prepares and allocates memory regions (`NSR`, base address `&H60000000`, length `&H3FFFFFFF`) required for homebrew payload mapping and execution.
+   *(Use the exact `V=START(...)` command printed by `server.js` for your host IP).*
 
-4. Run the generated `V=START(...)` command provided by the server. *(Note: Assigning the output to variable `V` via `V=` is required in SmileBASIC for functions with return values).*
-
-5. The host will automatically detect the console connection, qualify the native session, run inspection steps, prepare the **Hello World** app, and render it on your console!
-
----
-
-## Engineering Enhancements & Reliability Improvements
-
-This repository builds upon upstream foundations with extensive engineering enhancements for stability, timeout management, and cross-platform execution:
-
-- **RPC & Connection Layer Stability:** 
-  - Increased timeouts across connection layers and RPC memory transfer operations to prevent dropped requests and session termination during heavy memory transfers.
-  - Implemented real-time memory transfer progress logs and detailed diagnostics, fully guarded behind a clean `--verbose` flag so normal console output remains concise.
-- **Native Calling & Exchange Reliability:** 
-  - Upgraded native exchange handling (`native.cjs`) to prevent event-loop deadlocks.
-  - Added firmware instruction mismatch tolerance in `verifyFunction`: minor native instruction byte variations across different console firmware versions are now gracefully tolerated (issuing a warning instead of hard-crashing).
-- **Frame Loop & Pipeline Hardening:** 
-  - Replaced custom manual render loops with HBLauncher's continuous `launcher-loop.cjs` process to properly drive frame submission and presentation.
-  - Bypassed external toolchain dependencies (`spirv-val`) when validating app manifests (`catalogTools.readApp`), preventing startup failures on host machines lacking toolchain binaries.
-- **Cross-Platform Python & Font Fallbacks:** 
-  - Added multi-alias Python support (`python3`, `python`, `py`) with automatic Pillow dependency checking and installation via `pip`.
-  - Implemented multi-path system font resolution across Windows, macOS, and Linux to ensure robust catalog asset rasterization.
-- **Robust Input Handling:** 
-  - Added automatic fallback stubs for unresolved HID input state imports (`GetNpadState`, `GetTouchScreenState`) across differing system software versions.
+3. **Building / Updating Apps Manually Without Restarting the Server:**
+   - Apps are loaded **on-demand** from their pre-compiled `.spv` binaries.
+   - If you create a new app or modify an existing app's shaders while `server.js` is running, compile it manually:
+     ```powershell
+     python apps/<app-id>/assets.py
+     $env:GLSLANG="C:\VulkanSDK\1.4.363.0\Bin\glslangValidator.exe"
+     $env:SPIRV_VAL="C:\VulkanSDK\1.4.363.0\Bin\spirv-val.exe"
+     node sdk/build.cjs apps/<app-id>
+     ```
+   - Then press **`X`** (or select `[UPDATE]`) in the Homebrew Launcher on the Switch 2 and launch the app—its updated `.spv` fingerprint will be detected and prepared on demand!
 
 ---
 
