@@ -7,6 +7,7 @@ root = Path(__file__).resolve().parent
 (root / 'shaders').mkdir(exist_ok=True)
 
 FONT_CANDIDATES = [
+    str((root.parent.parent / 'fonts' / 'fixedsys.ttf').resolve()),
     'C:/Windows/Fonts/consola.ttf',
     'C:/Windows/Fonts/cour.ttf',
     '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',

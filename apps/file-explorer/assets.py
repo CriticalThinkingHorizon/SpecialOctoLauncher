@@ -6,6 +6,7 @@ import math
 # The shader draws directory names by looking up each byte's glyph cell at runtime.
 root = Path(__file__).resolve().parent
 FONT_CANDIDATES = [
+    str((root.parent.parent / 'fonts' / 'fixedsys.ttf').resolve()),
     'C:/Windows/Fonts/consola.ttf',
     'C:/Windows/Fonts/cour.ttf',
     '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',
