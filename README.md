@@ -132,16 +132,31 @@ All apps have unrestricted access to the native SDK mailbox (`mapped + 0x7f0000`
    ```
    *(Optional flags: `--app=<app-id>` to boot directly into a specific app instead of `launcher`, `--verbose` for low-level RPC transfer logs).*
 
-2. **Connect from SmileBASIC on your S2:**
+2. **Configure your PC IP in `bootstrap.bas` (Required for the `I` shortcut):**
+   > [!IMPORTANT]
+   > The convenient `I` shortcut command at the bottom of [`rpc/bootstrap.bas`](rpc/bootstrap.bas#L464-L467) contains a hardcoded IP address:
+   > ```basic
+   > COMMON DEF I
+   >  VAR V
+   >  V=START(39380,10,0,0,2)
+   > END
+   > ```
+   > **You MUST change `10,0,0,2` on line 466 to your computer's actual local IPv4 address** (e.g., `192,168,1,50` if your PC is `192.168.1.50`).  
+   > If you do not update this line, typing `I` will attempt to connect to `10.0.0.2` and halt with `BOOT FAILED 58` (Connect failed / host unreachable).
+
+3. **Connect from SmileBASIC on your S2:**
    ```basic
    LOAD "TXT:NS2"
    RUN
-   REMOVE NSR,&H60000000,&H3FFFFFFF
-   V=START(39380,10,0,0,2)
+   I
    ```
-   *(Or simply run `I` if the shortcut is defined).*
+   *(Or if you prefer not to edit `bootstrap.bas`, run the manual command printed by `server.js`:)*
+   ```basic
+   REMOVE NSR,&H60000000,&H3FFFFFFF
+   V=START(39380,192,168,1,50)
+   ```
 
-3. **Offline Play (Without PC Server):**
+4. **Offline Play (Without PC Server):**
    - While connected, press **`Y`** in the Launcher to cache all apps.
    - Stop `server.js` on PC (`Ctrl+C`).
    - The S2 console will transition to `LOCAL_DISPATCHER` (`ST: 10`).
