@@ -933,26 +933,23 @@ async function create(rpc) {
         }
 
         const fullBak = await this.readRawFile(backupPath, 0xB000);
-        logLines.push(`[STEP 1] Read backup file (${fullBak.fileSize} bytes)...`);
+        logLines.push(`[STEP 1] Read backup file (${fullBak.buffer.length} bytes)...`);
 
         await client.write(pathOff, Buffer.from(targetPath + '\0', 'utf8'));
         await client.result('DeleteFile', [client.base + pathOff]);
 
-        logLines.push(`[STEP 2] Create fresh save:/f/###/TNS2 (${fullBak.fileSize}B)...`);
-        await client.result('CreateFile', [client.base + pathOff, fullBak.fileSize]);
+        logLines.push(`[STEP 2] Create fresh save:/f/###/TNS2 (${fullBak.buffer.length}B)...`);
+        await client.result('CreateFile', [client.base + pathOff, fullBak.buffer.length]);
 
         await client.write(handleOff, Buffer.alloc(8));
         const opRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 3]);
         if (opRes === 0) {
           const handle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
-          const CHUNK = 8192;
-          for (let off = 0; off < fullBak.buffer.length; off += CHUNK) {
-            const slice = fullBak.buffer.subarray(off, Math.min(off + CHUNK, fullBak.buffer.length));
-            await client.write(writeOff, slice);
-            await client.write(storageOff, Buffer.alloc(128));
-            await client.call('StorageCtor', [client.base + storageOff, handle, 0]);
-            await client.result('StorageWrite', [client.base + storageOff, off, client.base + writeOff, slice.length]);
-          }
+          await client.result('SetFileSize', [handle, fullBak.buffer.length]);
+          await client.write(writeOff, fullBak.buffer);
+          await client.write(storageOff, Buffer.alloc(128));
+          await client.call('StorageCtor', [client.base + storageOff, handle, 0]);
+          await client.result('StorageWrite', [client.base + storageOff, 0, client.base + writeOff, fullBak.buffer.length]);
           await client.result('FlushFile', [handle]);
           await client.call('CloseFile', [handle]);
           logLines.push('  Restored file written successfully.');
@@ -988,21 +985,18 @@ async function create(rpc) {
         if (fullCur.result === 0) {
           await client.write(pathOff, Buffer.from(backupPath + '\0', 'utf8'));
           await client.result('DeleteFile', [client.base + pathOff]);
-          await client.result('CreateFile', [client.base + pathOff, fullCur.fileSize]);
+          await client.result('CreateFile', [client.base + pathOff, fullCur.buffer.length]);
           await client.write(handleOff, Buffer.alloc(8));
           if ((await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 3])) === 0) {
             const bHandle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
-            const CHUNK = 8192;
-            for (let off = 0; off < fullCur.buffer.length; off += CHUNK) {
-              const slice = fullCur.buffer.subarray(off, Math.min(off + CHUNK, fullCur.buffer.length));
-              await client.write(writeOff, slice);
-              await client.write(storageOff, Buffer.alloc(128));
-              await client.call('StorageCtor', [client.base + storageOff, bHandle, 0]);
-              await client.result('StorageWrite', [client.base + storageOff, off, client.base + writeOff, slice.length]);
-            }
+            await client.result('SetFileSize', [bHandle, fullCur.buffer.length]);
+            await client.write(writeOff, fullCur.buffer);
+            await client.write(storageOff, Buffer.alloc(128));
+            await client.call('StorageCtor', [client.base + storageOff, bHandle, 0]);
+            await client.result('StorageWrite', [client.base + storageOff, 0, client.base + writeOff, fullCur.buffer.length]);
             await client.result('FlushFile', [bHandle]);
             await client.call('CloseFile', [bHandle]);
-            logLines.push(`  Backup created successfully (${fullCur.fileSize}B).`);
+            logLines.push(`  Backup created successfully (${fullCur.buffer.length}B).`);
           }
         }
       }
@@ -1018,7 +1012,7 @@ async function create(rpc) {
         return { result: createRes, curSize, repoSize: repoBytes.length, isIdentical: 0, updateRes: createRes, commitRes: -1, lines: logLines };
       }
 
-      // Step 3: Write repoBytes in chunks
+      // Step 3: Write repoBytes in single direct transfer
       logLines.push(`[STEP 3] Writing repo bootstrap.bas to S2 save:...`);
       await client.write(handleOff, Buffer.alloc(8));
       const openRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 3]);
@@ -1027,16 +1021,11 @@ async function create(rpc) {
         return { result: openRes, curSize, repoSize: repoBytes.length, isIdentical: 0, updateRes: openRes, commitRes: -1, lines: logLines };
       }
       const handle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
-      let writeErr = 0;
-      const CHUNK = 8192;
-      for (let off = 0; off < repoBytes.length; off += CHUNK) {
-        const slice = repoBytes.subarray(off, Math.min(off + CHUNK, repoBytes.length));
-        await client.write(writeOff, slice);
-        await client.write(storageOff, Buffer.alloc(128));
-        await client.call('StorageCtor', [client.base + storageOff, handle, 0]);
-        const wRes = await client.result('StorageWrite', [client.base + storageOff, off, client.base + writeOff, slice.length]);
-        if (wRes !== 0) { writeErr = wRes; break; }
-      }
+      await client.result('SetFileSize', [handle, repoBytes.length]);
+      await client.write(writeOff, repoBytes);
+      await client.write(storageOff, Buffer.alloc(128));
+      await client.call('StorageCtor', [client.base + storageOff, handle, 0]);
+      const writeErr = await client.result('StorageWrite', [client.base + storageOff, 0, client.base + writeOff, repoBytes.length]);
       await client.result('FlushFile', [handle]);
       await client.call('CloseFile', [handle]);
       logLines.push(`  Write completed (result: 0x${writeErr.toString(16)}).`);
