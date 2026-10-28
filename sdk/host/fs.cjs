@@ -867,9 +867,22 @@ async function create(rpc) {
       // SmileBASIC requires at least two lines of trailing padding at the end of scripts;
       // otherwise the interpreter and editor truncate the last real lines.
       let scriptText = repoBytes.toString('utf8');
-      if (!scriptText.endsWith('\n\n\n') && !scriptText.endsWith('\r\n\r\n\r\n') && !scriptText.includes("' Padding")) {
+      const lines = scriptText.replace(/\r\n/g, '\n').split('\n');
+      let trailingPadding = 0;
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i].trim();
+        if (line === '' || line.startsWith("' Padding") || line.startsWith("'")) {
+          trailingPadding++;
+        } else {
+          break;
+        }
+      }
+      if (trailingPadding < 3) {
         if (!scriptText.endsWith('\n')) scriptText += '\n';
-        scriptText += "' Padding\n' Padding\n' Padding\n";
+        while (trailingPadding < 3) {
+          scriptText += "' Padding\n";
+          trailingPadding++;
+        }
         repoBytes = Buffer.from(scriptText, 'utf8');
       }
 
