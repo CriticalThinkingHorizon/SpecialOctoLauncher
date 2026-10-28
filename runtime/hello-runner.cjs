@@ -362,9 +362,11 @@ async function main(directory, attempt = 'auto') {
       // 2. Clear previous SDK response payload length (offset 4104) while preserving request/response sequence numbers
       await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(1048));
 
-      // 3. Always restore the target app's font atlas at mapped + 1024
+      // 3. Always restore the target app's font atlas at mapped + 1024, clearing any dirty rows from previous apps
       const nextSlice = getEffectiveDataSlice(targetApp.files.data.bytes);
-      await rpc.write(mapped + 1024, nextSlice);
+      const uploadBytes = Math.max(262144, nextSlice.length);
+      const atlasUpload = targetApp.files.data.bytes.subarray(0, Math.min(targetApp.files.data.bytes.length, uploadBytes));
+      await rpc.write(mapped + 1024, atlasUpload);
       currentAtlasSlice = nextSlice;
 
       // 4. Reset app scratch state (784..1024), clearing c.reserved.z (1016) & c.reserved.w (1020)
