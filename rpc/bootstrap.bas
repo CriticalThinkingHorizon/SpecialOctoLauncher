@@ -339,7 +339,3 @@ COMMON DEF I
  VAR V
  V=START(39380,10,0,0,2)
 END
-
-' Padding
-' Padding
-' Padding

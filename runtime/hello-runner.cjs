@@ -352,8 +352,14 @@ async function main(directory, attempt = 'auto') {
     await rpc.write(workerStateOffset, workerState);
 
     let stop = false;
-    process.on('SIGINT', () => stop = true);
-    process.on('SIGTERM', () => stop = true);
+    process.on('SIGINT', () => {
+      console.log('\n[DETACH] Server received SIGINT. Detaching and leaving native app running autonomously on S2...');
+      process.exit(0);
+    });
+    process.on('SIGTERM', () => {
+      console.log('\n[DETACH] Server received SIGTERM. Detaching and leaving native app running autonomously on S2...');
+      process.exit(0);
+    });
 
     const applyApp = async (name) => {
       const { app: targetApp, prep } = preparedApps[name];
@@ -444,29 +450,34 @@ async function main(directory, attempt = 'auto') {
       await new Promise(r => setTimeout(r, 16));
     }
 
-    await program.stop();
-    const until = Date.now() + 5000;
-    while (Date.now() < until) {
-      const state = (await rpc.callAddress(sdk + code.tryWait.offset, [thread])).result;
-      if (state === 1n) break;
-      await new Promise(r => setTimeout(r, 10));
-    }
-    await rpc.callAddress(sdk + code.join.offset, [thread, base + 8]);
-    await sdkRuntime.close();
-    await rpc.write(rpc.a.scratch + 0x7e000, Buffer.alloc(48));
-
-    if (closeLayerRequested && r.layer) {
-      try {
-        console.log('[EXIT] Waiting for Vulkan queue idle and closing nn::vi::Layer...');
-        await call('vkQueueWaitIdle', queue);
-        await call('_ZN2nn2vi5Layer5CloseEb', Number(r.layer), 0);
-        if (r.display) {
-          await call('_ZN2nn2vi12CloseDisplayEPNS0_7DisplayE', BigInt(r.display));
-        }
-        console.log('[EXIT] Vulkan overlay layer closed cleanly.');
-      } catch (closeErr) {
-        console.warn('[EXIT] Layer teardown warning:', closeErr.message);
+    if (closeLayerRequested) {
+      await program.stop();
+      const until = Date.now() + 5000;
+      while (Date.now() < until) {
+        const state = (await rpc.callAddress(sdk + code.tryWait.offset, [thread])).result;
+        if (state === 1n) break;
+        await new Promise(r => setTimeout(r, 10));
       }
+      await rpc.callAddress(sdk + code.join.offset, [thread, base + 8]);
+      await sdkRuntime.close();
+      await rpc.write(rpc.a.scratch + 0x7e000, Buffer.alloc(48));
+
+      if (r.layer) {
+        try {
+          console.log('[EXIT] Waiting for Vulkan queue idle and closing nn::vi::Layer...');
+          await call('vkQueueWaitIdle', queue);
+          await call('_ZN2nn2vi5Layer5CloseEb', Number(r.layer), 0);
+          if (r.display) {
+            await call('_ZN2nn2vi12CloseDisplayEPNS0_7DisplayE', BigInt(r.display));
+          }
+          console.log('[EXIT] Vulkan overlay layer closed cleanly.');
+        } catch (closeErr) {
+          console.warn('[EXIT] Layer teardown warning:', closeErr.message);
+        }
+      }
+    } else {
+      console.log('[DETACH] Server stopping. Leaving native frame loop running autonomously on S2 console.');
+      try { await sdkRuntime.close(); } catch (e) {}
     }
 
   } catch (e) {
