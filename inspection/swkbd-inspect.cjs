@@ -1,15 +1,24 @@
 // Safe investigation of nn::swkbd symbols and work buffer requirements on Switch 2.
 // This script performs read-only dynamic symbol inspection, prologue disassembly reads,
-// and executes strictly safe non-blocking query routines (e.g., CalculateWorkBufferSize).
+// and executes strictly safe non-blocking query routines (e.g., GetRequiredWorkBufferSize).
 // It explicitly DOES NOT invoke ShowKeyboard or any blocking applet transitions.
 
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { inspectModule } = require('./inspect.cjs');
 
+async function verifyAndCall(rpc, address, size = 16, args = []) {
+  const readSize = Math.max(16, Math.min(32, size));
+  const hex = (await rpc.read(address, readSize)).toString('hex');
+  await rpc.request({ command: 'verify-function', address, hex });
+  return rpc.callAddress(address, args);
+}
+
 function demangleSimple(name) {
-  // Helpful quick demangling patterns for nn::swkbd symbols
-  if (name.includes('CalculateWorkBufferSize')) return 'nn::swkbd::CalculateWorkBufferSize(bool)';
+  if (name.includes('GetRequiredWorkBufferSizeEb')) return 'nn::swkbd::GetRequiredWorkBufferSize(bool hasCustomizeDic)';
+  if (name.includes('GetRequiredWorkBufferSizeEi')) return 'nn::swkbd::GetRequiredWorkBufferSize(int dicSize)';
+  if (name.includes('GetRequiredStringBufferSize')) return 'nn::swkbd::GetRequiredStringBufferSize()';
+  if (name.includes('GetRequiredTextCheckWorkBufferSize')) return 'nn::swkbd::GetRequiredTextCheckWorkBufferSize()';
   if (name.includes('InitializeKeyboardConfig')) return 'nn::swkbd::InitializeKeyboardConfig(KeyboardConfig*)';
   if (name.includes('ShowKeyboard')) return 'nn::swkbd::ShowKeyboard(...)';
   if (name.includes('MakePreset')) return 'nn::swkbd::MakePreset(...)';
@@ -62,7 +71,7 @@ async function main(directory) {
       type: sym.type
     };
 
-    if (/CalculateWorkBufferSize|InitializeKeyboardConfig/i.test(sym.name)) {
+    if (/GetRequired|InitializeKeyboardConfig/i.test(sym.name)) {
       categorized.queryAndConfig.push(item);
     } else if (/ShowKeyboard/i.test(sym.name)) {
       categorized.showKeyboard.push(item);
@@ -93,47 +102,81 @@ async function main(directory) {
     probes: {}
   };
 
-  // 1. Probe CalculateWorkBufferSize (Stateless calculation, zero risk)
-  const calcBufSym = swkbdSymbols.find(s => s.name.includes('CalculateWorkBufferSize') && s.section && s.type === 2);
-  if (calcBufSym) {
-    const calcAddr = sdkBase + calcBufSym.offset;
-    console.log(`\n[Probe 1] Testing nn::swkbd::CalculateWorkBufferSize at 0x${calcAddr.toString(16)}:`);
-    try {
-      const resWithoutDic = await rpc.callAddress(calcAddr, [0]);
-      const resWithDic = await rpc.callAddress(calcAddr, [1]);
-      const bytesNoDic = Number(resWithoutDic.result);
-      const bytesWithDic = Number(resWithDic.result);
+  // 1. Probe GetRequiredWorkBufferSize & Buffer Sizing (Pure calculation, zero risk)
+  console.log('\n[Probe 1] Testing nn::swkbd Buffer Requirement Query Functions:');
+  report.probes.bufferSizes = {};
 
-      console.log(`  Work buffer required (without custom dict): ${bytesNoDic} bytes (0x${bytesNoDic.toString(16)})`);
-      console.log(`  Work buffer required (with custom dict):    ${bytesWithDic} bytes (0x${bytesWithDic.toString(16)})`);
-      report.probes.calculateWorkBufferSize = {
-        symbol: calcBufSym.name,
-        address: '0x' + calcAddr.toString(16),
-        withoutDictBytes: bytesNoDic,
-        withDictBytes: bytesWithDic
-      };
+  const getWorkBufBool = swkbdSymbols.find(s => s.name.includes('GetRequiredWorkBufferSizeEb') && s.section && s.type === 2);
+  if (getWorkBufBool) {
+    const addr = sdkBase + getWorkBufBool.offset;
+    try {
+      const resNoDic = await verifyAndCall(rpc, addr, getWorkBufBool.size, [0]);
+      const resWithDic = await verifyAndCall(rpc, addr, getWorkBufBool.size, [1]);
+      const bytesNoDic = Number(resNoDic.result);
+      const bytesWithDic = Number(resWithDic.result);
+      console.log(`  nn::swkbd::GetRequiredWorkBufferSize(false): ${bytesNoDic} bytes (0x${bytesNoDic.toString(16)})`);
+      console.log(`  nn::swkbd::GetRequiredWorkBufferSize(true):  ${bytesWithDic} bytes (0x${bytesWithDic.toString(16)})`);
+      report.probes.bufferSizes.workBufferWithoutDic = bytesNoDic;
+      report.probes.bufferSizes.workBufferWithDic = bytesWithDic;
     } catch (e) {
-      console.log('  CalculateWorkBufferSize call failed:', e.message);
-      report.probes.calculateWorkBufferSize = { error: e.message };
+      console.log('  GetRequiredWorkBufferSize(bool) failed:', e.message);
     }
-  } else {
-    console.log('\n[Probe 1] CalculateWorkBufferSize symbol not found.');
   }
 
-  // 2. Read assembly prologue of ShowKeyboard (Read-only, no execution)
-  const showSym = swkbdSymbols.find(s => s.name.includes('ShowKeyboard') && s.section && s.type === 2);
-  if (showSym) {
-    const showAddr = sdkBase + showSym.offset;
-    console.log(`\n[Probe 2] Reading machine code prologue of ShowKeyboard at 0x${showAddr.toString(16)}:`);
+  const getStringBuf = swkbdSymbols.find(s => s.name.includes('GetRequiredStringBufferSize') && s.section && s.type === 2);
+  if (getStringBuf) {
+    const addr = sdkBase + getStringBuf.offset;
     try {
-      const codeBytes = await rpc.read(showAddr, Math.min(64, showSym.size || 64));
-      console.log(`  Instructions (first ${codeBytes.length} bytes):`);
+      const res = await verifyAndCall(rpc, addr, getStringBuf.size, []);
+      const bytes = Number(res.result);
+      console.log(`  nn::swkbd::GetRequiredStringBufferSize():    ${bytes} bytes (0x${bytes.toString(16)})`);
+      report.probes.bufferSizes.stringBuffer = bytes;
+    } catch (e) {
+      console.log('  GetRequiredStringBufferSize failed:', e.message);
+    }
+  }
+
+  const getTextCheckBuf = swkbdSymbols.find(s => s.name.includes('GetRequiredTextCheckWorkBufferSize') && s.section && s.type === 2);
+  if (getTextCheckBuf) {
+    const addr = sdkBase + getTextCheckBuf.offset;
+    try {
+      const res = await verifyAndCall(rpc, addr, getTextCheckBuf.size, []);
+      const bytes = Number(res.result);
+      console.log(`  nn::swkbd::GetRequiredTextCheckWorkBufferSize(): ${bytes} bytes (0x${bytes.toString(16)})`);
+      report.probes.bufferSizes.textCheckWorkBuffer = bytes;
+    } catch (e) {
+      console.log('  GetRequiredTextCheckWorkBufferSize failed:', e.message);
+    }
+  }
+
+  const getInlineBuf = swkbdSymbols.find(s => s.name.includes('InlineKeyboard25GetRequiredWorkBufferSize') && s.section && s.type === 2);
+  if (getInlineBuf) {
+    const addr = sdkBase + getInlineBuf.offset;
+    try {
+      const res = await verifyAndCall(rpc, addr, getInlineBuf.size, []);
+      const bytes = Number(res.result);
+      console.log(`  nn::swkbd::InlineKeyboard::GetRequiredWorkBufferSize(): ${bytes} bytes (0x${bytes.toString(16)})`);
+      report.probes.bufferSizes.inlineWorkBuffer = bytes;
+    } catch (e) {
+      console.log('  InlineKeyboard::GetRequiredWorkBufferSize failed:', e.message);
+    }
+  }
+
+  // 2. Read assembly of ShowKeyboard implementation (offset 3980640, 892 bytes)
+  const fullShowSym = swkbdSymbols.find(s => s.name.includes('ShowKeyboard') && s.size > 100 && s.section && s.type === 2);
+  if (fullShowSym) {
+    const showAddr = sdkBase + fullShowSym.offset;
+    console.log(`\n[Probe 2] Reading machine code of ShowKeyboard (892 bytes) at 0x${showAddr.toString(16)}:`);
+    try {
+      const codeBytes = await rpc.read(showAddr, 64);
+      console.log(`  Target symbol: ${fullShowSym.name}`);
+      console.log(`  Instructions (first 64 bytes):`);
       console.log(`  HEX: ${codeBytes.toString('hex')}`);
       report.probes.showKeyboardPrologue = {
-        symbol: showSym.name,
+        symbol: fullShowSym.name,
         address: '0x' + showAddr.toString(16),
-        size: showSym.size,
-        hex: codeBytes.toString('hex')
+        totalSize: fullShowSym.size,
+        first64Hex: codeBytes.toString('hex')
       };
     } catch (e) {
       console.log('  Failed to read ShowKeyboard code:', e.message);
@@ -141,17 +184,17 @@ async function main(directory) {
     }
   }
 
-  // 3. Probe InitializeKeyboardConfig (Initializes struct with default values in isolated scratch buffer)
+  // 3. Probe InitializeKeyboardConfig (Verifies function, initializes struct in isolated scratch buffer)
   const initConfigSym = swkbdSymbols.find(s => s.name.includes('InitializeKeyboardConfig') && s.section && s.type === 2);
   if (initConfigSym) {
     const initAddr = sdkBase + initConfigSym.offset;
-    console.log(`\n[Probe 3] Testing InitializeKeyboardConfig with isolated scratch buffer:`);
+    console.log(`\n[Probe 3] Testing InitializeKeyboardConfig with verified call:`);
     try {
       const scratch = rpc.a.scratch + 0x10000;
       const initialZeros = Buffer.alloc(1024);
       await rpc.write(scratch, initialZeros);
       
-      const callRes = await rpc.callAddress(initAddr, [scratch]);
+      const callRes = await verifyAndCall(rpc, initAddr, initConfigSym.size, [scratch]);
       console.log(`  Call completed with return code: 0x${callRes.result.toString(16)}`);
 
       const filled = await rpc.read(scratch, 1024);
@@ -159,10 +202,8 @@ async function main(directory) {
       for (let i = 0; i < filled.length; i++) {
         if (filled[i] !== 0) nonZeroCount++;
       }
-      console.log(`  KeyboardConfig filled bytes: ${nonZeroCount} non-zero bytes out of 1024`);
-      
-      // Dump the first 128 bytes of KeyboardConfig
-      console.log(`  Config Header Hex: ${filled.subarray(0, 64).toString('hex')}`);
+      console.log(`  KeyboardConfig populated: ${nonZeroCount} non-zero bytes out of 1024`);
+      console.log(`  Config Header Hex (64 bytes): ${filled.subarray(0, 64).toString('hex')}`);
 
       report.probes.initializeKeyboardConfig = {
         symbol: initConfigSym.name,
