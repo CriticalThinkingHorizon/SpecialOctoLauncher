@@ -25,11 +25,13 @@ float drawRowTitle(vec2 p,vec2 origin,uint entry){
  return ink;
 }
 
-// Header: "S2 HOMEBREW LAUNCHER  |  A: Select  |  X: Sync"
-const uint HEADER_LEN = 46u;
-const uint HEADER_CHARS[46] = uint[46](
+// Header: "S2 HOMEBREW LAUNCHER  |  A: Select  |  Y: Cache All  |  X: Sync" (63 chars)
+const uint HEADER_LEN = 63u;
+const uint HEADER_CHARS[63] = uint[63](
  83u,50u,32u,72u,79u,77u,69u,66u,82u,69u,87u,32u,76u,65u,85u,78u,67u,72u,69u,82u,
- 32u,32u,124u,32u,32u,65u,58u,32u,83u,101u,108u,101u,99u,116u,32u,32u,124u,32u,32u,88u,58u,32u,83u,121u,110u,99u
+ 32u,32u,124u,32u,32u,65u,58u,32u,83u,101u,108u,101u,99u,116u,
+ 32u,32u,124u,32u,32u,89u,58u,32u,67u,97u,99u,104u,101u,32u,65u,108u,108u,
+ 32u,32u,124u,32u,32u,88u,58u,32u,83u,121u,110u,99u
 );
 
 // Loading message: "LOADING APPLICATION... PLEASE WAIT" (34 chars)
@@ -37,6 +39,20 @@ const uint LOAD_LEN = 34u;
 const uint LOAD_CHARS[34] = uint[34](
  76u,79u,65u,68u,73u,78u,71u,32u,65u,80u,80u,76u,73u,67u,65u,84u,73u,79u,78u,46u,46u,46u,32u,
  80u,76u,69u,65u,83u,69u,32u,87u,65u,73u,84u
+);
+
+// Caching message: "CACHING APPS TO TMP:/ AND MEMORY..." (35 chars)
+const uint CACHE_MSG_LEN = 35u;
+const uint CACHE_MSG_CHARS[35] = uint[35](
+ 67u,65u,67u,72u,73u,78u,71u,32u,65u,80u,80u,83u,32u,84u,79u,32u,
+ 84u,77u,80u,58u,47u,32u,65u,78u,68u,32u,77u,69u,77u,79u,82u,89u,
+ 46u,46u,46u
+);
+
+// Cached badge: "[CACHED]" (8 chars)
+const uint CACHED_LEN = 8u;
+const uint CACHED_CHARS[8] = uint[8](
+ 91u,67u,65u,67u,72u,69u,68u,93u
 );
 
 float drawHeader(vec2 p,vec2 origin){
@@ -51,6 +67,22 @@ float drawLoadingText(vec2 p,vec2 origin){
  float ink=0.0;
  for(uint i=0u;i<LOAD_LEN;i++){
   ink=max(ink,drawChar(p,origin+vec2(float(i*uint(GLYPH_W)),0.0),LOAD_CHARS[i]));
+ }
+ return ink;
+}
+
+float drawCachingText(vec2 p,vec2 origin){
+ float ink=0.0;
+ for(uint i=0u;i<CACHE_MSG_LEN;i++){
+  ink=max(ink,drawChar(p,origin+vec2(float(i*uint(GLYPH_W)),0.0),CACHE_MSG_CHARS[i]));
+ }
+ return ink;
+}
+
+float drawCachedBadge(vec2 p,vec2 origin){
+ float ink=0.0;
+ for(uint i=0u;i<CACHED_LEN;i++){
+  ink=max(ink,drawChar(p,origin+vec2(float(i*uint(GLYPH_W)),0.0),CACHED_CHARS[i]));
  }
  return ink;
 }
@@ -137,9 +169,17 @@ void main(){
     // Faint phosphor glow under non-selected text
     tubeColor=mix(tubeColor,textCol,textInk);
    }
+
+   // Draw [CACHED] badge if this app entry is cached in memory / tmp:/
+   if((c.stats.x&(1u<<i))!=0u){
+    vec2 badgeOrigin=origin+vec2(860.0,0.0);
+    float badgeInk=drawCachedBadge(sp,badgeOrigin);
+    vec3 badgeCol=(i==selected)?vec3(0.05,0.18,0.08):vec3(0.35,0.95,0.85);
+    tubeColor=mix(tubeColor,badgeCol,badgeInk);
+   }
   }
 
-  // Show loading modal + animated progress bar when launching an app or syncing catalog
+  // Show loading modal + animated progress bar when launching an app or caching apps
   if(c.reserved.z!=0u||c.game.z!=2u){
    tubeColor*=0.30;
    vec2 center=vec2(960.0,540.0);
@@ -148,9 +188,15 @@ void main(){
    tubeColor=mix(tubeColor,vec3(0.03,0.09,0.04),modal);
    tubeColor=mix(tubeColor,vec3(0.35,1.0,0.55),border);
 
-   float textW=float(LOAD_LEN*uint(GLYPH_W));
-   float loadInk=drawLoadingText(sp,vec2(960.0-textW*0.5,485.0));
-   tubeColor=mix(tubeColor,vec3(0.60,1.0,0.75),loadInk);
+   float modalInk=0.0;
+   if(c.game.z==3u){
+    float textW=float(CACHE_MSG_LEN*uint(GLYPH_W));
+    modalInk=drawCachingText(sp,vec2(960.0-textW*0.5,485.0));
+   }else{
+    float textW=float(LOAD_LEN*uint(GLYPH_W));
+    modalInk=drawLoadingText(sp,vec2(960.0-textW*0.5,485.0));
+   }
+   tubeColor=mix(tubeColor,vec3(0.60,1.0,0.75),modalInk);
 
    // Animated retro phosphor progress bar
    float track=fill(box(sp,vec2(960.0,575.0),vec2(320.0,10.0),4.0));

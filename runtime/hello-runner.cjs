@@ -351,6 +351,112 @@ async function main(directory, attempt = 'auto') {
     workerState.writeBigUInt64LE(BigInt(r.layer || 0), 40);
     await rpc.write(workerStateOffset, workerState);
 
+    const APP_TABLE_OFFSET = rpc.a.scratch + 0x7d000;
+    const SLOT_STRIDE = 0x40000; // 256 KiB per app slot
+    const MAX_CACHED_SLOTS = 15;
+    let cachedMask = 0;
+
+    const cacheAllApps = async () => {
+      console.log('[CACHE] Preparing local app cache on S2 tmp:/ and mapped GPU memory...');
+      let fsService;
+      try {
+        fsService = await require('../sdk/host/fs.cjs').create(rpc);
+        await fsService.mkdirPath('tmp:/cache');
+      } catch (e) {
+        console.warn('[CACHE] Notice preparing tmp:/cache:', e.message);
+      }
+
+      // App slot 0 is always launcher; subsequent slots correspond to catalog rows
+      const allAppIds = ['launcher', ...launchableIds.slice(0, MAX_CACHED_SLOTS - 1)];
+      const appCount = allAppIds.length;
+      console.log(`[CACHE] Staging ${appCount} apps into GPU memory and tmp:/ storage...`);
+
+      const tableBuf = Buffer.alloc(64 + appCount * 64);
+      tableBuf.writeUInt32LE(0x41505053, 0); // 'APPS' magic
+      tableBuf.writeBigUInt64LE(1n, 8);      // version 1
+      tableBuf.writeBigUInt64LE(BigInt(appCount), 16);
+      tableBuf.writeBigUInt64LE(0n, 24);     // activeSlot = 0 (launcher)
+      tableBuf.writeBigUInt64LE(BigInt(mapped), 40);
+      tableBuf.writeBigUInt64LE(BigInt(control), 48);
+      tableBuf.writeBigUInt64LE(BigInt(semObject), 56);
+
+      cachedMask = 0;
+
+      for (let slot = 0; slot < appCount; slot++) {
+        const appId = allAppIds[slot];
+        console.log(`[CACHE] Staging slot ${slot} (${appId})...`);
+        await ensureAppPrepared(appId);
+        const { app: targetApp, prep } = preparedApps[appId];
+
+        // 1. Build command buffer block (512 bytes)
+        const cmdBuf = Buffer.alloc(prep.commands.length * 0x100);
+        for (let phase = 0; phase < prep.commands.length; phase++) {
+          const o = phase * 0x100, obj = control + 0x1000 + o;
+          cmdBuf.writeBigUInt64LE(BigInt(obj + 0x60), o + 0x50);
+          prep.commands[phase].forEach((v, i) => cmdBuf.writeBigUInt64LE(BigInt(v), o + 0x60 + i * 8));
+          const submitStruct = struct(72, 4, {16: 1, 40: 1, 56: 1}, {24: control + 0x200, 32: control + 0x210, 48: obj + 0x28, 64: semObject + 0x28});
+          submitStruct.copy(cmdBuf, o + 0x80);
+        }
+
+        // 2. Scratch state (240 bytes)
+        const scratchState = Buffer.from(targetApp.files.state.bytes.subarray(784, 1024));
+        scratchState.writeFloatLE(1, 960 - 784);
+
+        // 3. Font atlas slice
+        const atlasSlice = getEffectiveDataSlice(targetApp.files.data.bytes);
+        const atlasLen = Math.min(atlasSlice.length, SLOT_STRIDE - 0x400);
+
+        // Slot mapped address: mapped + 0x300000 + slot * SLOT_STRIDE
+        const slotMapped = mapped + 0x300000 + slot * SLOT_STRIDE;
+        await rpc.write(slotMapped, cmdBuf);
+        await rpc.write(slotMapped + 0x200, scratchState);
+        await rpc.write(slotMapped + 0x400, atlasSlice.subarray(0, atlasLen));
+
+        // 4. Save to tmp:/cache/ on S2 filesystem
+        if (fsService) {
+          try {
+            await fsService.writeBytesAt(`tmp:/cache/${appId}-state.bin`, 0, targetApp.files.state.bytes);
+            await fsService.writeBytesAt(`tmp:/cache/${appId}-data.bin`, 0, atlasSlice.subarray(0, atlasLen));
+          } catch (fsErr) {
+            console.warn(`[CACHE] File cache warning for ${appId}:`, fsErr.message);
+          }
+        }
+
+        // 5. Fill slot entry in tableBuf
+        const entryOffset = 64 + slot * 64;
+        tableBuf.writeBigUInt64LE(BigInt(slotMapped), entryOffset);           // cmdSrc
+        tableBuf.writeBigUInt64LE(BigInt(cmdBuf.length), entryOffset + 8);    // cmdLen
+        tableBuf.writeBigUInt64LE(BigInt(slotMapped + 0x200), entryOffset + 16); // scratchSrc
+        tableBuf.writeBigUInt64LE(BigInt(scratchState.length), entryOffset + 24); // scratchLen
+        tableBuf.writeBigUInt64LE(BigInt(slotMapped + 0x400), entryOffset + 32); // atlasSrc
+        tableBuf.writeBigUInt64LE(BigInt(atlasLen), entryOffset + 40);         // atlasLen
+        tableBuf.writeBigUInt64LE(1n, entryOffset + 48);                      // isCached
+
+        if (slot > 0) {
+          cachedMask |= (1 << (slot - 1));
+        }
+      }
+
+      tableBuf.writeBigUInt64LE(BigInt(cachedMask), 32); // cachedBitmask
+
+      // Write tableBuf to scratch memory at APP_TABLE_OFFSET
+      await rpc.write(APP_TABLE_OFFSET, tableBuf);
+
+      // Write cachedMask to mapped + 992 (c.stats.x) so [CACHED] badges appear
+      const maskBuf = Buffer.alloc(4);
+      maskBuf.writeUInt32LE(cachedMask, 0);
+      await rpc.write(mapped + 992, maskBuf);
+
+      // Dismiss modal by resetting c.reserved.w = 0 and c.game.z = 2
+      const clearRes = Buffer.alloc(8);
+      await rpc.write(mapped + 1016, clearRes);
+      const readyZ = Buffer.alloc(4);
+      readyZ.writeUInt32LE(2, 0);
+      await rpc.write(mapped + 792, readyZ);
+
+      console.log(`[CACHE] Successfully cached ${appCount} apps! Bitmask: 0x${cachedMask.toString(16)}`);
+    };
+
     let stop = false;
     process.on('SIGINT', () => {
       console.log('\n[DETACH] Server received SIGINT. Detaching and leaving native app running autonomously on S2...');
@@ -403,6 +509,20 @@ async function main(directory, attempt = 'auto') {
       heldBuf.writeUInt32LE(heldButtons >>> 0, 0);
       await rpc.write(mapped + 84, heldBuf);
       activeAppId = name;
+
+      // Update activeSlot in AppTable and restore cachedMask in c.stats.x when in launcher
+      if (cachedMask !== 0) {
+        const slot = (name === 'launcher') ? 0 : launchableIds.indexOf(name) + 1;
+        const slotBuf = Buffer.alloc(8);
+        slotBuf.writeBigUInt64LE(BigInt(slot), 0);
+        await rpc.write(APP_TABLE_OFFSET + 24, slotBuf);
+
+        if (name === 'launcher') {
+          const maskBuf = Buffer.alloc(4);
+          maskBuf.writeUInt32LE(cachedMask, 0);
+          await rpc.write(mapped + 992, maskBuf);
+        }
+      }
     };
 
     let closeLayerRequested = false;
@@ -416,7 +536,10 @@ async function main(directory, attempt = 'auto') {
         const exitFlag = reserved.readUInt32LE(8);     // c.reserved.z (1016)
         const actionCode = reserved.readUInt32LE(12);  // c.reserved.w (1020)
 
-        if (activeAppId === 'launcher' && actionCode === 99) {
+        if (activeAppId === 'launcher' && actionCode === 97) {
+          console.log('[CACHE] User pressed Y: Caching all apps for offline play...');
+          await cacheAllApps();
+        } else if (activeAppId === 'launcher' && actionCode === 99) {
           console.log('[LIVE UPDATE] Rescanning apps directory for compiled apps...');
           const clearW = Buffer.alloc(4);
           await rpc.write(mapped + 1020, clearW);

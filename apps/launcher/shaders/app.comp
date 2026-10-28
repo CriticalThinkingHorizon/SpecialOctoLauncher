@@ -36,6 +36,12 @@ void main(){
  if((pressed&HB_DOWN)!=0u)c.game.y=(c.game.y+1u)%count;
  if((pressed&HB_UP)!=0u)c.game.y=(c.game.y+count-1u)%count;
 
+ // Press Y to Cache All Apps to tmp:/ and console memory for offline play
+ if((pressed&HB_Y)!=0u&&!hbBusy()){
+  c.reserved.w=97u;
+  c.game.z=3u;
+ }
+
  // Press X to rescan/update apps from server at any time
  if((pressed&HB_X)!=0u&&!hbBusy()){
   c.reserved.w=99u;
