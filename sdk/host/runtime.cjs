@@ -340,10 +340,11 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
      // Download and decode PNG image directly into GPU storage buffer (mapped + 1024)
      const packed=request.readUInt32LE(16)||0;
      const urlLen=Math.min(packed&0xffff,128);
-     const urlStr=request.subarray(32,32+urlLen).toString('utf8').replace(/\0.*$/, '')||'https://ferreirapablo.com/files/wolv.png';
+     let urlStr=request.subarray(32,32+urlLen).toString('utf8').replace(/\0.*$/, '');
+     if(!/^https?:\/\//i.test(urlStr))urlStr='https://ferreirapablo.com/files/wolv.png';
      try {
        console.log(`[HTTP IMAGE] Fetching remote image: ${urlStr}...`);
-       const resp=await fetch(urlStr);
+       const resp=await fetch(urlStr,{signal:AbortSignal.timeout(20000)});
        if(resp.ok){
          const fileBuf=Buffer.from(await resp.arrayBuffer());
          console.log(`[HTTP IMAGE] Downloaded ${fileBuf.length} bytes. Decoding PNG...`);
@@ -359,6 +360,7 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
          payload.writeUInt32LE(decoded.data.length>>>0,16);
          payload.writeUInt32LE(0,20);
        }else{
+         console.warn(`[HTTP IMAGE] HTTP fetch returned status: ${resp.status}`);
          payload=Buffer.alloc(24);
          payload.writeUInt32LE(resp.status>>>0,0);
          payload.writeUInt32LE(1,20);

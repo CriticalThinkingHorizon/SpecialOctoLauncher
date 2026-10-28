@@ -57,12 +57,12 @@ void main(){
  // When image is ready (c.game.z == 2u), sample directly from mapped buffer at offset 1024
  if(c.game.z==2u){
   int px=int(p.x);
-  int py=int(1079.0-p.y); // row 0 at top
+  int py=int(p.y); // Vulkan gl_FragCoord.y=0 is at top of screen
   px=clamp(px,0,1919);
   py=clamp(py,0,1079);
 
   uint pixelIdx=uint(py*1920+px);
-  uint word=c.atlas[256u+pixelIdx];
+  uint word=c.atlas[pixelIdx]; // c.atlas[0] starts directly at byte 1024
 
   vec3 imgColor=vec3(
    float(word&255u)/255.0,
