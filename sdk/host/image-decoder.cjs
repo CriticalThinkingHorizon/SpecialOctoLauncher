@@ -72,4 +72,16 @@ function decodePng(buf) {
   return { width, height, data: out };
 }
 
-module.exports = { decodePng };
+function decodePngToRgb565(buf) {
+  const decoded = decodePng(buf);
+  const { width, height, data } = decoded;
+  const rgb565 = Buffer.alloc(width * height * 2);
+  for (let i = 0; i < width * height; i++) {
+    const r = data[i * 4 + 0], g = data[i * 4 + 1], b = data[i * 4 + 2];
+    const p = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+    rgb565.writeUInt16LE(p, i * 2);
+  }
+  return { width, height, data: rgb565 };
+}
+
+module.exports = { decodePng, decodePngToRgb565 };

@@ -1,5 +1,5 @@
 const L=require('./layout.cjs');
-const { decodePng } = require('./image-decoder.cjs');
+const { decodePng, decodePngToRgb565 } = require('./image-decoder.cjs');
 const SUPPORTED_CAPABILITIES = ['vibration','nfc','udp','hid','time','system','display','fs','net','irsensor','audio'];
 function validateManifest(value){
  if(!value)return {capabilities:SUPPORTED_CAPABILITIES,endpoints:[]};
@@ -348,9 +348,10 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
        if(resp.ok){
          const fileBuf=Buffer.from(await resp.arrayBuffer());
          console.log(`[HTTP IMAGE] Downloaded ${fileBuf.length} bytes. Decoding PNG...`);
-         const decoded=decodePng(fileBuf);
-         console.log(`[HTTP IMAGE] Decoded ${decoded.width}x${decoded.height} (${decoded.data.length} bytes). Writing to GPU buffer...`);
-         await rpc.write(mapped+1024,decoded.data);
+         const decoded=decodePngToRgb565(fileBuf);
+         console.log(`[HTTP IMAGE] Decoded ${decoded.width}x${decoded.height} RGB565 (${decoded.data.length} bytes). Writing to GPU buffer at offset 262144 (preserving font atlas)...`);
+         // Store image at byte offset 262144 (word offset 65536) to preserve font atlas at 0..65535
+         await rpc.write(mapped+1024+262144,decoded.data);
          console.log(`[HTTP IMAGE] Direct GPU upload complete!`);
          payload=Buffer.alloc(24);
          payload.writeUInt32LE(resp.status>>>0,0);

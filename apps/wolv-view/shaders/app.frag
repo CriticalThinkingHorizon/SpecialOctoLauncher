@@ -54,20 +54,21 @@ const uint H_CHARS[54] = uint[54](
 void main(){
  vec2 p=gl_FragCoord.xy;
 
- // When image is ready (c.game.z == 2u), sample directly from mapped buffer at offset 1024
+ // When image is ready (c.game.z == 2u), sample RGB565 directly from c.atlas at offset 65536u
  if(c.game.z==2u){
-  int px=int(p.x);
-  int py=int(p.y); // Vulkan gl_FragCoord.y=0 is at top of screen
-  px=clamp(px,0,1919);
-  py=clamp(py,0,1079);
+  int px=clamp(int(p.x),0,1919);
+  int py=clamp(int(p.y),0,1079);
 
   uint pixelIdx=uint(py*1920+px);
-  uint word=c.atlas[pixelIdx]; // c.atlas[0] starts directly at byte 1024
+
+  // Each 32-bit word stores two 16-bit RGB565 pixels (starting at offset 65536u to preserve font atlas)
+  uint word=c.atlas[65536u+(pixelIdx>>1u)];
+  uint rgb565=((pixelIdx&1u)==0u)?(word&65535u):(word>>16u);
 
   vec3 imgColor=vec3(
-   float(word&255u)/255.0,
-   float((word>>8u)&255u)/255.0,
-   float((word>>16u)&255u)/255.0
+   float((rgb565>>11u)&31u)/31.0,
+   float((rgb565>>5u)&63u)/63.0,
+   float(rgb565&31u)/31.0
   );
 
   vec3 color=imgColor;
