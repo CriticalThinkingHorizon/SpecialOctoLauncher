@@ -1,0 +1,19 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "rumble-lab",
+  "name": "HD Rumble Lab",
+  "version": "1.0.0",
+  "description": "Interactive Joy-Con Linear Resonant Actuator haptics test bench",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  },
+  "sdk": {
+    "capabilities": ["vibration"]
+  }
+}

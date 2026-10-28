@@ -1,0 +1,189 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+
+void main(){
+ uint pressed = hbPressed();
+ uint held = hbButtons();
+ c.motion.x += 1.0 / 60.0;
+
+ // Universal Exit: Press MINUS to return to Launcher
+ if ((pressed & HB_MINUS) != 0u) {
+  hbExit();
+  hbEndFrame();
+  return;
+ }
+
+ // Toggle AI mode with Y button
+ if ((pressed & HB_Y) != 0u) {
+  c.game.w ^= 1u;
+ }
+
+ // Reset Match with + (PLUS) button
+ if ((pressed & HB_PLUS) != 0u) {
+  c.game.x = 0u; // score left
+  c.game.y = 0u; // score right
+  c.game.z = 0u; // in play
+  c.piece.x = 9600;
+  c.piece.y = 5400;
+  c.piece.z = 70;
+  c.piece.w = 35;
+  c.flow.x = 540.0;
+  c.flow.y = 540.0;
+  c.flow.z = 0.0;
+  c.flow.w = 0.0;
+ }
+
+ const float paddleH = 160.0;
+ const float halfH = paddleH * 0.5;
+ const float paddleW = 28.0;
+ const float leftX = 160.0;
+ const float rightX = 1760.0;
+ const float topLimit = 80.0 + halfH;
+ const float botLimit = 1000.0 - halfH;
+ const float moveSpeed = 12.0;
+
+ // Initial center positioning if zero
+ if (c.flow.x < 50.0) c.flow.x = 540.0;
+ if (c.flow.y < 50.0) c.flow.y = 540.0;
+
+ float ballX = float(c.piece.x) * 0.1;
+ float ballY = float(c.piece.y) * 0.1;
+ float velX = float(c.piece.z) * 0.1;
+ float velY = float(c.piece.w) * 0.1;
+ const float ballR = 14.0;
+
+ // --- Left Paddle Control (Left Stick / D-Pad UP/DOWN) ---
+ vec2 leftStick = hbStick(false);
+ if (abs(leftStick.y) > 0.15) {
+  c.flow.x = clamp(c.flow.x - leftStick.y * moveSpeed, topLimit, botLimit);
+ }
+ if ((held & HB_UP) != 0u) {
+  c.flow.x = max(c.flow.x - moveSpeed, topLimit);
+ }
+ if ((held & HB_DOWN) != 0u) {
+  c.flow.x = min(c.flow.x + moveSpeed, botLimit);
+ }
+
+ // --- Right Paddle Control (Right Stick / AI / ABXY) ---
+ if (c.game.w == 1u) {
+  // Intelligent AI mode: actively pursue ball when coming towards right paddle
+  float targetY = 540.0;
+  if (velX > 0.0) {
+   targetY = ballY;
+  }
+  float diff = targetY - c.flow.y;
+  float aiSpeed = clamp(diff * 0.22, -11.0, 11.0);
+  c.flow.y = clamp(c.flow.y + aiSpeed, topLimit, botLimit);
+ } else {
+  // 2-Player mode: Right Stick OR X = Up, B = Down
+  vec2 rightStick = hbStick(true);
+  if (abs(rightStick.y) > 0.15) {
+   c.flow.y = clamp(c.flow.y - rightStick.y * moveSpeed, topLimit, botLimit);
+  }
+  if ((held & HB_X) != 0u) {
+   c.flow.y = max(c.flow.y - moveSpeed, topLimit);
+  }
+  if ((held & HB_B) != 0u) {
+   c.flow.y = min(c.flow.y + moveSpeed, botLimit);
+  }
+ }
+
+ // --- Game State: Match Won Celebration ---
+ if (c.game.z == 2u) {
+  c.flow.w += 1.0;
+  if ((pressed & (HB_A | HB_PLUS)) != 0u) {
+   c.game.x = 0u;
+   c.game.y = 0u;
+   c.game.z = 0u;
+   c.piece.x = 9600;
+   c.piece.y = 5400;
+   c.piece.z = 70;
+   c.piece.w = 35;
+  }
+  hbEndFrame();
+  return;
+ }
+
+ // --- Game State: Score Celebration / Pause Timer ---
+ if (c.game.z == 1u) {
+  c.flow.w += 1.0;
+  if (c.flow.w >= 50.0) {
+   // Resume play after ~0.8s
+   c.game.z = 0u;
+   c.flow.w = 0.0;
+   c.piece.x = 9600;
+   c.piece.y = 5400;
+   int dirX = (c.game.x > c.game.y) ? -70 : 70;
+   c.piece.z = dirX;
+   c.piece.w = (int(c.motion.x * 100.0) % 2 == 0) ? 35 : -35;
+  }
+  hbEndFrame();
+  return;
+ }
+
+ // --- Ball Physics Update ---
+ ballX += velX;
+ ballY += velY;
+
+ // Top / Bottom arena bounce
+ if (ballY - ballR <= 80.0) {
+  ballY = 80.0 + ballR;
+  velY = abs(velY);
+  hbVibrate(2u, 20u, 250u);
+ } else if (ballY + ballR >= 1000.0) {
+  ballY = 1000.0 - ballR;
+  velY = -abs(velY);
+  hbVibrate(2u, 20u, 250u);
+ }
+
+ // Left Paddle Collision
+ float paddleLeftY = c.flow.x;
+ if (ballX - ballR <= leftX + paddleW * 0.5 && ballX + ballR >= leftX - paddleW * 0.5) {
+  if (ballY >= paddleLeftY - halfH - ballR && ballY <= paddleLeftY + halfH + ballR && velX < 0.0) {
+   ballX = leftX + paddleW * 0.5 + ballR;
+   float offset = (ballY - paddleLeftY) / halfH;
+   velX = abs(velX) * 1.05;
+   if (velX > 18.0) velX = 18.0;
+   velY = clamp(offset * 12.0, -14.0, 14.0);
+   c.flow.z += 1.0;
+   hbVibrate(0u, 40u, 650u); // Left Joy-Con rumble
+  }
+ }
+
+ // Right Paddle Collision
+ float paddleRightY = c.flow.y;
+ if (ballX + ballR >= rightX - paddleW * 0.5 && ballX - ballR <= rightX + paddleW * 0.5) {
+  if (ballY >= paddleRightY - halfH - ballR && ballY <= paddleRightY + halfH + ballR && velX > 0.0) {
+   ballX = rightX - paddleW * 0.5 - ballR;
+   float offset = (ballY - paddleRightY) / halfH;
+   velX = -abs(velX) * 1.05;
+   if (velX < -18.0) velX = -18.0;
+   velY = clamp(offset * 12.0, -14.0, 14.0);
+   c.flow.z += 1.0;
+   hbVibrate(1u, 40u, 650u); // Right Joy-Con rumble
+  }
+ }
+
+ // Goal Scoring
+ if (ballX < leftX - paddleW - 30.0) {
+  c.game.y++;
+  c.game.z = (c.game.y >= 7u) ? 2u : 1u;
+  c.flow.w = 0.0;
+  hbVibrate(2u, 150u, 900u);
+ } else if (ballX > rightX + paddleW + 30.0) {
+  c.game.x++;
+  c.game.z = (c.game.x >= 7u) ? 2u : 1u;
+  c.flow.w = 0.0;
+  hbVibrate(2u, 150u, 900u);
+ }
+
+ c.piece.x = int(ballX * 10.0);
+ c.piece.y = int(ballY * 10.0);
+ c.piece.z = int(velX * 10.0);
+ c.piece.w = int(velY * 10.0);
+
+ hbEndFrame();
+}

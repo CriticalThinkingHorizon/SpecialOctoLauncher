@@ -19,7 +19,11 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
   let status=L.STATUS.ok,payload=Buffer.alloc(0);
   try{
    if(op===L.OP.vibrate){
-    const result=await hardware.pulse({side:request.readUInt32LE(8),milliseconds:request.readUInt32LE(12),amplitude:request.readUInt32LE(16)/1000});payload=result.actual;
+    const side=request.readUInt32LE(8);
+    const milliseconds=request.readUInt32LE(12);
+    const amplitude=request.readUInt32LE(16)/1000;
+    const result=await hardware.pulse({side,milliseconds,amplitude});
+    payload=result.actual;
    }else if(op===L.OP.haptics){
     const count=request.readUInt32LE(12);if(count<1||count>32){status=L.STATUS.invalid;}else{
      const steps=Array.from({length:count},(_,i)=>{const o=32+i*20;return {milliseconds:request.readUInt32LE(o),lowAmplitude:request.readFloatLE(o+4),lowFrequency:request.readFloatLE(o+8),highAmplitude:request.readFloatLE(o+12),highFrequency:request.readFloatLE(o+16)};});
@@ -113,8 +117,7 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
      const apps=catalog.apps.filter(a=>a.id!=='launcher');
      const rows=[
       ...apps.map(a=>({id:a.id,title:`[APP] ${a.name} (${a.id})`,type:1})),
-      {id:'__refresh__',title:'[UPDATE] Rescan & Reload Apps from Server',type:2},
-      {id:'__close_sb__',title:'[EXIT] Close Vulkan Layer & Return to SB',type:3}
+      {id:'__refresh__',title:'[UPDATE] Rescan & Reload Apps from Server',type:2}
      ];
      payload=Buffer.alloc(8+rows.length*64);
      payload.writeUInt32LE(rows.length,0);
@@ -398,6 +401,48 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
        payload.writeUInt32LE(0,0);
        payload.writeUInt32LE(2,20);
      }
+    }else if(subOp===30){
+     const nono=require('./nonopost.cjs');
+     const startOffset=request.readUInt32LE(12)||0;
+     const maxCount=Math.min(request.readUInt32LE(16)||4,4);
+     const res=await nono.getFeedSlice(startOffset,maxCount);
+     payload=Buffer.alloc(16+res.posts.length*240);
+     payload.writeUInt32LE(res.posts.length>>>0,0);
+     payload.writeUInt32LE(res.total>>>0,4);
+     payload.writeUInt32LE(startOffset>>>0,8);
+     payload.writeUInt32LE(200,12);
+     for(let i=0;i<res.posts.length;i++){
+      const p=res.posts[i],o=16+i*240;
+      payload.write(p.id.slice(0,35),o,36,'utf8');
+      payload.write(p.author.slice(0,19),o+36,20,'utf8');
+      payload.write(p.date.slice(0,11),o+56,12,'utf8');
+      payload.writeFloatLE(p.avgRating,o+68);
+      payload.writeUInt32LE(p.totalRatings>>>0,o+72);
+      payload.writeUInt32LE(p.commentCount>>>0,o+76);
+      payload.write(p.content.slice(0,159),o+80,160,'utf8');
+     }
+     // Mirror persistent feed buffer to mapped + 1024 + 70000*4 (c.atlas[70000])
+     await rpc.write(mapped+1024+70000*4,payload);
+    }else if(subOp===31){
+     const nono=require('./nonopost.cjs');
+     const authorLen=Math.min(request.readUInt32LE(12)||0,32);
+     const contentLen=Math.min(request.readUInt32LE(16)||0,400);
+     const authorName=authorLen>0?request.subarray(32,32+authorLen).toString('utf8').replace(/\0.*$/, ''):'';
+     const content=contentLen>0?request.subarray(32+32,32+32+contentLen).toString('utf8').replace(/\0.*$/, ''):'';
+     const postRes=await nono.createPost({authorName,content});
+     payload=Buffer.alloc(48);
+     payload.writeUInt32LE(postRes.statusCode>>>0,0);
+     if(postRes.post?.id){
+      payload.write(String(postRes.post.id).slice(0,35),4,36,'utf8');
+     }
+    }else if(subOp===32){
+     const nono=require('./nonopost.cjs');
+     const postIndex=request.readUInt32LE(12)||0;
+     const rating=request.readUInt32LE(16)||5;
+     const rateRes=await nono.ratePost({postIndex,rating});
+     payload=Buffer.alloc(16);
+     payload.writeUInt32LE(rateRes.statusCode>>>0,0);
+     payload.writeUInt32LE(rating>>>0,4);
     }else{
      status=L.STATUS.invalid;
     }
@@ -440,6 +485,7 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
     }
    }
   }catch(error){
+   console.error(`[RUNTIME ERROR] Op ${op} failed:`, error);
    status=error.code==='ETIMEDOUT'?L.STATUS.timeout:L.STATUS.native;
    payload=Buffer.from(error.message).subarray(0,1024);
   }

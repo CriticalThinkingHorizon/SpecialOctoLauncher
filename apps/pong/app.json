@@ -1,0 +1,19 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "pong",
+  "name": "Joy-Con Pong",
+  "version": "1.0.0",
+  "description": "Retro arcade Pong with Joy-Con HD Rumble haptics & AI mode",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  },
+  "sdk": {
+    "capabilities": ["vibration"]
+  }
+}

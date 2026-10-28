@@ -1,0 +1,96 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+
+void main(){
+ uint pressed = hbPressed();
+ uint held = hbButtons();
+ c.motion.x += 1.0 / 60.0;
+ c.flow.w += 1.0; // frame tick
+
+ // Universal Exit: Press MINUS to return to Launcher
+ if ((pressed & HB_MINUS) != 0u) {
+  hbExit();
+  hbEndFrame();
+  return;
+ }
+
+ // Decay active visualizer amplitudes
+ c.flow.x = max(c.flow.x - 0.05, 0.0); // left visualizer
+ c.flow.y = max(c.flow.y - 0.05, 0.0); // right visualizer
+
+ // Cycle preset pattern with X
+ if ((pressed & HB_X) != 0u) {
+  c.game.x = (c.game.x + 1u) % 5u;
+ }
+
+ // Adjust amplitude with UP / DOWN
+ if ((pressed & HB_UP) != 0u) {
+  c.game.y = min(c.game.y + 100u, 1000u);
+ }
+ if ((pressed & HB_DOWN) != 0u) {
+  c.game.y = max(c.game.y - 100u, 100u);
+ }
+
+ // Adjust duration with RIGHT / LEFT
+ if ((pressed & HB_RIGHT) != 0u) {
+  c.game.z = min(c.game.z + 20u, 400u);
+ }
+ if ((pressed & HB_LEFT) != 0u) {
+  c.game.z = max(c.game.z - 20u, 20u);
+ }
+
+ uint preset = c.game.x;
+ uint amp = c.game.y > 0u ? c.game.y : 700u;
+ uint dur = c.game.z > 0u ? c.game.z : 80u;
+
+ bool fireBoth = (pressed & HB_Y) != 0u;
+ bool fireLeft = (pressed & HB_A) != 0u;
+ bool fireRight = (pressed & HB_B) != 0u;
+
+ if (fireBoth) {
+  c.flow.x = 1.0;
+  c.flow.y = 1.0;
+  if (preset == 0u) {
+   hbVibrate(2u, dur, amp);
+  } else if (preset == 1u) {
+   hbVibrate(2u, 25u, 500u); // crisp click
+  } else if (preset == 2u) {
+   hbVibrate(2u, 50u, 800u); // heartbeat
+  } else if (preset == 3u) {
+   hbVibrate(2u, 30u, 900u); // burst
+  } else if (preset == 4u) {
+   hbVibrate(2u, 350u, 1000u); // max rumble
+  }
+ } else if (fireLeft) {
+  c.flow.x = 1.0;
+  if (preset == 0u) {
+   hbVibrate(0u, dur, amp);
+  } else if (preset == 1u) {
+   hbVibrate(0u, 25u, 500u); // crisp click
+  } else if (preset == 2u) {
+   hbVibrate(0u, 50u, 800u); // heartbeat
+  } else if (preset == 3u) {
+   hbVibrate(0u, 30u, 900u); // burst
+  } else if (preset == 4u) {
+   hbVibrate(0u, 350u, 1000u); // max rumble
+  }
+ } else if (fireRight) {
+  c.flow.y = 1.0;
+  if (preset == 0u) {
+   hbVibrate(1u, dur, amp);
+  } else if (preset == 1u) {
+   hbVibrate(1u, 25u, 500u);
+  } else if (preset == 2u) {
+   hbVibrate(1u, 50u, 800u);
+  } else if (preset == 3u) {
+   hbVibrate(1u, 30u, 900u);
+  } else if (preset == 4u) {
+   hbVibrate(1u, 350u, 1000u);
+  }
+ }
+
+ hbEndFrame();
+}

@@ -23,7 +23,7 @@ void main(){
   if(hbResult()==0u&&hbResponseBytes()>=8u){
    c.game.z=2u;
    count=max(hbFsEntryCount(),1u);
-   if(count>15u)count=15u;
+   if(count>32u)count=32u;
    c.game.w=count;
   }else{
    c.game.z=0u;
@@ -48,22 +48,15 @@ void main(){
   c.game.z=0u;
  }
 
- // Press MINUS in launcher to close Vulkan layer & return to SmileBASIC
- if((pressed&HB_MINUS)!=0u&&!hbBusy()){
-  c.reserved.w=98u;
-  hbExit();
- }
+ // Note: MINUS in Launcher is disabled as returning to SB4 after Vulkan overlay teardown is unsupported
 
- // Press A to launch the selected app, trigger [UPDATE], or trigger [EXIT]
+ // Press A to launch the selected app or trigger [UPDATE]
  if((pressed&HB_A)!=0u&&c.game.z==2u&&!hbBusy()){
   uint sel=c.game.y;
   uint rowType=hbFsEntryType(sel);
   if(rowType==2u){
    c.reserved.w=99u;
    c.game.z=0u;
-  }else if(rowType==3u){
-   c.reserved.w=98u;
-   hbExit();
   }else{
    c.reserved.w=sel+1u;
    hbExit();

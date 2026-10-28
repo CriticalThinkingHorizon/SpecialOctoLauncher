@@ -73,21 +73,27 @@ async function main() {
   await fs.mkdir(path.join(__dirname, 'runs'), {recursive: true, mode: 0o700});
   const directory = path.join(__dirname, 'runs', 'latest');
 
-  let interrupted = false;
+  let native = null, bridge = null, loopChild = null;
   const onSignal = () => {
-    interrupted = true;
+    console.log('\n[SERVER] Ctrl+C received. Exiting server...');
+    if (loopChild) {
+      try { loopChild.kill('SIGTERM'); } catch (e) {}
+    }
+    process.exit(0);
   };
   process.on('SIGINT', onSignal);
   process.on('SIGTERM', onSignal);
 
   let sessionCount = 0;
 
-  while (!interrupted) {
+  while (true) {
     sessionCount++;
     await fs.rm(directory, {recursive: true, force: true});
     await fs.mkdir(directory, {recursive: true});
 
-    let native, bridge, loopChild;
+    native = null;
+    bridge = null;
+    loopChild = null;
     try {
       const connected = await listen({
         host,
@@ -203,23 +209,18 @@ async function main() {
         connected.connection.socket.once('close', done);
         connected.connection.socket.once('error', done);
         loopChild.once('close', done);
-        if (interrupted) resolve();
       });
 
     } catch (error) {
-      if (!interrupted) {
-        console.error(`[SESSION #${sessionCount}] Error:`, error.message);
-      }
+      console.error(`[SESSION #${sessionCount}] Error:`, error.message);
     } finally {
       if (loopChild) {
         try { loopChild.kill('SIGTERM'); } catch (e) {}
       }
       await bridge?.close().catch(() => {});
       await native?.stop().catch(() => {});
-      if (!interrupted) {
-        console.log(`\n[SESSION #${sessionCount} ENDED] Connection dropped or closed. Ready for reconnection.`);
-        await new Promise(r => setTimeout(r, 1000));
-      }
+      console.log(`\n[SESSION #${sessionCount} ENDED] Connection dropped or closed. Ready for reconnection.`);
+      await new Promise(r => setTimeout(r, 1000));
     }
   }
 

@@ -110,9 +110,9 @@ uint nnFsGetDirectoryEntryCount(){return hbWord(4128u);}
 uint hbFsEntryCount(){return nnFsGetDirectoryEntryCount();}
 uint nnFsGetDirectoryEntryTotal(){return hbWord(4132u);}
 uint hbFsEntryTotal(){return nnFsGetDirectoryEntryTotal();}
-uint nnFsGetDirectoryEntryByte(uint entry,uint byteIndex){return entry<15u&&byteIndex<48u?hbResponseByte(8u+entry*64u+byteIndex):0u;}
+uint nnFsGetDirectoryEntryByte(uint entry,uint byteIndex){return entry<32u&&byteIndex<48u?hbResponseByte(8u+entry*64u+byteIndex):0u;}
 uint hbFsEntryByte(uint entry,uint byteIndex){return nnFsGetDirectoryEntryByte(entry,byteIndex);}
-uint nnFsGetDirectoryEntryType(uint index){return index<15u?hbWord(4128u+8u+index*64u+48u):0u;}
+uint nnFsGetDirectoryEntryType(uint index){return index<32u?hbWord(4128u+8u+index*64u+48u):0u;}
 uint hbFsEntryType(uint index){return nnFsGetDirectoryEntryType(index);}
 
 uint hbFsTextLineCount(){return hbWord(4128u);}

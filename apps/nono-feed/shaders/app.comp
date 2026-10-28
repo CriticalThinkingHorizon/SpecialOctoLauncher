@@ -1,0 +1,203 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+
+const uint PROMPT_CHARS[32] = uint[32](
+ 78u, 111u, 110u, 111u, 112u, 111u, 115u, 116u, 32u, 45u, 32u, 83u, 111u, 99u, 105u, 97u,
+ 108u, 32u, 70u, 101u, 101u, 100u, 32u, 80u, 111u, 115u, 116u, 32u, 83u, 50u, 33u, 0u
+);
+
+const uint GUIDE_CHARS[32] = uint[32](
+ 84u, 121u, 112u, 101u, 32u, 121u, 111u, 117u, 114u, 32u, 112u, 111u, 115u, 116u, 32u, 97u,
+ 110u, 100u, 32u, 112u, 114u, 101u, 115u, 115u, 32u, 40u, 43u, 41u, 46u, 46u, 46u, 0u
+);
+
+void main(){
+ uint pressed = hbPressed();
+ uint held = hbButtons();
+ vec2 stick = hbStick(false);
+
+ c.motion.x += 1.0 / 60.0;
+ c.flow.w += 1.0;
+
+ // Universal Exit: Press MINUS to return to Launcher
+ if (((pressed | held) & HB_MINUS) != 0u) {
+  hbExit();
+  hbEndFrame();
+  return;
+ }
+
+ // Decrement temporary feedback banners
+ if (c.flow.y > 0.0) c.flow.y -= 1.0;
+ if (c.flow.z > 0.0) c.flow.z -= 1.0;
+
+ // State machine (c.game.x):
+ // 0 = Idle / Feed browsing
+ // 1 = Feed fetch in flight
+ // 2 = Waiting for SWKBD
+ // 3 = Post create in flight
+ // 4 = Rating in flight
+
+ // 1. Initial Feed Fetch on Boot
+ if (c.flow.w < 5.0 && c.game.x == 0u && !hbBusy()) {
+  if (nnNonopostFetchFeed(0u, 3u)) {
+   c.game.x = 1u;
+  }
+ }
+
+ // 2. Handle Feed Fetch Response
+ if (c.game.x == 1u && !hbBusy()) {
+  for (uint i = 0u; i < 244u; i++) {
+   c.atlas[NONO_FEED_BASE + i] = c.atlas[HB_EXT + (4128u / 4u) + i];
+  }
+  uint postCount = nnNonopostGetPostCount();
+  uint totalCount = nnNonopostGetTotalCount();
+  uint statusCode = nnNonopostGetStatusCode();
+  c.piece.x = int(min(postCount, 3u));
+  c.game.w = max(totalCount, postCount);
+  c.piece.y = int(statusCode);
+  if (c.piece.x > 0 && c.game.y >= uint(c.piece.x)) {
+   c.game.y = uint(c.piece.x - 1);
+  }
+  c.game.x = 0u; // Return to idle browsing
+  hbVibrate(2u, 15u, 250u);
+ }
+
+ // 3. Handle SWKBD return
+ if (c.game.x == 2u && !hbBusy()) {
+  uint res = nnSwkbdGetResult();
+  uint textLen = min(nnSwkbdGetTextLength(), 160u);
+  if (textLen > 0u) {
+   // Stage text for posting
+   for (uint i = 0u; i < textLen; i++) {
+    uint ch = nnSwkbdGetTextByte(i);
+    nnNonopostSetContentByte(i, ch);
+   }
+   if (nnNonopostCreatePost(0u, textLen)) {
+    c.game.x = 3u;
+    c.flow.y = 180.0; // 3-second publishing banner
+   } else {
+    c.game.x = 0u;
+   }
+  } else {
+   c.game.x = 0u; // Cancelled
+  }
+ }
+
+ // 4. Handle Post Create Response
+ if (c.game.x == 3u && !hbBusy()) {
+  uint code = nnNonopostGetStatusCode();
+  c.piece.y = int(code);
+  if (code >= 200u && code < 300u) {
+   hbVibrate(2u, 80u, 800u);
+   c.game.x = 5u; // Wait for vibration, then refresh
+  } else {
+   c.game.x = 0u;
+  }
+ }
+
+ // 5. Handle Rate Response
+ if (c.game.x == 4u && !hbBusy()) {
+  hbVibrate(1u, 40u, 750u);
+  c.flow.z = 120.0; // 2-second rated banner
+  c.game.x = 0u;
+ }
+
+ // Post-publish feed reload after vibration
+ if (c.game.x == 5u && !hbBusy()) {
+  c.game.z = 0u;
+  c.game.y = 0u;
+  nnNonopostFetchFeed(0u, 3u);
+  c.game.x = 1u;
+ }
+
+ // 6. Active Feed Browsing & Controller Input
+ if (c.game.x == 0u && !hbBusy()) {
+  // Stick and D-Pad navigation with repeat delay
+  bool stickDown = (stick.y < -0.5);
+  bool stickUp = (stick.y > 0.5);
+
+  bool navDown = ((pressed & HB_DOWN) != 0u);
+  bool navUp = ((pressed & HB_UP) != 0u);
+
+  if (c.flow.x > 0.0) c.flow.x -= 1.0;
+
+  if (!stickDown && !stickUp) {
+   c.flow.x = 0.0;
+  } else if (c.flow.x == 0.0) {
+   if (stickDown) {
+    navDown = true;
+    c.flow.x = 18.0;
+   } else if (stickUp) {
+    navUp = true;
+    c.flow.x = 18.0;
+   }
+  }
+
+  // Navigate Down
+  if (navDown && c.piece.x > 0) {
+   if (c.game.y + 1u < uint(c.piece.x)) {
+    c.game.y++;
+    hbVibrate(2u, 15u, 250u);
+   } else if (c.game.z + uint(c.piece.x) < c.game.w) {
+    // Next page
+    c.game.z += uint(c.piece.x);
+    c.game.y = 0u;
+    nnNonopostFetchFeed(c.game.z, 3u);
+    c.game.x = 1u;
+   }
+  }
+
+  // Navigate Up
+  if (navUp && c.piece.x > 0) {
+   if (c.game.y > 0u) {
+    c.game.y--;
+    hbVibrate(2u, 15u, 250u);
+   } else if (c.game.z >= 3u) {
+    // Previous page
+    c.game.z -= 3u;
+    c.game.y = 2u;
+    nnNonopostFetchFeed(c.game.z, 3u);
+    c.game.x = 1u;
+   }
+  }
+
+  // Press (X): Manual Refresh
+  if ((pressed & HB_X) != 0u) {
+   nnNonopostFetchFeed(c.game.z, 3u);
+   c.game.x = 1u;
+  }
+
+  // Press (Y): Compose Post via Native Keyboard
+  if ((pressed & HB_Y) != 0u) {
+   for (uint i = 0u; i < 31u; i++) nnSwkbdSetPromptByte(i, PROMPT_CHARS[i]);
+   for (uint i = 0u; i < 31u; i++) nnSwkbdSetGuideByte(i, GUIDE_CHARS[i]);
+   if (hbSwkbdShow(31u, 31u, 0u)) {
+    c.game.x = 2u;
+    hbVibrate(0u, 30u, 500u);
+   }
+  }
+
+  // Press (R): Rate Post 5 Stars
+  if ((pressed & HB_R) != 0u) {
+   if (nnNonopostRatePost(c.game.y, 5u)) {
+    c.game.x = 4u;
+    c.piece.z = 5;
+    hbVibrate(1u, 35u, 600u);
+   }
+  }
+
+  // Press (A): Rate Post 10 Stars (Favorite)
+  if ((pressed & HB_A) != 0u) {
+   if (nnNonopostRatePost(c.game.y, 10u)) {
+    c.game.x = 4u;
+    c.piece.z = 10;
+    hbVibrate(1u, 50u, 850u);
+   }
+  }
+ }
+
+ hbEndFrame();
+}

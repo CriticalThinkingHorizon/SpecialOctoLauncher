@@ -566,8 +566,10 @@ async function main(directory, attempt = 'auto') {
               stop = true;
               break;
             }
+            launchableIds = await reloadCatalog();
             const idx = actionCode > 0 ? actionCode - 1 : 0;
             const targetId = launchableIds[idx] || launchableIds[0];
+            console.log(`[LAUNCHER] Launch requested: actionCode=${actionCode}, idx=${idx} -> ${targetId} (catalog: ${launchableIds.length} apps)`);
             if (targetId) {
               console.log(`[LAUNCHER] Switching to app: ${targetId}`);
               await ensureAppPrepared(targetId);

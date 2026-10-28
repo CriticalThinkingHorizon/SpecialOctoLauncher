@@ -1,0 +1,19 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "nono-feed",
+  "name": "Nonopost Social",
+  "version": "1.0.0",
+  "description": "Anonymous social feed with S2 native keyboard posting, Joy-Con rumble & rating",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  },
+  "sdk": {
+    "capabilities": ["net", "swkbd", "vibration"]
+  }
+}

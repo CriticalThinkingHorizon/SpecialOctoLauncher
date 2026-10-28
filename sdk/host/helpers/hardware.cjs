@@ -22,8 +22,18 @@ async function create(rpc){
     await api.write(0,word(next.id));const style=STYLES.find(([bit])=>next.style&bit);selected.kind=style[1];
     const n=await api.result('motionHandles',[api.base+0x300,2,api.base,style[0]]);if(n>2)throw Error('Invalid motion handle count');
     for(let i=0;i<n;i++){const handle=api.base+0x300+i*4;if(await api.result('motionStart',[handle])===0)motion.push(handle);}
-    const v=await api.result('vibrationHandles',[api.base+0x800,2,api.base,style[0]]);if(v>2)throw Error('Invalid vibration handle count');
-    for(let i=0;i<v;i++){const handle=api.base+0x800+i*4;if(await api.result('vibrationInit',[handle])===0)vibration.push(handle);}
+    await api.write(0,word(next.id));
+    const v=await api.result('vibrationHandles',[api.base+0x800,2,api.base,style[0]]);
+    console.log(`[HID] Controller id=${next.id} (${selected.kind}), style=0x${next.style.toString(16)}, vibration handles found=${v}`);
+    if(v<=2){
+     for(let i=0;i<v;i++){
+      const handle=api.base+0x800+i*4;
+      const initRc=await api.result('vibrationInit',[handle]);
+      console.log(`[HID] vibrationInit handle #${i} (0x${handle.toString(16)}): rc=0x${initRc.toString(16)}`);
+      if(initRc===0)vibration.push(handle);
+     }
+    }
+    console.log(`[HID] Active vibration handles: ${vibration.length}`);
    }
   }
   lastDiscovery=Date.now();return controllers;
@@ -76,11 +86,17 @@ async function create(rpc){
   out.writeUInt32LE(flags,12);return out;
  },async pulse({side=0,amplitude=.15,milliseconds=120}={}){
   if(closed)throw Error('Hardware context closed');
-  if(!vibration.length)throw Error('Vibration device unavailable');
+  if(!vibration.length){
+   console.warn(`[HID WARNING] Vibration pulse requested (side=${side}, amp=${amplitude}, ms=${milliseconds}) but no vibration handles are available`);
+   return {actual:Buffer.alloc(16)};
+  }
   return require('./haptics.cjs').play(api,vibration,{side,steps:[{milliseconds,lowAmplitude:amplitude,highAmplitude:amplitude}]});
  },async pattern({side=0,steps}={}){
   if(closed)throw Error('Hardware context closed');
-  if(!vibration.length)throw Error('Vibration device unavailable');
+  if(!vibration.length){
+   console.warn(`[HID WARNING] Vibration pattern requested (side=${side}) but no vibration handles are available`);
+   return {actual:Buffer.alloc(16)};
+  }
   return require('./haptics.cjs').play(api,vibration,{side,steps});
  },async queryPadDetails(npadId=32){
   if(closed)throw Error('Hardware context closed');

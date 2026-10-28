@@ -1,0 +1,232 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+
+// 4 Apple Grove Positions
+const vec2 APPLE_POS[4] = vec2[4](
+ vec2(380.0, 480.0),
+ vec2(420.0, 800.0),
+ vec2(680.0, 620.0),
+ vec2(580.0, 880.0)
+);
+
+// 4 Stick Grove Positions
+const vec2 STICK_POS[4] = vec2[4](
+ vec2(1540.0, 480.0),
+ vec2(1500.0, 800.0),
+ vec2(1240.0, 620.0),
+ vec2(1340.0, 880.0)
+);
+
+const vec2 COUNTER_INTERACT_POS = vec2(960.0, 310.0);
+
+void spawnNewCustomer(){
+ c.flow.x = 1.0; // active customer
+ // Randomize order based on frame tick and served count
+ uint seed = uint(c.flow.w) * 11u + c.game.z * 17u + 13u;
+ uint apples = 1u + (seed % 3u); // 1..3 apples
+ uint sticks = ((seed / 3u) % 3u); // 0..2 sticks
+ if (apples == 0u && sticks == 0u) apples = 1u;
+
+ c.motion.x = float(apples);
+ c.motion.y = float(sticks);
+ c.motion.z = float((seed / 7u) % 4u); // customer hat/color variant
+
+ // Patience timer: 750 to 950 frames (~12.5 to 16s)
+ float patience = 900.0 - min(float(c.game.z) * 12.0, 300.0);
+ c.flow.y = patience;
+ c.flow.z = patience; // max patience for ratio
+}
+
+void main(){
+ uint pressed = hbPressed();
+ uint held = hbButtons();
+ vec2 stick = hbStick(false);
+
+ c.motion.w += 1.0 / 60.0;
+ c.flow.w += 1.0;
+
+ // Universal Exit: Press MINUS to return to Launcher
+ if (((pressed | held) & HB_MINUS) != 0u) {
+  hbExit();
+  hbEndFrame();
+  return;
+ }
+
+ // Initial Game Setup with guaranteed magic check
+ const uint RUSH_MAGIC = 0x52555348u; // 'RUSH'
+ if (c.reserved.x != RUSH_MAGIC) {
+  c.reserved.x = RUSH_MAGIC;
+  c.piece.x = 9600; // X = 960.0
+  c.piece.y = 5800; // Y = 580.0
+  c.piece.z = 0;    // apples = 0
+  c.piece.w = 0;    // sticks = 0
+  c.game.x = 0u;   // score = 0
+  c.game.y = 0u;   // high score = 0
+  c.game.z = 0u;   // served = 0
+  c.game.w = 0u;   // missed = 0
+  c.flow.w = 1.0;
+  for (uint i = 0u; i < 16u; i++) c.rows[i] = 0u;
+  spawnNewCustomer();
+ }
+
+ float px = float(c.piece.x) * 0.1;
+ float py = float(c.piece.y) * 0.1;
+
+ // Movement Control (Left Stick + D-Pad)
+ vec2 move = vec2(0.0);
+ if (abs(stick.x) > 0.15 || abs(stick.y) > 0.15) {
+  move.x += stick.x;
+  move.y -= stick.y; // invert stick Y for screen coordinates
+ }
+ if ((held & HB_LEFT) != 0u) move.x -= 1.0;
+ if ((held & HB_RIGHT) != 0u) move.x += 1.0;
+ if ((held & HB_UP) != 0u) move.y -= 1.0;
+ if ((held & HB_DOWN) != 0u) move.y += 1.0;
+
+ float moveLen = length(move);
+ if (moveLen > 0.05) {
+  vec2 dir = normalize(move);
+  float speed = 7.5;
+  px += dir.x * speed;
+  py += dir.y * speed;
+ }
+
+ // Arena Boundaries Clamping
+ px = clamp(px, 160.0, 1760.0);
+ py = clamp(py, 290.0, 970.0);
+
+ // Update Respawn Timers for items
+ for (uint i = 0u; i < 8u; i++) {
+  if (c.rows[i] > 0u) c.rows[i]--;
+ }
+
+ // Decrement Feedback Timers
+ if (c.rows[8] > 0u) c.rows[8]--;
+
+ // Interaction Detection
+ // c.rows[10] prompt code:
+ // 0 = none
+ // 1 = [A] PICK APPLE
+ // 2 = [A] PICK STICK
+ // 3 = [APPLE BAG FULL]
+ // 4 = [STICK BAG FULL]
+ // 5 = [A] DELIVER ORDER!
+ // 6 = [NEED MORE ITEMS]
+ // 7 = [NO CUSTOMER WAITING]
+ uint prompt = 0u;
+
+ // Check Counter Proximity
+ float distCounter = distance(vec2(px, py), COUNTER_INTERACT_POS);
+ if (distCounter < 100.0) {
+  if (c.flow.x == 1.0) {
+   uint needA = uint(c.motion.x);
+   uint needS = uint(c.motion.y);
+   bool ready = (uint(c.piece.z) >= needA && uint(c.piece.w) >= needS);
+   if (ready) {
+    prompt = 5u; // DELIVER ORDER!
+    if ((pressed & HB_A) != 0u) {
+     c.piece.z -= int(needA);
+     c.piece.w -= int(needS);
+     uint speedPts = uint((c.flow.y / max(c.flow.z, 1.0)) * 180.0);
+     uint scoreGain = needA * 100u + needS * 80u + speedPts;
+     c.game.x += scoreGain;
+     if (c.game.x > c.game.y) c.game.y = c.game.x;
+     c.game.z++; // delivered count
+     c.flow.x = 2.0; // celebration
+     c.flow.y = 45.0; // celebration timer
+     c.rows[8] = 80u; // show popup
+     c.rows[9] = scoreGain; // store gained score
+     hbVibrate(2u, 60u, 850u); // celebration rumble
+    }
+   } else {
+    prompt = 6u; // NEED MORE ITEMS
+    if ((pressed & HB_A) != 0u) {
+     hbVibrate(0u, 20u, 350u);
+    }
+   }
+  } else {
+   prompt = 7u; // WAITING...
+  }
+ }
+
+ // Check Apple Spots Proximity
+ if (prompt == 0u) {
+  for (uint i = 0u; i < 4u; i++) {
+   if (c.rows[i] == 0u) { // apple available
+    float d = distance(vec2(px, py), APPLE_POS[i]);
+    if (d < 70.0) {
+     if (c.piece.z < 4) {
+      prompt = 1u; // [A] PICK APPLE
+      if ((pressed & HB_A) != 0u) {
+       c.piece.z++;
+       c.rows[i] = 160u; // ~2.6s respawn
+       c.rows[8] = 40u;
+       c.rows[9] = 1001u; // code: picked apple
+       hbVibrate(0u, 25u, 500u);
+      }
+     } else {
+      prompt = 3u; // APPLE BAG FULL
+     }
+     break;
+    }
+   }
+  }
+ }
+
+ // Check Stick Spots Proximity
+ if (prompt == 0u) {
+  for (uint i = 0u; i < 4u; i++) {
+   if (c.rows[4u + i] == 0u) { // stick available
+    float d = distance(vec2(px, py), STICK_POS[i]);
+    if (d < 70.0) {
+     if (c.piece.w < 4) {
+      prompt = 2u; // [A] PICK STICK
+      if ((pressed & HB_A) != 0u) {
+       c.piece.w++;
+       c.rows[4u + i] = 160u; // ~2.6s respawn
+       c.rows[8] = 40u;
+       c.rows[9] = 1002u; // code: picked stick
+       hbVibrate(1u, 25u, 500u);
+      }
+     } else {
+      prompt = 4u; // STICK BAG FULL
+     }
+     break;
+    }
+   }
+  }
+ }
+
+ c.rows[10] = prompt;
+
+ // Customer Lifecycle Update
+ if (c.flow.x == 1.0) {
+  c.flow.y -= 1.0; // patience countdown
+  if (c.flow.y <= 0.0) {
+   // Order missed!
+   c.flow.x = 3.0; // missed angry state
+   c.flow.y = 50.0; // pause before next customer
+   c.game.w++; // missed count
+   c.game.x = (c.game.x > 75u) ? c.game.x - 75u : 0u; // penalty
+   c.rows[8] = 80u;
+   c.rows[9] = 9999u; // code: missed order
+   hbVibrate(0u, 80u, 950u); // angry buzz
+  }
+ } else if (c.flow.x == 2.0 || c.flow.x == 3.0) {
+  // Post-order pause (fulfilled or missed)
+  c.flow.y -= 1.0;
+  if (c.flow.y <= 0.0) {
+   spawnNewCustomer();
+  }
+ } else {
+  spawnNewCustomer();
+ }
+
+ c.piece.x = int(px * 10.0);
+ c.piece.y = int(py * 10.0);
+
+ hbEndFrame();
+}

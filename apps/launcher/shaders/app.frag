@@ -200,26 +200,40 @@ void main(){
    tubeColor=mix(tubeColor,vec3(0.30,0.90,0.45),0.75);
   }
 
-  float rowH=float(GLYPH_H)+32.0;
-  vec2 left=vec2(120.0,160.0);
-  uint count=c.game.z==2u?min(c.game.w,15u):0u;
+  float rowH=55.0;
+  vec2 left=vec2(120.0,135.0);
+  uint count=c.game.z==2u?min(c.game.w,32u):0u;
   uint selected=c.game.y;
 
-  for(uint i=0u;i<15u;i++){
+  // Fill view space: up to 15 visible rows
+  uint visibleRows=15u;
+  uint scroll=0u;
+  if(count>visibleRows){
+   if(selected<3u){
+    scroll=0u;
+   }else if(selected+visibleRows-3u>=count){
+    scroll=count-visibleRows;
+   }else{
+    scroll=selected-2u;
+   }
+  }
+
+  for(uint v=0u;v<15u;v++){
+   uint i=scroll+v;
    if(i>=count)break;
-   vec2 origin=left+vec2(0.0,float(i)*rowH);
+   vec2 origin=left+vec2(0.0,float(v)*rowH);
    float textInk=drawRowTitle(sp,origin,i);
    uint rowType=hbFsEntryType(i);
 
-   // Phosphor color themes: Amber warning for EXIT, Cyan for UPDATE, Neon Green for apps
-   vec3 textCol=rowType==3u?vec3(1.0,0.42,0.25):(rowType==2u?vec3(0.40,1.0,0.85):vec3(0.35,0.95,0.50));
+   // Phosphor color themes: Cyan for [UPDATE], Neon Green for apps
+   vec3 textCol=rowType==2u?vec3(0.40,1.0,0.85):vec3(0.35,0.95,0.50);
 
    if(i==selected){
-    float bar=fill(box(sp,origin+vec2(520.0,float(GLYPH_H)*0.5),vec2(540.0,float(GLYPH_H)*0.5+10.0),8.0));
-    float barOutline=line(box(sp,origin+vec2(520.0,float(GLYPH_H)*0.5),vec2(540.0,float(GLYPH_H)*0.5+10.0),8.0),2.0);
+    float bar=fill(box(sp,origin+vec2(520.0,float(GLYPH_H)*0.5),vec2(540.0,float(GLYPH_H)*0.5+6.0),8.0));
+    float barOutline=line(box(sp,origin+vec2(520.0,float(GLYPH_H)*0.5),vec2(540.0,float(GLYPH_H)*0.5+6.0),8.0),2.0);
 
-    vec3 barCol=rowType==3u?vec3(0.65,0.18,0.12):(rowType==2u?vec3(0.12,0.60,0.45):vec3(0.20,0.85,0.38));
-    vec3 selTextCol=(rowType==2u||rowType==3u)?vec3(1.0,1.0,0.95):vec3(0.02,0.07,0.03);
+    vec3 barCol=rowType==2u?vec3(0.12,0.60,0.45):vec3(0.20,0.85,0.38);
+    vec3 selTextCol=rowType==2u?vec3(1.0,1.0,0.95):vec3(0.02,0.07,0.03);
 
     tubeColor=mix(tubeColor,barCol,bar*0.9);
     tubeColor=mix(tubeColor,vec3(0.60,1.0,0.70),barOutline*0.8);
@@ -236,6 +250,27 @@ void main(){
     vec3 badgeCol=(i==selected)?vec3(0.05,0.18,0.08):vec3(0.35,0.95,0.85);
     tubeColor=mix(tubeColor,badgeCol,badgeInk);
    }
+  }
+
+  // Horizontal phosphor divider line above debug HUD
+  if(abs(sp.y-968.0)<1.0&&sp.x>=110.0&&sp.x<=1810.0){
+   tubeColor=mix(tubeColor,vec3(0.15,0.45,0.22),0.60);
+  }
+
+  // Vertical scrollbar indicator: only shown when items exceed the 15-row view
+  if(count>visibleRows){
+   float trackX=1720.0;
+   float trackTop=135.0;
+   float trackH=float(visibleRows)*rowH;
+   float trackBox=fill(box(sp,vec2(trackX,trackTop+trackH*0.5),vec2(3.0,trackH*0.5),2.0));
+   tubeColor=mix(tubeColor,vec3(0.06,0.18,0.09),trackBox);
+
+   float thumbH=max(40.0,trackH*float(visibleRows)/float(count));
+   float thumbY=trackTop+thumbH*0.5+(trackH-thumbH)*float(scroll)/float(count-visibleRows);
+   float thumbBox=fill(box(sp,vec2(trackX,thumbY),vec2(5.0,thumbH*0.5),3.0));
+   float thumbLine=line(box(sp,vec2(trackX,thumbY),vec2(5.0,thumbH*0.5),3.0),1.5);
+   tubeColor=mix(tubeColor,vec3(0.25,0.90,0.50),thumbBox);
+   tubeColor=mix(tubeColor,vec3(0.65,1.0,0.85),thumbLine);
   }
 
   // Show loading modal + animated progress bar when launching an app or caching apps

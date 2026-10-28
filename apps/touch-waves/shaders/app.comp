@@ -1,0 +1,50 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+
+void main(){
+ uint pressed = hbPressed();
+ c.motion.x += 1.0 / 60.0;
+ c.game.w++; // frame counter
+
+ // Universal Exit: Press MINUS to return to Launcher
+ if ((pressed & HB_MINUS) != 0u) {
+  hbExit();
+  hbEndFrame();
+  return;
+ }
+
+ // Cycle color palette with X
+ if ((pressed & HB_X) != 0u) {
+  c.game.x = (c.game.x + 1u) % 4u;
+ }
+
+ // Central shockwave pulse with Y
+ if ((pressed & HB_Y) != 0u) {
+  c.game.z = 180u; // 3 seconds wave pulse
+  hbVibrate(2u, 30u, 500u);
+ }
+
+ // Clear / reset phase with A
+ if ((pressed & HB_A) != 0u) {
+  c.flow.x = 0.0;
+  c.game.z = 0u;
+ }
+
+ if (c.game.z > 0u) {
+  c.game.z--;
+ }
+
+ // Query active touches
+ uint touchCount = nnHidGetTouchScreenCount();
+ c.game.y = touchCount;
+
+ // When new touches land, give subtle tactile haptic tap
+ if (touchCount > 0u && (c.game.w % 12u == 0u)) {
+  hbVibrate(2u, 15u, 180u);
+ }
+
+ hbEndFrame();
+}
