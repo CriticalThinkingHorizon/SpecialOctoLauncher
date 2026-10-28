@@ -1,0 +1,16 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "bootstrap-updater",
+  "name": "Bootstrap Updater",
+  "version": "1.0.0",
+  "description": "Updates save:/f/###/TNS2 with latest repo bootstrap.bas and commits to S2 save data",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  }
+}

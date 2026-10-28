@@ -1,3 +1,5 @@
+const fs = require('node:fs/promises');
+const path = require('node:path');
 const zlib = require('node:zlib');
 const nativeClient = require('../native/client.cjs');
 const ftpDefs = require('../native/ftp-functions.json');
@@ -834,6 +836,245 @@ async function create(rpc) {
         result: 0,
         existedBefore: existedBefore ? 1 : 0,
         saveRes: writeRes,
+        commitRes,
+        lines: logLines
+      };
+    },
+    async updateBootstrapFile(action = 0) {
+      const targetPath = 'save:/f/###/TNS2';
+      const backupPath = 'save:/f/###/TNS2.BAK';
+      const repoBootstrapPath = path.resolve(__dirname, '../../rpc/bootstrap.bas');
+      
+      let repoBytes = Buffer.alloc(0);
+      try {
+        repoBytes = await fs.readFile(repoBootstrapPath);
+      } catch (e) {
+        return {
+          result: -1,
+          lines: [
+            '=== BOOTSTRAP UPDATER ERROR ===',
+            '',
+            'Failed to read local bootstrap.bas:',
+            `  ${e.message}`,
+            '',
+            'Check repository files on PC host.',
+            '------------------------------------------------',
+            '-: Exit to Menu'
+          ]
+        };
+      }
+
+      const logLines = [];
+      logLines.push('=== S2 TNS2 BOOTSTRAP UPDATER & COMMIT ===');
+      logLines.push('');
+
+      const pathOff = 0x1000;
+      const typeOff = 0x2000;
+      const handleOff = 0x2010;
+      const sizeOff = 0x2020;
+      const storageOff = 0x2040;
+      const writeOff = 0x4000;
+
+      // Check current TNS2 on console
+      const curRead = await this.readRawFile(targetPath, 0xB000);
+      const curExists = (curRead.result === 0);
+      const curSize = curExists ? curRead.fileSize : 0;
+      const curHeader = curExists ? curRead.buffer.toString('utf8').split('\n')[0].substring(0, 42) : '(none)';
+
+      // Check backup TNS2.BAK
+      const bakRead = await this.readRawFile(backupPath, 16);
+      const bakExists = (bakRead.result === 0);
+      const bakSize = bakExists ? bakRead.fileSize : 0;
+
+      if (action === 0) {
+        // Status & Compare
+        logLines.push('[STATUS] Current Console File:');
+        logLines.push('  Path: save:/f/###/TNS2');
+        logLines.push(`  Exists: ${curExists ? 'YES' : 'NO'} | Size: ${curSize} bytes`);
+        if (curExists) {
+          logLines.push(`  Header: "${curHeader}"`);
+        }
+        logLines.push('');
+
+        logLines.push('[STATUS] Host Repository File:');
+        logLines.push('  Source: rpc/bootstrap.bas');
+        logLines.push(`  Size: ${repoBytes.length} bytes`);
+        const isIdentical = curExists && curRead.buffer.equals(repoBytes);
+        logLines.push(`  Match with Console: ${isIdentical ? 'IDENTICAL (Up to date)' : 'DIFFERS (Update available)'}`);
+        logLines.push('');
+
+        logLines.push('[STATUS] Backup File:');
+        logLines.push(`  save:/f/###/TNS2.BAK: ${bakExists ? `FOUND (${bakSize}B)` : 'None'}`);
+        logLines.push('');
+        logLines.push('------------------------------------------------');
+        logLines.push('A: Update & Commit TNS2    X: Restore Backup');
+        logLines.push('Y: Refresh Check           -: Exit to Launcher');
+
+        return {
+          result: 0,
+          curSize,
+          repoSize: repoBytes.length,
+          isIdentical: isIdentical ? 1 : 0,
+          updateRes: 0,
+          commitRes: 0,
+          lines: logLines
+        };
+      }
+
+      if (action === 2) {
+        // Restore Backup
+        logLines[0] = '=== RESTORE TNS2 FROM BACKUP ===';
+        if (!bakExists) {
+          logLines.push('[ERROR] No backup found at save:/f/###/TNS2.BAK!');
+          logLines.push('Cannot restore without existing backup file.');
+          logLines.push('------------------------------------------------');
+          logLines.push('A: Update from Repo    Y: Check    -: Exit');
+          return { result: -1, curSize, repoSize: repoBytes.length, isIdentical: 0, updateRes: -1, commitRes: -1, lines: logLines };
+        }
+
+        const fullBak = await this.readRawFile(backupPath, 0xB000);
+        logLines.push(`[STEP 1] Read backup file (${fullBak.fileSize} bytes)...`);
+
+        await client.write(pathOff, Buffer.from(targetPath + '\0', 'utf8'));
+        await client.result('DeleteFile', [client.base + pathOff]);
+
+        logLines.push(`[STEP 2] Create fresh save:/f/###/TNS2 (${fullBak.fileSize}B)...`);
+        await client.result('CreateFile', [client.base + pathOff, fullBak.fileSize]);
+
+        await client.write(handleOff, Buffer.alloc(8));
+        const opRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 3]);
+        if (opRes === 0) {
+          const handle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
+          const CHUNK = 8192;
+          for (let off = 0; off < fullBak.buffer.length; off += CHUNK) {
+            const slice = fullBak.buffer.subarray(off, Math.min(off + CHUNK, fullBak.buffer.length));
+            await client.write(writeOff, slice);
+            await client.write(storageOff, Buffer.alloc(128));
+            await client.call('StorageCtor', [client.base + storageOff, handle, 0]);
+            await client.result('StorageWrite', [client.base + storageOff, off, client.base + writeOff, slice.length]);
+          }
+          await client.result('FlushFile', [handle]);
+          await client.call('CloseFile', [handle]);
+          logLines.push('  Restored file written successfully.');
+        }
+
+        logLines.push('[STEP 3] Committing restored file to save:...');
+        const saveMountOff = 0x1400;
+        await client.write(saveMountOff, Buffer.from('save\0', 'utf8'));
+        const commitRes = await client.result('CommitSaveData', [client.base + saveMountOff]);
+        logLines.push(`  nn::fs::CommitSaveData("save") -> 0x${commitRes.toString(16)}`);
+
+        logLines.push('');
+        logLines.push('STATUS: RESTORE COMPLETED AND COMMITTED!');
+        logLines.push('------------------------------------------------');
+        logLines.push('A: Update from Repo    Y: Re-check    -: Exit');
+
+        return {
+          result: 0,
+          curSize: fullBak.fileSize,
+          repoSize: repoBytes.length,
+          isIdentical: 0,
+          updateRes: 0,
+          commitRes,
+          lines: logLines
+        };
+      }
+
+      // action === 1: Update & Commit TNS2
+      logLines.push(`[STEP 1] Target: save:/f/###/TNS2 (${curExists ? `Existing: ${curSize}B` : 'New'})`);
+      if (curExists && curSize > 0) {
+        logLines.push('  Creating backup save:/f/###/TNS2.BAK...');
+        const fullCur = await this.readRawFile(targetPath, 0xB000);
+        if (fullCur.result === 0) {
+          await client.write(pathOff, Buffer.from(backupPath + '\0', 'utf8'));
+          await client.result('DeleteFile', [client.base + pathOff]);
+          await client.result('CreateFile', [client.base + pathOff, fullCur.fileSize]);
+          await client.write(handleOff, Buffer.alloc(8));
+          if ((await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 3])) === 0) {
+            const bHandle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
+            const CHUNK = 8192;
+            for (let off = 0; off < fullCur.buffer.length; off += CHUNK) {
+              const slice = fullCur.buffer.subarray(off, Math.min(off + CHUNK, fullCur.buffer.length));
+              await client.write(writeOff, slice);
+              await client.write(storageOff, Buffer.alloc(128));
+              await client.call('StorageCtor', [client.base + storageOff, bHandle, 0]);
+              await client.result('StorageWrite', [client.base + storageOff, off, client.base + writeOff, slice.length]);
+            }
+            await client.result('FlushFile', [bHandle]);
+            await client.call('CloseFile', [bHandle]);
+            logLines.push(`  Backup created successfully (${fullCur.fileSize}B).`);
+          }
+        }
+      }
+
+      // Step 2: Delete old TNS2 and Create fresh with new size
+      logLines.push(`[STEP 2] Preparing fresh TNS2 (${repoBytes.length} bytes)...`);
+      await client.write(pathOff, Buffer.from(targetPath + '\0', 'utf8'));
+      await client.result('DeleteFile', [client.base + pathOff]);
+      const createRes = await client.result('CreateFile', [client.base + pathOff, repoBytes.length]);
+      logLines.push(`  nn::fs::CreateFile -> 0x${createRes.toString(16)}`);
+      if (createRes !== 0) {
+        logLines.push('  ERROR: CreateFile failed!');
+        return { result: createRes, curSize, repoSize: repoBytes.length, isIdentical: 0, updateRes: createRes, commitRes: -1, lines: logLines };
+      }
+
+      // Step 3: Write repoBytes in chunks
+      logLines.push(`[STEP 3] Writing repo bootstrap.bas to S2 save:...`);
+      await client.write(handleOff, Buffer.alloc(8));
+      const openRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 3]);
+      if (openRes !== 0) {
+        logLines.push('  ERROR: OpenFile failed!');
+        return { result: openRes, curSize, repoSize: repoBytes.length, isIdentical: 0, updateRes: openRes, commitRes: -1, lines: logLines };
+      }
+      const handle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
+      let writeErr = 0;
+      const CHUNK = 8192;
+      for (let off = 0; off < repoBytes.length; off += CHUNK) {
+        const slice = repoBytes.subarray(off, Math.min(off + CHUNK, repoBytes.length));
+        await client.write(writeOff, slice);
+        await client.write(storageOff, Buffer.alloc(128));
+        await client.call('StorageCtor', [client.base + storageOff, handle, 0]);
+        const wRes = await client.result('StorageWrite', [client.base + storageOff, off, client.base + writeOff, slice.length]);
+        if (wRes !== 0) { writeErr = wRes; break; }
+      }
+      await client.result('FlushFile', [handle]);
+      await client.call('CloseFile', [handle]);
+      logLines.push(`  Write completed (result: 0x${writeErr.toString(16)}).`);
+
+      // Step 4: Atomic Commit to NAND flash
+      logLines.push('');
+      logLines.push('[STEP 4] *** ATOMIC TRANSACTION COMMIT ***:');
+      const saveMountOff = 0x1400;
+      await client.write(saveMountOff, Buffer.from('save\0', 'utf8'));
+      const commitRes = await client.result('CommitSaveData', [client.base + saveMountOff]);
+      logLines.push(`  nn::fs::CommitSaveData("save") -> 0x${commitRes.toString(16)}`);
+      if (commitRes === 0) {
+        logLines.push('  STATUS: COMMITTED TO S2 PERSISTENT STORAGE!');
+      } else {
+        logLines.push('  STATUS: COMMIT FAILED!');
+      }
+
+      // Step 5: Read-Back Verification
+      logLines.push('');
+      logLines.push('[STEP 5] Verification (Read-Back & Compare):');
+      const verifyRead = await this.readRawFile(targetPath, 0xB000);
+      const isMatch = verifyRead.result === 0 && verifyRead.buffer.equals(repoBytes);
+      logLines.push(`  Read back: ${verifyRead.fileSize}B | 100% Byte Match: ${isMatch ? 'YES (SUCCESS)' : 'NO (MISMATCH)'}`);
+
+      // Step 6: Directory overview
+      const dirListing = await this.listDirectory('save:/f/###', 8, 0);
+      const names = dirListing.entries.map(e => `${e.name} (${e.size}B)`).join(', ');
+      logLines.push('');
+      logLines.push(`[SAVE:/F/### DIR] ${names || '(empty)'}`);
+      logLines.push('------------------------------------------------');
+      logLines.push('A: Update & Commit Again    Y: Verify    -: Exit');
+
+      return {
+        result: 0,
+        curSize: verifyRead.fileSize,
+        repoSize: repoBytes.length,
+        isIdentical: isMatch ? 1 : 0,
+        updateRes: writeErr,
         commitRes,
         lines: logLines
       };

@@ -163,6 +163,19 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
      for(let i=0;i<res.lines.length;i++){
       payload.write(res.lines[i].substring(0,47),16+i*48,48,'utf8');
      }
+    }else if(subOp===7){
+     const action=request.readUInt32LE(12)||0;
+     delete require.cache[require.resolve('./fs.cjs')];
+     const activeFs=await require('./fs.cjs').create(rpc);
+     const res=await activeFs.updateBootstrapFile(action);
+     payload=Buffer.alloc(16+res.lines.length*48);
+     payload.writeUInt32LE(res.lines.length,0);
+     payload.writeUInt32LE(res.curSize>>>0,4);
+     payload.writeUInt32LE(res.repoSize>>>0,8);
+     payload.writeUInt32LE(res.isIdentical>>>0,12);
+     for(let i=0;i<res.lines.length;i++){
+      payload.write(res.lines[i].substring(0,47),16+i*48,48,'utf8');
+     }
     }else if(subOp===10){
      const pathLen=Math.min(request.readUInt32LE(16)||1,64);
      const pathStr=request.subarray(32,32+pathLen).toString('utf8').replace(/\0.*$/, '');
