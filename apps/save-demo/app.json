@@ -1,0 +1,16 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "save-demo",
+  "name": "Native Save Manager POC",
+  "version": "1.0.0",
+  "description": "POC writing to save:/f/###/TTEST with atomic nn::fs::CommitSaveData persistence on S2",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  }
+}

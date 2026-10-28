@@ -1,0 +1,49 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+
+void main(){
+ uint pressed=hbPressed();
+
+ // c.game.z: 0 = request needed, 1 = waiting for RPC, 2 = result ready
+ // c.game.x: action (0 = Save & Commit, 1 = Verify Persistence, 2 = Delete & Commit)
+ // c.game.y: last requested action (for display status)
+ if(c.game.z==0u&&!hbBusy()){
+  c.game.y=c.game.x;
+  if(hbFsTestSave(c.game.x)){
+   c.game.z=1u;
+  }
+ }
+
+ if(c.game.z==1u&&!hbBusy()){
+  if(hbResult()==0u&&hbResponseBytes()>=16u){
+   c.game.z=2u;
+   c.game.w=min(hbFsTextLineCount(),20u);
+  }else{
+   c.game.z=0u;
+  }
+ }
+
+ // Press A to Save & Commit to save:/f/###/TTEST
+ if((pressed&HB_A)!=0u&&!hbBusy()){
+  c.game.x=0u;
+  c.game.z=0u;
+ }
+
+ // Press Y to Verify Persistence of save:/f/###/TTEST
+ if((pressed&HB_Y)!=0u&&!hbBusy()){
+  c.game.x=1u;
+  c.game.z=0u;
+ }
+
+ // Press X to Delete & Commit
+ if((pressed&HB_X)!=0u&&!hbBusy()){
+  c.game.x=2u;
+  c.game.z=0u;
+ }
+
+ if(((pressed|hbButtons())&HB_MINUS)!=0u)hbExit();
+ hbEndFrame();
+}

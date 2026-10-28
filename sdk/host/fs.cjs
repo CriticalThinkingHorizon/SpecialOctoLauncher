@@ -21,7 +21,19 @@ async function create(rpc) {
     DeleteDirectory: ftpDefs.deleteDirectory,
     RenameDirectory: ftpDefs.renameDirectory,
     GetEntryType: ftpDefs.entryType,
-    CommitSaveData: ftpDefs.commit
+    CommitSaveData: ftpDefs.commit,
+    StorageCtor: {
+      symbol: '_ZN2nn2fs17FileHandleStorageC1ENS0_10FileHandleEb',
+      offset: 952452,
+      size: 36,
+      hex: '480000120900809208400039686100d0'
+    },
+    StorageWrite: {
+      symbol: '_ZN2nn2fs17FileHandleStorage5WriteElPKvm',
+      offset: 952904,
+      size: 232,
+      hex: 'ff4301d1fd7b01a9fd430091f85f02a9'
+    }
   });
 
   const ENTRY_STRIDE = 0x310;
@@ -415,7 +427,7 @@ async function create(rpc) {
       return { result: readRes, fileSize, data };
     },
     async writeBytesAt(pathStr, offset = 0, dataBuf = Buffer.alloc(0)) {
-      const pathOff = 0x1000, typeOff = 0x2000, handleOff = 0x2010, sizeOff = 0x2020, optOff = 0x2030, writeOff = 0x4000;
+      const pathOff = 0x1000, typeOff = 0x2000, handleOff = 0x2010, storageOff = 0x2040, sizeOff = 0x20c0, writeOff = 0x4000;
       await client.write(pathOff, Buffer.from(pathStr + '\0', 'utf8'));
       await client.write(typeOff, Buffer.alloc(8));
       if ((await client.result('GetEntryType', [client.base + typeOff, client.base + pathOff])) !== 0) {
@@ -423,8 +435,8 @@ async function create(rpc) {
         if (cr !== 0) return { result: cr, bytesWritten: 0 };
       }
       await client.write(handleOff, Buffer.alloc(8));
-      // Mode 6 = Mode_Write (2) | Mode_AllowAppend (4)
-      let openRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 6]);
+      // Mode 3 = OpenMode_Read (1) | OpenMode_Write (2)
+      let openRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 3]);
       if (openRes !== 0) {
         openRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 2]);
         if (openRes !== 0) return { result: openRes, bytesWritten: 0 };
@@ -441,11 +453,9 @@ async function create(rpc) {
         }
         if (dataBuf.length > 0) {
           await client.write(writeOff, dataBuf);
-          const optBuf = Buffer.alloc(4);
-          optBuf.writeUInt32LE(1, 0); // WriteOption::Flush = 1
-          await client.write(optOff, optBuf);
-          // WriteFile has 5 args; pass client.base + optOff in 4th arg (or rely on SetFileSize + FlushFile if 4-arg ABI is used)
-          writeRes = await client.result('WriteFile', [handle, offset, client.base + writeOff, dataBuf.length]);
+          await client.write(storageOff, Buffer.alloc(128));
+          await client.call('StorageCtor', [client.base + storageOff, handle, 0]);
+          writeRes = await client.result('StorageWrite', [client.base + storageOff, offset, client.base + writeOff, dataBuf.length]);
         }
         await client.result('FlushFile', [handle]);
       } finally {
@@ -598,6 +608,233 @@ async function create(rpc) {
         existedBefore: existedBefore ? 1 : 0,
         createRes,
         openRes,
+        lines: logLines
+      };
+    },
+    async testSaveFile(action = 0) {
+      const targetPath = 'save:/f/###/TTEST';
+      const pathOff = 0x1000;
+      const typeOff = 0x2000;
+      const handleOff = 0x2010;
+      const sizeOff = 0x2020;
+      const storageOff = 0x2040;
+      const writeOff = 0x4000;
+      const readOff = 0x4800;
+
+      const savePayload = Buffer.from('\' S2 Native Save Manager POC\nPRINT "PERSISTENCE VERIFIED OK"\n', 'utf8');
+      const pathBuf = Buffer.from(targetPath + '\0', 'utf8');
+      await client.write(pathOff, pathBuf);
+
+      const logLines = [];
+      logLines.push('=== S2 NATIVE SAVE & COMMIT POC (save:/f/###/TTEST) ===');
+      logLines.push('');
+
+      if (action === 2) {
+        logLines[0] = '=== S2 SAVE CLEANER (Delete save:/f/###/TTEST) ===';
+        await client.write(typeOff, Buffer.alloc(8));
+        const checkRes = await client.result('GetEntryType', [client.base + typeOff, client.base + pathOff]);
+        const existedBefore = (checkRes === 0);
+
+        logLines.push('[STEP 1] Check if save:/f/###/TTEST exists:');
+        logLines.push(`  GetEntryType("save:/f/###/TTEST") -> 0x${checkRes.toString(16)}`);
+        if (existedBefore) {
+          logLines.push('  STATUS: FOUND TTEST!');
+        } else {
+          logLines.push('  STATUS: DOES NOT EXIST (Already Clean)');
+        }
+        logLines.push('');
+
+        let delRes = 0;
+        let commitRes = 0;
+        if (existedBefore) {
+          logLines.push('[STEP 2] Deleting save:/f/###/TTEST:');
+          delRes = await client.result('DeleteFile', [client.base + pathOff]);
+          logLines.push(`  nn::fs::DeleteFile("save:/f/###/TTEST") -> 0x${delRes.toString(16)}`);
+
+          logLines.push('[STEP 3] Committing deletion to save: partition:');
+          const saveMountOff = 0x1400;
+          await client.write(saveMountOff, Buffer.from('save\0', 'utf8'));
+          commitRes = await client.result('CommitSaveData', [client.base + saveMountOff]);
+          logLines.push(`  nn::fs::CommitSaveData("save") -> 0x${commitRes.toString(16)} ${commitRes === 0 ? '(Committed)' : '(Failed)'}`);
+        } else {
+          logLines.push('[STEP 2] Delete skipped (file not present).');
+        }
+        logLines.push('');
+
+        await client.write(typeOff, Buffer.alloc(8));
+        const afterRes = await client.result('GetEntryType', [client.base + typeOff, client.base + pathOff]);
+        logLines.push('[STEP 4] Verify deletion:');
+        logLines.push(`  GetEntryType("save:/f/###/TTEST") -> 0x${afterRes.toString(16)}`);
+        logLines.push(afterRes !== 0 ? '  STATUS: CONFIRMED REMOVED (0x202 = PathNotFound)' : '  STATUS: STILL PRESENT!');
+
+        const dirListing = await this.listDirectory('save:/f/###', 10, 0);
+        const names = dirListing.entries.map(e => `${e.name} (${e.size}B)`).join(', ');
+        logLines.push('');
+        logLines.push(`[SAVE:/F/### DIR] ${names || '(empty)'}`);
+        logLines.push('------------------------------------------------');
+        logLines.push('A: Save & Commit   Y: Verify   X: Clean   -: Exit');
+
+        return {
+          result: 0,
+          existedBefore: existedBefore ? 1 : 0,
+          saveRes: delRes,
+          commitRes,
+          lines: logLines
+        };
+      }
+
+      if (action === 1) {
+        logLines[0] = '=== S2 SAVE PERSISTENCE VERIFICATION ===';
+        await client.write(typeOff, Buffer.alloc(8));
+        const checkRes = await client.result('GetEntryType', [client.base + typeOff, client.base + pathOff]);
+        const exists = (checkRes === 0);
+
+        logLines.push('[STEP 1] Check file existence in save:/f/###/:');
+        logLines.push(`  GetEntryType("save:/f/###/TTEST") -> 0x${checkRes.toString(16)}`);
+        if (exists) {
+          logLines.push('  STATUS: FILE FOUND! Persistent in save partition.');
+        } else {
+          logLines.push('  STATUS: NOT FOUND (0x202 = PathNotFound)');
+        }
+        logLines.push('');
+
+        let readSize = 0;
+        let readText = '';
+        if (exists) {
+          logLines.push('[STEP 2] Open & Read verified persistent data:');
+          await client.write(handleOff, Buffer.alloc(8));
+          const openRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 1]);
+          logLines.push(`  nn::fs::OpenFile("save:/f/###/TTEST", Read) -> 0x${openRes.toString(16)}`);
+          if (openRes === 0) {
+            const handle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
+            await client.write(sizeOff, Buffer.alloc(8));
+            await client.result('GetFileSize', [client.base + sizeOff, handle]);
+            readSize = Number((await client.read(sizeOff, 8)).readBigInt64LE(0));
+            logLines.push(`  nn::fs::GetFileSize -> ${readSize} bytes`);
+
+            if (readSize > 0) {
+              const toRead = Math.min(readSize, 64);
+              await client.write(readOff, Buffer.alloc(toRead));
+              const rRes = await client.result('ReadFile', [handle, 0, client.base + readOff, toRead]);
+              if (rRes === 0) {
+                const readBuf = await client.read(readOff, toRead);
+                readText = readBuf.toString('utf8').replace(/[\r\n]+/g, ' ').substring(0, 40);
+                logLines.push(`  Content: "${readText}"`);
+              }
+            }
+            await client.call('CloseFile', [handle]);
+          }
+        } else {
+          logLines.push('[STEP 2] Read skipped (file not present).');
+        }
+
+        const dirListing = await this.listDirectory('save:/f/###', 10, 0);
+        const names = dirListing.entries.map(e => `${e.name} (${e.size}B)`).join(', ');
+        logLines.push('');
+        logLines.push(`[SAVE:/F/### DIR] ${names || '(empty)'}`);
+        logLines.push('------------------------------------------------');
+        logLines.push('A: Save & Commit   Y: Verify   X: Clean   -: Exit');
+
+        return {
+          result: 0,
+          existedBefore: exists ? 1 : 0,
+          saveRes: exists ? 0 : checkRes,
+          commitRes: 0,
+          lines: logLines
+        };
+      }
+
+      // action === 0: Native Save & Commit Process
+      // Step 1: Check existing status via GetEntryType
+      await client.write(typeOff, Buffer.alloc(8));
+      const checkRes = await client.result('GetEntryType', [client.base + typeOff, client.base + pathOff]);
+      const existedBefore = (checkRes === 0);
+
+      logLines.push('[STEP 1] Query save:/f/###/TTEST:');
+      logLines.push(`  GetEntryType -> 0x${checkRes.toString(16)} (${existedBefore ? 'File exists' : 'New file'})`);
+
+      if (existedBefore) {
+        logLines.push('  Removing previous version for fresh write...');
+        await client.result('DeleteFile', [client.base + pathOff]);
+      }
+
+      // Step 2: Create file with exact payload size
+      logLines.push(`[STEP 2] CreateFile ("save:/f/###/TTEST", ${savePayload.length}B):`);
+      const createRes = await client.result('CreateFile', [client.base + pathOff, savePayload.length]);
+      logLines.push(`  nn::fs::CreateFile -> 0x${createRes.toString(16)} ${createRes === 0 ? '(Success)' : '(Error)'}`);
+      if (createRes !== 0) {
+        logLines.push('  FAILED to create file in save partition.');
+        return { result: createRes, existedBefore: 0, saveRes: createRes, commitRes: 0, lines: logLines };
+      }
+
+      // Step 3: Open file in ReadWrite mode
+      logLines.push('[STEP 3] OpenFile (OpenMode_Read | OpenMode_Write):');
+      await client.write(handleOff, Buffer.alloc(8));
+      const openRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 3]);
+      logLines.push(`  nn::fs::OpenFile -> 0x${openRes.toString(16)}`);
+      if (openRes !== 0) {
+        logLines.push('  FAILED to open file for writing.');
+        return { result: openRes, existedBefore: 0, saveRes: openRes, commitRes: 0, lines: logLines };
+      }
+      const handle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
+
+      // Step 4: Write payload via FileHandleStorage
+      logLines.push(`[STEP 4] WriteFile (${savePayload.length} bytes UTF-8 code):`);
+      await client.write(writeOff, savePayload);
+      await client.write(storageOff, Buffer.alloc(128));
+      await client.call('StorageCtor', [client.base + storageOff, handle, 0]);
+      const writeRes = await client.result('StorageWrite', [client.base + storageOff, 0, client.base + writeOff, savePayload.length]);
+      logLines.push(`  WriteFile via FileHandleStorage -> 0x${writeRes.toString(16)} ${writeRes === 0 ? '(OK)' : '(Error)'}`);
+
+      await client.result('FlushFile', [handle]);
+      await client.call('CloseFile', [handle]);
+      logLines.push('  FlushFile & CloseFile completed.');
+
+      // Step 5: ATOMIC COMMIT - nn::fs::CommitSaveData("save")
+      logLines.push('');
+      logLines.push('[STEP 5] *** ATOMIC TRANSACTION COMMIT ***:');
+      const saveMountOff = 0x1400;
+      await client.write(saveMountOff, Buffer.from('save\0', 'utf8'));
+      const commitRes = await client.result('CommitSaveData', [client.base + saveMountOff]);
+      logLines.push(`  nn::fs::CommitSaveData("save") -> 0x${commitRes.toString(16)}`);
+      if (commitRes === 0) {
+        logLines.push('  STATUS: TRANSACTION COMMITTED TO FLASH!');
+      } else {
+        logLines.push('  STATUS: COMMIT FAILED (Transaction uncommitted)');
+      }
+
+      // Step 6: Verify Persistence by reading back
+      logLines.push('');
+      logLines.push('[STEP 6] Verify Persistence (Read-Back Verification):');
+      await client.write(handleOff, Buffer.alloc(8));
+      const vOpenRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 1]);
+      if (vOpenRes === 0) {
+        const vHandle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
+        await client.write(sizeOff, Buffer.alloc(8));
+        await client.result('GetFileSize', [client.base + sizeOff, vHandle]);
+        const vSize = Number((await client.read(sizeOff, 8)).readBigInt64LE(0));
+        await client.write(readOff, Buffer.alloc(savePayload.length));
+        await client.result('ReadFile', [vHandle, 0, client.base + readOff, savePayload.length]);
+        const readBackBuf = await client.read(readOff, savePayload.length);
+        await client.call('CloseFile', [vHandle]);
+
+        const verified = readBackBuf.equals(savePayload);
+        logLines.push(`  Verified: ${vSize} bytes, Match: ${verified ? 'YES (100% Match)' : 'NO'}`);
+      }
+
+      // Step 7: Enumerate save:/f/### directory
+      const dirListing = await this.listDirectory('save:/f/###', 10, 0);
+      const names = dirListing.entries.map(e => `${e.name} (${e.size}B)`).join(', ');
+      logLines.push('');
+      logLines.push(`[SAVE:/F/### DIR] ${names || '(empty)'}`);
+      logLines.push('------------------------------------------------');
+      logLines.push('A: Save & Commit   Y: Verify   X: Clean   -: Exit');
+
+      return {
+        result: 0,
+        existedBefore: existedBefore ? 1 : 0,
+        saveRes: writeRes,
+        commitRes,
         lines: logLines
       };
     }
