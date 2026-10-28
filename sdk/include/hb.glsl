@@ -326,5 +326,38 @@ bool nnHttpDownloadToTmp(uint urlLen){return nnHttpDownloadTo(0u,urlLen);}
 bool hbHttpDownloadToTmp(uint urlLen){return nnHttpDownloadToTmp(urlLen);}
 bool nnHttpDownloadImage(uint urlLen){return hbRequest(10u,22u,0u,(urlLen&65535u));}
 bool hbHttpDownloadImage(uint urlLen){return nnHttpDownloadImage(urlLen);}
+
+// --- nn::swkbd (Nintendo Switch Native Software Keyboard) ---
+void nnSwkbdSetPromptByte(uint index, uint value) {
+ if (index >= 64u || hbBusy()) return;
+ uint o = HB_EXT + (2048u + 32u)/4u + index/4u, shift = (index % 4u) * 8u;
+ c.atlas[o] = (c.atlas[o] & ~(255u << shift)) | ((value & 255u) << shift);
+}
+void hbSwkbdPromptByte(uint index, uint value) { nnSwkbdSetPromptByte(index, value); }
+
+void nnSwkbdSetGuideByte(uint index, uint value) {
+ if (index >= 64u || hbBusy()) return;
+ uint o = HB_EXT + (2048u + 96u)/4u + index/4u, shift = (index % 4u) * 8u;
+ c.atlas[o] = (c.atlas[o] & ~(255u << shift)) | ((value & 255u) << shift);
+}
+void hbSwkbdGuideByte(uint index, uint value) { nnSwkbdSetGuideByte(index, value); }
+
+void nnSwkbdSetInitialByte(uint index, uint value) {
+ if (index >= 64u || hbBusy()) return;
+ uint o = HB_EXT + (2048u + 160u)/4u + index/4u, shift = (index % 4u) * 8u;
+ c.atlas[o] = (c.atlas[o] & ~(255u << shift)) | ((value & 255u) << shift);
+}
+void hbSwkbdInitialByte(uint index, uint value) { nnSwkbdSetInitialByte(index, value); }
+
+bool nnSwkbdShow(uint promptLen, uint guideLen, uint initialLen) {
+ return hbRequest(13u, 1u, promptLen, (guideLen & 65535u) | (initialLen << 16u));
+}
+bool hbSwkbdShow(uint promptLen, uint guideLen, uint initialLen) {
+ return nnSwkbdShow(promptLen, guideLen, initialLen);
+}
+
+uint nnSwkbdGetResult() { return hbWord(4128u); }
+uint nnSwkbdGetTextLength() { return hbWord(4132u); }
+uint nnSwkbdGetTextByte(uint index) { return hbResponseByte(16u + index); }
 #endif
 #endif

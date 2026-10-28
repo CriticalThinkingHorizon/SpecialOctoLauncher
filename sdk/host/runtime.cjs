@@ -1,13 +1,13 @@
 const L=require('./layout.cjs');
 const { decodePng, decodePngToRgb565 } = require('./image-decoder.cjs');
-const SUPPORTED_CAPABILITIES = ['vibration','nfc','udp','hid','time','system','display','fs','net','irsensor','audio'];
+const SUPPORTED_CAPABILITIES = ['vibration','nfc','udp','hid','time','system','display','fs','net','irsensor','audio','swkbd'];
 function validateManifest(value){
  if(!value)return {capabilities:SUPPORTED_CAPABILITIES,endpoints:[]};
  const endpoints=Array.isArray(value.endpoints)?value.endpoints.slice(0,8).map(require('./helpers/network.cjs').endpoint):[];
  return {capabilities:SUPPORTED_CAPABILITIES,endpoints};
 }
 async function create({rpc,mapped,directory,hardware:providedHardware}){
-  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,httpServer,netSockets,timeService,lastSequence=0,lastPoll=0;
+  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,httpServer,netSockets,timeService,swkbdService,lastSequence=0,lastPoll=0;
   const base=mapped+L.OFFSET;
  return {hardware,async atBoundary(app=null){
   if(!lastPoll||Date.now()-lastPoll>5000){await rpc.write(base,(await hardware.poll()).subarray(0,128));lastPoll=Date.now();}
@@ -391,6 +391,26 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
     payload.writeUInt32LE(au.count>>>0,0);
     for(let i=0;i<au.names.length;i++){
      payload.write(au.names[i].substring(0,63),16+i*64,64,'utf8');
+    }
+   }else if(op===L.OP.swkbd){
+    swkbdService??=await require('./swkbd.cjs').create(rpc);
+    const subOp=request.readUInt32LE(8);
+    if(subOp===1){
+     const headerLen=Math.min(request.readUInt32LE(12)||0,64);
+     const packed=request.readUInt32LE(16)||0;
+     const guideLen=Math.min(packed&0xffff,64);
+     const initialLen=Math.min((packed>>>16)&0xffff,64);
+     const headerText=headerLen>0?request.subarray(32,32+headerLen).toString('utf8').replace(/\0.*$/, ''):'HelloWorldS2 Keyboard';
+     const guideText=guideLen>0?request.subarray(32+64,32+64+guideLen).toString('utf8').replace(/\0.*$/, ''):'Enter text...';
+     const initialText=initialLen>0?request.subarray(32+128,32+128+initialLen).toString('utf8').replace(/\0.*$/, ''):'';
+     console.log(`[SWKBD] Triggering Native Software Keyboard on Switch 2: "${headerText}"...`);
+     const kbdRes=await swkbdService.show({headerText,guideText,initialText});
+     console.log(`[SWKBD] Result: 0x${kbdRes.result.toString(16)}, Text: "${kbdRes.text}"`);
+     const textBuf=Buffer.from(kbdRes.text,'utf8');
+     payload=Buffer.alloc(16+textBuf.length);
+     payload.writeUInt32LE(kbdRes.result>>>0,0);
+     payload.writeUInt32LE(textBuf.length>>>0,4);
+     textBuf.copy(payload,16);
     }
    }
   }catch(error){

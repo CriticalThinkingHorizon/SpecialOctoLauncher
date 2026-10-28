@@ -1,0 +1,67 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+
+void main(){
+ uint pressed = hbPressed();
+ c.game.w++; // frame counter
+
+ // State machine (c.game.x):
+ // 0 = Ready / Idle
+ // 1 = Keyboard active (waiting for user on console)
+ // 2 = Text received successfully
+ // 3 = Cancelled / Dismissed
+
+ // (A) Press: Trigger native soft keyboard applet
+ if ((pressed & HB_A) != 0u && !hbBusy() && c.game.x != 1u) {
+  uint promptStr[28] = uint[28](
+   72u, 101u, 108u, 108u, 111u, 87u, 111u, 114u, 108u, 100u, 83u, 50u, 32u,
+   78u, 97u, 116u, 105u, 118u, 101u, 32u, 75u, 101u, 121u, 98u, 111u, 97u, 114u, 100u
+  );
+
+  uint guideStr[23] = uint[23](
+   84u, 121u, 112u, 101u, 32u, 115u, 111u, 109u, 101u, 116u, 104u, 105u, 110u, 103u, 32u, 98u, 101u, 108u, 111u, 119u, 46u, 46u, 46u
+  );
+
+  for (uint i = 0u; i < 28u; i++) nnSwkbdSetPromptByte(i, promptStr[i]);
+  for (uint i = 0u; i < 23u; i++) nnSwkbdSetGuideByte(i, guideStr[i]);
+  
+  if (hbSwkbdShow(28u, 23u, 0u)) {
+   c.game.x = 1u;
+  }
+ }
+
+ // Receive response when finished
+ if (c.game.x == 1u && !hbBusy()) {
+  uint res = nnSwkbdGetResult();
+  uint len = min(nnSwkbdGetTextLength(), 64u);
+  c.game.y = len;
+  c.game.z = res;
+
+  for (uint i = 0u; i < 16u; i++) c.rows[i] = 0u;
+  for (uint i = 0u; i < len; i++) {
+   uint ch = nnSwkbdGetTextByte(i);
+   uint wordIdx = i / 4u;
+   uint shift = (i % 4u) * 8u;
+   c.rows[wordIdx] |= ((ch & 255u) << shift);
+  }
+
+  if (len > 0u) {
+   c.game.x = 2u; // Success
+  } else {
+   c.game.x = 3u; // Cancelled
+  }
+ }
+
+ // (X) Press: Clear entered text
+ if ((pressed & HB_X) != 0u && c.game.x != 1u) {
+  c.game.x = 0u;
+  c.game.y = 0u;
+  for (uint i = 0u; i < 16u; i++) c.rows[i] = 0u;
+ }
+
+ if (((pressed | hbButtons()) & HB_MINUS) != 0u) hbExit();
+ hbEndFrame();
+}

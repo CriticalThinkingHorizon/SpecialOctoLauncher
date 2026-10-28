@@ -1,0 +1,16 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "swkbd-demo",
+  "name": "Native Keyboard POC",
+  "version": "1.0.0",
+  "description": "POC triggering the Switch Native Soft Keyboard (nn::swkbd) for text input",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  }
+}
