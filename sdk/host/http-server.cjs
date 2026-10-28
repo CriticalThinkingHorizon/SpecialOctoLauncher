@@ -155,7 +155,7 @@ async function create(rpc, fsService) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Switch 2 On-Console HTTP File Server</title>
+<title>S2 On-Console HTTP File Server</title>
 <style>
   body { background:#0b1522; color:#e8f2ff; font-family:Consolas,monospace,sans-serif; margin:0; padding:24px; }
   .card { max-width:920px; margin:0 auto; background:#112236; border:1px solid #264a73; border-radius:12px; padding:22px; box-shadow:0 8px 28px rgba(0,0,0,0.45); }
@@ -178,8 +178,8 @@ async function create(rpc, fsService) {
 </head>
 <body>
 <div class="card">
-  <h1>Switch 2 On-Console HTTP File Server</h1>
-  <div class="sub">Served directly from Nintendo Switch 2 via <code>nn::socket</code> &amp; <code>nn::fs</code> (${consoleIp}:${boundPort})</div>
+  <h1>S2 On-Console HTTP File Server</h1>
+  <div class="sub">Served directly from S2 via <code>nn::socket</code> &amp; <code>nn::fs</code> (${consoleIp}:${boundPort})</div>
   <div class="nav">
     <span>Path: <strong>${escapeHtml(cleanPath)}</strong></span>
     ${cleanPath !== '/' ? `<a href="${parentHref}">[&uarr; Up One Level]</a> <a href="/">[Root Mounts]</a>` : ''}
@@ -354,7 +354,7 @@ async function create(rpc, fsService) {
         '=== S2 ON-CONSOLE HTTP FILE SERVER ===',
         '',
         `  URL:     http://${consoleIp}:${boundPort}/`,
-        `  STATUS:  ${listenFd >= 0 ? 'ONLINE (Listening on Switch 2)' : 'ERROR (Socket bind failed)'}`,
+        `  STATUS:  ${listenFd >= 0 ? 'ONLINE (Listening on S2)' : 'ERROR (Socket bind failed)'}`,
         `  MOUNTS:  rom:/   save:/   tmp:/   exefs:/`,
         `  STATS:   ${requestCount} HTTP Requests  |  ${formatBytes(bytesSent)} Sent`,
         '',

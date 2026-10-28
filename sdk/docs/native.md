@@ -119,5 +119,5 @@ apps use the verified raw Jcms path and implement their own cursor.
 
 The Jcms decoder was checked against live captures, including its sample guard,
 signed deltas and ring layout. Generic mouse and Jcms data remain distinct APIs.
-For protocol cross-checks see [Switchbrew HID research](https://switchbrew.org/wiki/HID_services)
+For protocol cross-checks see [S2 Research & HID reference](https://switchbrew.org/wiki/HID_services)
 and [libnx CMIF implementation](https://github.com/switchbrew/libnx/blob/master/nx/include/switch/sf/cmif.h).

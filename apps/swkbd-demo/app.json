@@ -4,7 +4,7 @@
   "id": "swkbd-demo",
   "name": "Native Keyboard POC",
   "version": "1.0.0",
-  "description": "POC triggering the Switch Native Soft Keyboard (nn::swkbd) for text input",
+  "description": "POC triggering the S2 Native Soft Keyboard (nn::swkbd) for text input",
   "icon": "assets/icon.png",
   "initialState": "assets/state.bin",
   "data": "assets/text.bin",

@@ -403,7 +403,7 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
      const headerText=headerLen>0?request.subarray(32,32+headerLen).toString('utf8').replace(/\0.*$/, ''):'HelloWorldS2 Keyboard';
      const guideText=guideLen>0?request.subarray(32+64,32+64+guideLen).toString('utf8').replace(/\0.*$/, ''):'Enter text...';
      const initialText=initialLen>0?request.subarray(32+128,32+128+initialLen).toString('utf8').replace(/\0.*$/, ''):'';
-     console.log(`[SWKBD] Triggering Native Software Keyboard on Switch 2: "${headerText}"...`);
+     console.log(`[SWKBD] Triggering Native Software Keyboard on S2: "${headerText}"...`);
      const kbdRes=await swkbdService.show({headerText,guideText,initialText});
      console.log(`[SWKBD] Result: 0x${kbdRes.result.toString(16)}, Text: "${kbdRes.text}"`);
      const textBuf=Buffer.from(kbdRes.text,'utf8');

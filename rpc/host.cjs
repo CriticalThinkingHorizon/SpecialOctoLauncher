@@ -30,7 +30,7 @@ async function main() {
     await fs.mkdir(path.join(directory, 'shared'));
     await fs.copyFile(path.join(__dirname, 'engine/shared/rpc.cjs'), path.join(directory, 'shared/rpc.cjs'));
     await fs.writeFile(path.join(directory, 'connection.json'), JSON.stringify({port: bridge.port, token: bridge.token,
-      addresses: {...native.addresses, session: path.basename(directory), target: 'switch2'}}), {mode: 0o600});
+      addresses: {...native.addresses, session: path.basename(directory), target: 's2'}}), {mode: 0o600});
     console.log('Qualified native session ready for graphics inspection.');
     await new Promise(resolve => {
       const done = () => {process.removeListener('SIGINT', done); process.removeListener('SIGTERM', done); resolve();};

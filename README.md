@@ -1,6 +1,6 @@
 # HelloWorldS2
 
-A cross-platform host & GPU-driven homebrew runtime for **Nintendo Switch 2 (S2)** via **SmileBASIC 4.4.9** (`HOS 23.0.1`), featuring an interactive **Homebrew Launcher**, **File Explorer**, **On-Console HTTP File Server (`:8080`)**, **`tmp:/` Write & Persistence Tools**, and a comprehensive **official-aligned `nn::*` GLSL SDK**—all without requiring a Raspberry Pi Pico keyboard server.
+A cross-platform host & GPU-driven homebrew runtime for **S2** via **SmileBASIC 4.4.9** (`HOS 23.0.1`), featuring an interactive **Homebrew Launcher**, **File Explorer**, **On-Console HTTP File Server (`:8080`)**, **`tmp:/` Write & Persistence Tools**, and a comprehensive **official-aligned `nn::*` GLSL SDK**—all without requiring a Raspberry Pi Pico keyboard server.
 
 ---
 
@@ -17,7 +17,7 @@ We (Main developer and contributors) are not responsible for any damage to your 
 - **Supported Environment:** Proven and validated exclusively on **HOS 23.0.1** and **SmileBASIC 4.4.9**.
 - **Platform Compatibility:** Primarily tested and developed on **Windows**, with cross-platform support for **macOS** and **Linux**.
 - **Architecture:**
-  - **Console-Side Autonomous 60 FPS Loop:** Runs an independent `nn::vi::Layer` + Vulkan 1.4 swapchain (`1920×1080`) driven by a native `pthread` executing a self-restoring `setcontext`/`longjmp` frame loop on the Switch 2. Controller/touch polling (`nn::hid`) and GPU compute/fragment shader rendering run at 60 FPS directly on the console.
+  - **Console-Side Autonomous 60 FPS Loop:** Runs an independent `nn::vi::Layer` + Vulkan 1.4 swapchain (`1920×1080`) driven by a native `pthread` executing a self-restoring `setcontext`/`longjmp` frame loop on the S2. Controller/touch polling (`nn::hid`) and GPU compute/fragment shader rendering run at 60 FPS directly on the console.
   - **Host-Side RPC Bridge & On-Demand App Loader:** The PC host (`server.js` + `runtime/hello-runner.cjs`) qualifies the native session, prepares Vulkan pipelines **on-demand** when apps are launched, and services asynchronous SDK mailbox requests (`nn::fs`, `nn::socket`, `nn::nifm`, `nn::hid`, `nn::time`, `nn::os`, `nn::irsensor`, `nn::nfc`, `nn::audio`).
 
 ---
@@ -32,9 +32,10 @@ By default, `node server.js` boots into the **Homebrew Launcher** (`apps/launche
 | --- | --- | --- |
 | `launcher` | **Homebrew Launcher** | Interactive app picker with animated loading modal, live server catalog rescan (`X` or `[UPDATE]` row), and clean `nn::vi::Layer` teardown (`-` or `[EXIT]` row to close the Vulkan layer and return to SmileBASIC). |
 | `file-explorer` | **File Explorer** | Read-only S2 filesystem browser across `rom:/`, `save:/`, `tmp:/`, and virtual `exefs:/` (loaded process modules & sections). Supports 15-entry 2-column directory pages and a 20-line `.TXT`/`.PRG`/`T*` viewer with automatic SmileBASIC 4 container header stripping and `zlib` decompression. (`A`: Open/Read, `B`: Parent/Close File, `D-Pad`: Navigate/Scroll, `-`: Exit). |
-| `http-server` | **On-Console HTTP File Server (`:8080`)** | Binds a listening TCP socket (`nn::socket`) directly on the Switch 2's LAN IP (`http://<switch2-ip>:8080/`). Open the URL on any PC or phone browser to browse `rom:/`, `save:/`, `tmp:/`, and `exefs:/`, preview decompressed `.PRG`/`.TXT` or hex dumps, and download files directly from the console. (`X`: Restart Socket, `-`: Exit). |
+| `http-server` | **On-Console HTTP File Server (`:8080`)** | Binds a listening TCP socket (`nn::socket`) directly on the S2's LAN IP (`http://<s2-ip>:8080/`). Open the URL on any PC or phone browser to browse `rom:/`, `save:/`, `tmp:/`, and `exefs:/`, preview decompressed `.PRG`/`.TXT` or hex dumps, and download files directly from the console. (`X`: Restart Socket, `-`: Exit). |
 | `http-client` | **HTTP Client & Downloader** | Outbound HTTP `GET` queries and file streaming directly into console storage (`tmp:/download.bin`) using official-aligned `nn::http` abstractions. (`A`: GET /get, `X`: GET /ip, `Y`: Download robots.txt, `-`: Exit). |
-| `wolv-view` | **Wolverine 1080p Viewer** | Downloads a 1920×1080 PNG image live from `https://ferreirapablo.com/files/wolv.png` via `nnHttpDownloadImage` and renders it edge-to-edge fullscreen on the Switch 2. (`A`: Reload, `X`: Toggle HUD, `-`: Exit). |
+| `swkbd-demo` | **Native Keyboard POC** | Direct on-console integration with the S2 Native Soft Keyboard (`nn::swkbd`), triggering the OS library applet for text input into a glowing terminal display. (`A`: Open Keyboard, `X`: Clear, `-`: Exit). |
+| `wolv-view` | **Wolverine 1080p Viewer** | Downloads a 1920×1080 PNG image live from `https://ferreirapablo.com/files/wolv.png` via `nnHttpDownloadImage` and renders it edge-to-edge fullscreen on the S2. (`A`: Reload, `X`: Toggle HUD, `-`: Exit). |
 | `chip8` | **CHIP-8 Virtual Machine** | On-console compute-shader interpreter running ROM programs directly from `tmp:/rom.ch8` at 60 FPS on the GPU. Features retro CRT bloom, 4 selectable phosphor palettes, Joy-Con controls, and HD rumble sound buzzer (`nnHidSendVibrationPulse`). (`A`: Reload tmp:/rom.ch8, `X`: Palette, `Y`: Speed, `+`: Reset, `-`: Exit). |
 | `hello-world` | **Hello World** | Interactive controller visualizer displaying real-time button states (including `-` and `+`) for attached and detached Joy-Con controllers. (`-`: Exit). |
 | `tmp-test` | **TMP Write & Persistence Test** | Verifies `nn::fs::GetEntryType` and `nn::fs::CreateFile` on SmileBASIC's `tmp:/` (`MountCacheStorage`) mount by checking and creating `tmp:/tmptest` and reporting persistence across runs. (`A`: Re-check, `X`: Delete & Recreate, `-`: Exit). |
@@ -44,7 +45,7 @@ By default, `node server.js` boots into the **Homebrew Launcher** (`apps/launche
 
 ## Official-Aligned GLSL SDK (`sdk/include/hb.glsl`)
 
-All apps have unrestricted access to the full native SDK mailbox (`mapped + 0x7f0000`). Functions in [`sdk/include/hb.glsl`](sdk/include/hb.glsl) use official Nintendo SDK (`nn::*`) naming conventions (with concise `hb*` aliases preserved):
+All apps have unrestricted access to the full native SDK mailbox (`mapped + 0x7f0000`). Functions in [`sdk/include/hb.glsl`](sdk/include/hb.glsl) use official S2 SDK (`nn::*`) naming conventions (with concise `hb*` aliases preserved):
 
 ### 1. `nn::fs` — Complete 18-Function Filesystem Suite (`OP.fs = 9`)
 - **Path & Payload Staging:** `nnFsSetPathByte(i, ch)`, `nnFsSetSecondPathByte(i, ch)`, `nnFsSetWriteByte(i, val)`
@@ -90,14 +91,14 @@ All apps have unrestricted access to the full native SDK mailbox (`mapped + 0x7f
 1. **Node.js (v22+)** — Runs `server.js`, the TCP RPC listener, and the Vulkan/SDK host runtime.
 2. **Python 3 + Pillow (`PIL`)** — Used by each app's `assets.py` to generate glyph atlases (`text.bin`) and icons (`server.js` automatically verifies and installs Pillow if missing).
 3. **Vulkan SDK (`glslangValidator` & `spirv-val`)** — Used when manually compiling app shaders via `sdk/build.cjs`.
-4. **Network Access** — Inbound TCP port **39380** must be allowed through your firewall so the Switch 2 can connect to your PC.
+4. **Network Access** — Inbound TCP port **39380** must be allowed through your firewall so the S2 can connect to your PC.
 
 ---
 
 ## Console Bootstrap Setup (Required)
 
 1. Retrieve the content of `bootstrap.bas` from the [ns2jb repository](https://gitlab.com/pepsipu/ns2jb/-/tree/main?ref_type=heads).
-2. Save it in SmileBASIC on your Switch 2 as `TXT:NS2` in the default workspace.
+2. Save it in SmileBASIC on your S2 as `TXT:NS2` in the default workspace.
 
 ---
 
@@ -109,7 +110,7 @@ All apps have unrestricted access to the full native SDK mailbox (`mapped + 0x7f
    ```
    *(Optional flags: `--app=<app-id>` to boot directly into a specific app instead of `launcher`, `--verbose` for low-level RPC transfer logs, `--pairingCode n1,n2,n3,n4`)*
 
-2. **Connect from SmileBASIC Direct Mode on your Switch 2:**
+2. **Connect from SmileBASIC Direct Mode on your S2:**
    ```basic
    LOAD "TXT:NS2"
    RUN
@@ -127,7 +128,7 @@ All apps have unrestricted access to the full native SDK mailbox (`mapped + 0x7f
      $env:SPIRV_VAL="C:\VulkanSDK\1.4.363.0\Bin\spirv-val.exe"
      node sdk/build.cjs apps/<app-id>
      ```
-   - Then press **`X`** (or select `[UPDATE]`) in the Homebrew Launcher on the Switch 2 and launch the app—its updated `.spv` fingerprint will be detected and prepared on demand!
+   - Then press **`X`** (or select `[UPDATE]`) in the Homebrew Launcher on the S2 and launch the app—its updated `.spv` fingerprint will be detected and prepared on demand!
 
 ---
 

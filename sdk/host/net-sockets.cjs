@@ -214,7 +214,7 @@ async function create(rpc) {
       let fullBody = Buffer.alloc(0);
       let errno = 0;
 
-      // For plain http://, execute directly on the Switch 2's BSD socket stack (nn::socket::Socket -> Connect -> Send -> Poll -> Recv -> Close)
+      // For plain http://, execute directly on the S2's BSD socket stack (nn::socket::Socket -> Connect -> Send -> Poll -> Recv -> Close)
       if (!isHttps) {
         let hostIp = parsed.hostname;
         if (!net.isIPv4(hostIp)) {
@@ -238,7 +238,7 @@ async function create(rpc) {
               const hdrLines = [
                 `${method} ${reqPath} HTTP/1.1`,
                 `Host: ${parsed.host}`,
-                'User-Agent: Switch2-Homebrew-SDK/1.0',
+                'User-Agent: S2-Homebrew-SDK/1.0',
                 'Accept: */*',
                 'Connection: close'
               ];
@@ -300,7 +300,7 @@ async function create(rpc) {
           const resp = await fetch(normalizedUrl, {
             method,
             body: (method === 'POST' && reqBody.length > 0) ? reqBody : undefined,
-            headers: { 'User-Agent': 'Switch2-Homebrew-SDK/1.0' }
+            headers: { 'User-Agent': 'S2-Homebrew-SDK/1.0' }
           });
           statusCode = resp.status;
           const arrBuf = await resp.arrayBuffer();

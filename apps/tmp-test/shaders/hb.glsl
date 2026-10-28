@@ -327,7 +327,7 @@ bool hbHttpDownloadToTmp(uint urlLen){return nnHttpDownloadToTmp(urlLen);}
 bool nnHttpDownloadImage(uint urlLen){return hbRequest(10u,22u,0u,(urlLen&65535u));}
 bool hbHttpDownloadImage(uint urlLen){return nnHttpDownloadImage(urlLen);}
 
-// --- nn::swkbd (Nintendo Switch Native Software Keyboard) ---
+// --- nn::swkbd (S2 Native Software Keyboard) ---
 void nnSwkbdSetPromptByte(uint index, uint value) {
  if (index >= 64u || hbBusy()) return;
  uint o = HB_EXT + (2048u + 32u)/4u + index/4u, shift = (index % 4u) * 8u;

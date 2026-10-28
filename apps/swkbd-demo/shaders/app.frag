@@ -32,9 +32,9 @@ uint getTypedChar(uint idx) {
 }
 
 // String constants for UI
-const uint titleStr[40] = uint[](
- 83u, 87u, 73u, 84u, 67u, 72u, 32u, 50u, 32u, 78u, 65u, 84u, 73u, 86u, 69u, 32u,
- 83u, 79u, 70u, 84u, 87u, 65u, 82u, 69u, 32u, 75u, 69u, 89u, 66u, 79u, 65u, 82u, 68u, 32u, 80u, 79u, 67u, 0u, 0u, 0u
+const uint titleStr[32] = uint[](
+ 83u, 50u, 32u, 78u, 65u, 84u, 73u, 86u, 69u, 32u, 83u, 79u, 70u, 84u, 87u, 65u,
+ 82u, 69u, 32u, 75u, 69u, 89u, 66u, 79u, 65u, 82u, 68u, 32u, 80u, 79u, 67u, 0u
 );
 
 const uint subStr[36] = uint[](
@@ -103,7 +103,7 @@ void main(){
 
  // Title text
  float ink = 0.0;
- for (uint i = 0u; i < 37u; i++) {
+ for (uint i = 0u; i < 31u; i++) {
   ink = max(ink, drawChar(p, vec2(140.0, 130.0) + vec2(float(i * uint(GLYPH_W)), 0.0), titleStr[i]));
  }
  color = mix(color, vec3(0.4, 1.0, 0.6), ink);

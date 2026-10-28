@@ -1,4 +1,4 @@
-// Safe investigation of nn::swkbd symbols and work buffer requirements on Switch 2.
+// Safe investigation of nn::swkbd symbols and work buffer requirements on S2.
 // This script performs read-only dynamic symbol inspection, prologue disassembly reads,
 // and executes strictly safe non-blocking query routines (e.g., GetRequiredWorkBufferSize).
 // It explicitly DOES NOT invoke ShowKeyboard or any blocking applet transitions.

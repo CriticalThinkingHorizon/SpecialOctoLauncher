@@ -84,4 +84,4 @@ async function query(address) {
 
 module.exports = {request, call, callAddress, pair, read, write, query, a: addresses,
   output: addresses.scratch + 0x4040,
-  directory: path.resolve(__dirname, '..', 'switch' + addresses.platform)};
+  directory: path.resolve(__dirname, '..', 's' + addresses.platform)};

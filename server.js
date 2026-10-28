@@ -109,7 +109,7 @@ async function main() {
       JSON.stringify({
         port: bridge.port,
         token: bridge.token,
-        addresses: {...native.addresses, session: 'latest', target: 'switch2'}
+        addresses: {...native.addresses, session: 'latest', target: 's2'}
       }, null, 2)
     );
 

@@ -1,4 +1,4 @@
-// Native nn::swkbd Host Adapter for Nintendo Switch 2
+// Native nn::swkbd Host Adapter for S2
 const nativeClient = require('../native/client.cjs');
 
 async function create(rpc) {
@@ -104,7 +104,7 @@ async function create(rpc) {
       await client.call('SetInitialTextUtf8', [argPtr, iPtr]);
     }
 
-    // 5. Invoke ShowKeyboard synchronously (Switch Horizon displays native OSK on screen)
+    // 5. Invoke ShowKeyboard synchronously (S2 Horizon displays native OSK on screen)
     const result = await client.result('ShowKeyboard', [strPtr, argPtr, 0]);
 
     // 6. Read back outString

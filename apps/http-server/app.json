@@ -4,7 +4,7 @@
   "id": "http-server",
   "name": "On-Console HTTP File Server (:8080)",
   "version": "1.0.0",
-  "description": "Serves rom:/, save:/, tmp:/, and exefs:/ over HTTP directly from the Switch 2",
+  "description": "Serves rom:/, save:/, tmp:/, and exefs:/ over HTTP directly from S2",
   "icon": "assets/icon.png",
   "initialState": "assets/state.bin",
   "data": "assets/text.bin",

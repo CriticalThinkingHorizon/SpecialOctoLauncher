@@ -23,10 +23,10 @@ const uint T_CHARS[46] = uint[46](
  67u,72u,73u,80u,45u,56u,32u,86u,73u,82u,84u,85u,65u,76u,32u,77u,65u,67u,72u,73u,78u,69u,32u,45u,32u,67u,79u,77u,80u,85u,84u,69u,32u,83u,72u,65u,68u,69u,82u,32u,82u,85u,78u,78u,69u,82u
 );
 
-// "ROM: tmp:/rom.ch8 (Loaded from Switch 2 tmp:/)" (46 chars)
-const uint R_TMP_LEN = 46u;
-const uint R_TMP_CHARS[46] = uint[46](
- 82u,79u,77u,58u,32u,116u,109u,112u,58u,47u,114u,111u,109u,46u,99u,104u,56u,32u,40u,76u,111u,97u,100u,101u,100u,32u,102u,114u,111u,109u,32u,83u,119u,105u,116u,99u,104u,32u,50u,32u,116u,109u,112u,58u,47u,41u
+// "ROM: tmp:/rom.ch8 (Loaded from S2 tmp:/)" (40 chars)
+const uint R_TMP_LEN = 40u;
+const uint R_TMP_CHARS[40] = uint[40](
+ 82u,79u,77u,58u,32u,116u,109u,112u,58u,47u,114u,111u,109u,46u,99u,104u,56u,32u,40u,76u,111u,97u,100u,101u,100u,32u,102u,114u,111u,109u,32u,83u,50u,32u,116u,109u,112u,58u,47u,41u
 );
 
 // "ROM: BUILT-IN DEMO (Drop rom.ch8 into tmp:/)" (44 chars)

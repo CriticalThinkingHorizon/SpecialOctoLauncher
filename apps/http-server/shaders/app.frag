@@ -41,7 +41,7 @@ void main(){
  float badge=fill(box(p,vec2(960.0,115.0),vec2(820.0,28.0),10.0));
  color=mix(color,badgeCol,badge*0.45);
 
- // Animated pulse dot showing active polling on the Switch 2 socket
+ // Animated pulse dot showing active polling on the S2 socket
  float pulse=0.5+0.5*sin(c.motion.x*5.0);
  float dot=fill(length(p-vec2(1720.0,115.0))-10.0);
  color=mix(color,listening==1u?vec3(0.35,1.0,0.65)*pulse:vec3(1.0,0.3,0.3),dot);

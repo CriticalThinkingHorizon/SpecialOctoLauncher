@@ -27,10 +27,10 @@ float drawBodyLine(vec2 p,vec2 origin,uint lineIdx){
  return ink;
 }
 
-// "SWITCH 2 HTTP CLIENT & DOWNLOADER (nn::http)" (43 chars)
-const uint TITLE_LEN = 43u;
-const uint TITLE_CHARS[43] = uint[43](
- 83u,87u,73u,84u,67u,72u,32u,50u,32u,72u,84u,84u,80u,32u,67u,76u,73u,69u,78u,84u,32u,38u,32u,68u,79u,87u,78u,76u,79u,65u,68u,69u,82u,32u,40u,110u,110u,58u,58u,104u,116u,116u,112u
+// "S2 HTTP CLIENT & DOWNLOADER (nn::http)" (38 chars)
+const uint TITLE_LEN = 38u;
+const uint TITLE_CHARS[38] = uint[38](
+ 83u,50u,32u,72u,84u,84u,80u,32u,67u,76u,73u,69u,78u,84u,32u,38u,32u,68u,79u,87u,78u,76u,79u,65u,68u,69u,82u,32u,40u,110u,110u,58u,58u,104u,116u,116u,112u,41u
 );
 
 // "IDLE: Press [A], [X], or [Y] to test" (36 chars)
@@ -39,10 +39,10 @@ const uint IDLE_CHARS[36] = uint[36](
  73u,68u,76u,69u,58u,32u,80u,114u,101u,115u,115u,32u,91u,65u,93u,44u,32u,91u,88u,93u,44u,32u,111u,114u,32u,91u,89u,93u,32u,116u,111u,32u,116u,101u,115u,116u
 );
 
-// "REQUESTING... Communicating via Switch 2 network stack" (53 chars)
-const uint REQ_LEN = 53u;
-const uint REQ_CHARS[53] = uint[53](
- 82u,69u,81u,85u,69u,83u,84u,73u,78u,71u,46u,46u,46u,32u,67u,111u,109u,109u,117u,110u,105u,99u,97u,116u,105u,110u,103u,32u,118u,105u,97u,32u,83u,119u,105u,116u,99u,104u,32u,50u,32u,115u,116u,97u,99u,107u,46u,46u,46u,0u,0u,0u,0u
+// "REQUESTING... Communicating via S2 stack..." (43 chars)
+const uint REQ_LEN = 43u;
+const uint REQ_CHARS[43] = uint[43](
+ 82u,69u,81u,85u,69u,83u,84u,73u,78u,71u,46u,46u,46u,32u,67u,111u,109u,109u,117u,110u,105u,99u,97u,116u,105u,110u,103u,32u,118u,105u,97u,32u,83u,50u,32u,115u,116u,97u,99u,107u,46u,46u,46u
 );
 
 // "STATUS: 200 OK (Response body preview below)" (43 chars)
