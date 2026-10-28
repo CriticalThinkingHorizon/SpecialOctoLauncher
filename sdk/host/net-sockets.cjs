@@ -1,3 +1,5 @@
+const dns = require('node:dns/promises');
+const net = require('node:net');
 const nativeClient = require('../native/client.cjs');
 const ftpDefs = require('../native/ftp-functions.json');
 const svcDefs = require('../native/service-functions.json');
@@ -195,6 +197,136 @@ async function create(rpc) {
       openFds.delete(fd);
       const res = Number(BigInt.asIntN(32, await api.call('socketClose', [fd])));
       return { result: res };
+    },
+    async httpRequest({ method = 'GET', urlStr = '', reqBody = Buffer.alloc(0), maxBytes = 960, savePath = '', fsService = null }) {
+      const normalizedUrl = /^https?:\/\//i.test(urlStr) ? urlStr : `http://${urlStr}`;
+      let parsed;
+      try {
+        parsed = new URL(normalizedUrl);
+      } catch {
+        return { statusCode: 0, totalBytes: 0, errno: 22, body: Buffer.alloc(0) };
+      }
+
+      const isHttps = parsed.protocol === 'https:';
+      const maxRead = savePath ? 0xB000 : Math.max(1, Math.min(maxBytes || 960, 960));
+
+      let statusCode = 0;
+      let fullBody = Buffer.alloc(0);
+      let errno = 0;
+
+      // For plain http://, execute directly on the Switch 2's BSD socket stack (nn::socket::Socket -> Connect -> Send -> Poll -> Recv -> Close)
+      if (!isHttps) {
+        let hostIp = parsed.hostname;
+        if (!net.isIPv4(hostIp)) {
+          try {
+            const resolved = await dns.lookup(hostIp, { family: 4 });
+            hostIp = resolved.address;
+          } catch {
+            errno = 2;
+          }
+        }
+        if (net.isIPv4(hostIp)) {
+          const octets = hostIp.split('.').map(Number);
+          const ipBuf = Buffer.from(octets);
+          const ipWord = ipBuf.readUInt32LE(0);
+          const port = Number(parsed.port) || 80;
+          const conn = await this.connectTcp(ipWord, port);
+          if (conn.fd >= 0) {
+            const fd = conn.fd;
+            try {
+              const reqPath = (parsed.pathname || '/') + (parsed.search || '');
+              const hdrLines = [
+                `${method} ${reqPath} HTTP/1.1`,
+                `Host: ${parsed.host}`,
+                'User-Agent: Switch2-Homebrew-SDK/1.0',
+                'Accept: */*',
+                'Connection: close'
+              ];
+              if (method === 'POST' || reqBody.length > 0) {
+                hdrLines.push(`Content-Length: ${reqBody.length}`);
+                hdrLines.push('Content-Type: application/octet-stream');
+              }
+              const headBuf = Buffer.from(hdrLines.join('\r\n') + '\r\n\r\n', 'utf8');
+              const fullReq = reqBody.length > 0 ? Buffer.concat([headBuf, reqBody]) : headBuf;
+
+              for (let off = 0; off < fullReq.length; off += MAX_IO_BYTES) {
+                const slice = fullReq.subarray(off, off + MAX_IO_BYTES);
+                await api.write(IO_OFF, slice);
+                const s = Number(BigInt.asIntN(32, await api.call('send', [fd, api.base + IO_OFF, slice.length, 0])));
+                if (s <= 0) break;
+              }
+
+              const chunks = [];
+              let totalCollected = 0;
+              const chunkCap = 0x4000;
+              for (let iter = 0; iter < 16 && totalCollected < maxRead + 2048; iter++) {
+                const pfd = Buffer.alloc(8);
+                pfd.writeInt32LE(fd, 0);
+                pfd.writeInt16LE(1, 4);
+                await api.write(POLLFD_OFF, pfd);
+                const ready = Number(BigInt.asIntN(32, await api.call('poll', [api.base + POLLFD_OFF, 1, 1500])));
+                if (ready <= 0) break;
+
+                const n = Number(BigInt.asIntN(32, await api.call('recv', [fd, api.base + IO_OFF, chunkCap, 0])));
+                if (n <= 0) break;
+                const part = await api.read(IO_OFF, n);
+                chunks.push(part);
+                totalCollected += n;
+              }
+
+              const rawResp = Buffer.concat(chunks);
+              const sepIdx = rawResp.indexOf('\r\n\r\n');
+              if (sepIdx >= 0) {
+                const statusLine = rawResp.subarray(0, Math.min(sepIdx, 128)).toString('utf8').split('\r\n')[0] || '';
+                const m = statusLine.match(/HTTP\/\d\.\d\s+(\d+)/);
+                statusCode = m ? Number(m[1]) : 200;
+                fullBody = rawResp.subarray(sepIdx + 4);
+              } else if (rawResp.length > 0) {
+                statusCode = 200;
+                fullBody = rawResp;
+              }
+            } finally {
+              await this.closeSocket(fd);
+            }
+          } else {
+            errno = conn.errno || 111;
+          }
+        }
+      }
+
+      // Fallback / HTTPS support via host fetch if HTTPS or if console route could not reach external internet
+      if (statusCode === 0) {
+        try {
+          const resp = await fetch(normalizedUrl, {
+            method,
+            body: (method === 'POST' && reqBody.length > 0) ? reqBody : undefined,
+            headers: { 'User-Agent': 'Switch2-Homebrew-SDK/1.0' }
+          });
+          statusCode = resp.status;
+          const arrBuf = await resp.arrayBuffer();
+          fullBody = Buffer.from(arrBuf);
+          errno = 0;
+        } catch (err) {
+          errno = errno || 113;
+        }
+      }
+
+      let totalBytes = fullBody.length;
+      if (savePath && fsService && statusCode >= 200 && statusCode < 400) {
+        const toWrite = fullBody.subarray(0, 0xB000);
+        await fsService.deletePath(savePath);
+        const wr = await fsService.writeBytesAt(savePath, 0, toWrite);
+        errno = wr.result;
+        totalBytes = wr.bytesWritten;
+      }
+
+      const returnedBody = fullBody.subarray(0, Math.min(fullBody.length, 960));
+      return {
+        statusCode,
+        totalBytes,
+        errno,
+        body: returnedBody
+      };
     },
     async closeAll() {
       for (const fd of openFds) {

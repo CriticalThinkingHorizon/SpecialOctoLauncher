@@ -309,6 +309,32 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
      const er=await netSockets.getLastErrno();
      payload=Buffer.alloc(16);
      payload.writeUInt32LE(er.errno>>>0,0);
+    }else if(subOp===20){
+     const maxBytes=Math.min(request.readUInt32LE(12)||960,960);
+     const packed=request.readUInt32LE(16)||0;
+     const urlLen=Math.min(packed&0xffff,128);
+     const isPost=((packed>>>16)&1)===1;
+     const postLen=Math.min((packed>>>17)&0x7fff,960);
+     const urlStr=request.subarray(32,32+urlLen).toString('utf8').replace(/\0.*$/, '');
+     const reqBody=isPost?request.subarray(32+128,32+128+postLen):Buffer.alloc(0);
+     const httpRes=await netSockets.httpRequest({method:isPost?'POST':'GET',urlStr,reqBody,maxBytes});
+     payload=Buffer.alloc(16+httpRes.body.length);
+     payload.writeUInt32LE(httpRes.statusCode>>>0,0);
+     payload.writeUInt32LE(httpRes.totalBytes>>>0,4);
+     payload.writeUInt32LE(httpRes.body.length>>>0,8);
+     payload.writeUInt32LE(httpRes.errno>>>0,12);
+     httpRes.body.copy(payload,16);
+    }else if(subOp===21){
+     const packed=request.readUInt32LE(16)||0;
+     const urlLen=Math.min(packed&0xffff,128);
+     const saveLen=Math.min((packed>>>16)&0xffff,64);
+     const urlStr=request.subarray(32,32+urlLen).toString('utf8').replace(/\0.*$/, '');
+     const savePath=request.subarray(32+128,32+128+saveLen).toString('utf8').replace(/\0.*$/, '')||'tmp:/download.bin';
+     const dlRes=await netSockets.httpRequest({method:'GET',urlStr,savePath,fsService});
+     payload=Buffer.alloc(16);
+     payload.writeUInt32LE(dlRes.statusCode>>>0,0);
+     payload.writeUInt32LE(dlRes.totalBytes>>>0,4);
+     payload.writeUInt32LE(dlRes.errno>>>0,12);
     }else{
      status=L.STATUS.invalid;
     }

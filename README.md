@@ -33,6 +33,7 @@ By default, `node server.js` boots into the **Homebrew Launcher** (`apps/launche
 | `launcher` | **Homebrew Launcher** | Interactive app picker with animated loading modal, live server catalog rescan (`X` or `[UPDATE]` row), and clean `nn::vi::Layer` teardown (`-` or `[EXIT]` row to close the Vulkan layer and return to SmileBASIC). |
 | `file-explorer` | **File Explorer** | Read-only S2 filesystem browser across `rom:/`, `save:/`, `tmp:/`, and virtual `exefs:/` (loaded process modules & sections). Supports 15-entry 2-column directory pages and a 20-line `.TXT`/`.PRG`/`T*` viewer with automatic SmileBASIC 4 container header stripping and `zlib` decompression. (`A`: Open/Read, `B`: Parent/Close File, `D-Pad`: Navigate/Scroll, `-`: Exit). |
 | `http-server` | **On-Console HTTP File Server (`:8080`)** | Binds a listening TCP socket (`nn::socket`) directly on the Switch 2's LAN IP (`http://<switch2-ip>:8080/`). Open the URL on any PC or phone browser to browse `rom:/`, `save:/`, `tmp:/`, and `exefs:/`, preview decompressed `.PRG`/`.TXT` or hex dumps, and download files directly from the console. (`X`: Restart Socket, `-`: Exit). |
+| `http-client` | **HTTP Client & Downloader** | Outbound HTTP `GET` queries and file streaming directly into console storage (`tmp:/download.bin`) using official-aligned `nn::http` abstractions. (`A`: GET /get, `X`: GET /ip, `Y`: Download robots.txt, `-`: Exit). |
 | `hello-world` | **Hello World** | Interactive controller visualizer displaying real-time button states (including `-` and `+`) for attached and detached Joy-Con controllers. (`-`: Exit). |
 | `tmp-test` | **TMP Write & Persistence Test** | Verifies `nn::fs::GetEntryType` and `nn::fs::CreateFile` on SmileBASIC's `tmp:/` (`MountCacheStorage`) mount by checking and creating `tmp:/tmptest` and reporting persistence across runs. (`A`: Re-check, `X`: Delete & Recreate, `-`: Exit). |
 | `tmp-delete` | **TMP Cleaner (`Delete tmptest`)** | Built using pure shader-side `nnFsGetEntryType` + `nnFsDeleteFile` SDK primitives to check for `tmp:/tmptest` and remove it if present. (`A`: Re-check & Delete, `-`: Exit). |
@@ -54,7 +55,7 @@ All apps have unrestricted access to the full native SDK mailbox (`mapped + 0x7f
   - `nnFsCommitSaveData(mountLen)`
 - **High-Level Helpers:** `nnFsReadDirectory(maxEntries, startOffset, pathLen)`, `nnFsReadTextLines(lineStart, pathLen)`
 
-### 2. `nn::socket` & `nn::nifm` — TCP & UDP Networking (`OP.net = 10`, `OP.udp = 3`)
+### 2. `nn::socket`, `nn::nifm` & `nn::http` — TCP/UDP & Outbound HTTP Client (`OP.net = 10`, `OP.udp = 3`)
 - **Interface Status:** `nnNifmGetCurrentPrimaryIpAddress()` → `nnNifmResultIpAddress()`, `nnNifmResultConnectionStatus()`
 - **TCP Server & Client:**
   - `nnSocketListenTcp(port, backlog)` → `nnSocketResultFd()`
@@ -64,6 +65,11 @@ All apps have unrestricted access to the full native SDK mailbox (`mapped + 0x7f
   - `nnSocketSetSendByte(i, val)` + `nnSocketSend(fd, byteLen)`
   - `nnSocketClose(fd)`, `nnSocketGetSockName(fd)`, `nnSocketGetLastErrno()`
 - **UDP Datagram Exchange:** `nnSocketSendToUdpEndpoint(endpoint, bytes)`
+- **HTTP / HTTPS Outbound Client (`nn::http`):**
+  - **Staging Helpers:** `nnHttpSetUrlByte(i, ch)`, `nnHttpSetPostByte(i, val)`, `nnHttpSetSavePathByte(i, ch)`
+  - **Requests:** `nnHttpGet(maxBytes, urlLen)` / `nnHttpPost(postLen, urlLen)`
+  - **Direct File Downloads:** `nnHttpDownloadTo(savePathLen, urlLen)` / `nnHttpDownloadToTmp(urlLen)` (streams remote HTTP/HTTPS downloads directly into `tmp:/` or designated storage path)
+  - **Response Accessors:** `nnHttpResultStatusCode()`, `nnHttpResultTotalBytes()`, `nnHttpResultBodyBytes()`, `nnHttpResultErrno()`, `nnHttpResultBodyByte(i)`
 
 ### 3. `nn::hid` & `nn::hid::detail` — Controllers, SixAxis, Colors, LEDs & Haptics
 - **Input Polling:** `nnHidGetNpadButtons()`, `nnHidGetNpadPressed()`, `nnHidGetNpadSourceButtons(slot)`, `nnHidGetAnalogStick(right)`, `nnHidGetTouchScreenCount()`, `nnHidGetTouchScreenPoint(i)`, `nnHidGetKeyboardKey(usage)`, `nnHidGetMousePosition()`, `nnHidGetMouseButtons()`

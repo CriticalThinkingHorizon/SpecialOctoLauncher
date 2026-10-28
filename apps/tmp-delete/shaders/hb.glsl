@@ -149,6 +149,18 @@ uint nnSocketResultErrno(){return hbWord(4136u);}
 uint nnSocketResultByte(uint index){return index<960u?hbResponseByte(16u+index):0u;}
 uint hbNetByte(uint index){return nnSocketResultByte(index);}
 
+// High-level HTTP Client Response Accessors (subOp 20, 21)
+uint nnHttpResultStatusCode(){return hbWord(4128u);}
+uint hbHttpStatusCode(){return nnHttpResultStatusCode();}
+uint nnHttpResultTotalBytes(){return hbWord(4132u);}
+uint hbHttpTotalBytes(){return nnHttpResultTotalBytes();}
+uint nnHttpResultBodyBytes(){return hbWord(4136u);}
+uint hbHttpBodyBytes(){return nnHttpResultBodyBytes();}
+uint nnHttpResultErrno(){return hbWord(4140u);}
+uint hbHttpErrno(){return nnHttpResultErrno();}
+uint nnHttpResultBodyByte(uint index){return index<960u?hbResponseByte(16u+index):0u;}
+uint hbHttpByte(uint index){return nnHttpResultBodyByte(index);}
+
 // nn::time & nn::os Response Accessors (after calling nnTimeGetNow() or nnOsGetSystemInfo())
 uvec2 nnTimeResultSteadyClockTick(){return uvec2(hbWord(4128u),hbWord(4132u));}
 uvec2 nnTimeResultSteadyClockFreq(){return uvec2(hbWord(4136u),hbWord(4140u));}
@@ -281,5 +293,26 @@ bool nnSocketGetSockName(uint fd){return hbRequest(10u,8u,fd,0u);}
 bool hbNetGetSockName(uint fd){return nnSocketGetSockName(fd);}
 bool nnSocketGetLastErrno(){return hbRequest(10u,9u,0u,0u);}
 bool hbNetGetLastErrno(){return nnSocketGetLastErrno();}
+
+// --- High-Level HTTP Request Primitives ---
+// Staging helpers:
+// URL is set via nnHttpSetUrlByte(i, ch) (up to 128 bytes)
+// POST body is set via nnHttpSetPostByte(i, val) (up to 960 bytes)
+// Destination path for downloads is set via nnHttpSetSavePathByte(i, ch) (up to 64 bytes)
+void nnHttpSetUrlByte(uint index,uint value){if(index>=128u||hbBusy())return;uint o=HB_EXT+(2048u+32u)/4u+index/4u,shift=(index%4u)*8u;c.atlas[o]=(c.atlas[o]&~(255u<<shift))|((value&255u)<<shift);}
+void hbHttpUrlByte(uint index,uint value){nnHttpSetUrlByte(index,value);}
+void nnHttpSetPostByte(uint index,uint value){if(index>=960u||hbBusy())return;uint o=HB_EXT+(2048u+160u)/4u+index/4u,shift=(index%4u)*8u;c.atlas[o]=(c.atlas[o]&~(255u<<shift))|((value&255u)<<shift);}
+void hbHttpPostByte(uint index,uint value){nnHttpSetPostByte(index,value);}
+void nnHttpSetSavePathByte(uint index,uint value){if(index>=64u||hbBusy())return;uint o=HB_EXT+(2048u+160u)/4u+index/4u,shift=(index%4u)*8u;c.atlas[o]=(c.atlas[o]&~(255u<<shift))|((value&255u)<<shift);}
+void hbHttpSavePathByte(uint index,uint value){nnHttpSetSavePathByte(index,value);}
+
+bool nnHttpGet(uint maxBytes,uint urlLen){return hbRequest(10u,20u,min(maxBytes,960u),(urlLen&65535u));}
+bool hbHttpGet(uint maxBytes,uint urlLen){return nnHttpGet(maxBytes,urlLen);}
+bool nnHttpPost(uint postLen,uint urlLen){return hbRequest(10u,20u,960u,(urlLen&65535u)|(1u<<16u)|((min(postLen,960u)&32767u)<<17u));}
+bool hbHttpPost(uint postLen,uint urlLen){return nnHttpPost(postLen,urlLen);}
+bool nnHttpDownloadTo(uint savePathLen,uint urlLen){return hbRequest(10u,21u,0u,(urlLen&65535u)|((savePathLen&65535u)<<16u));}
+bool hbHttpDownloadTo(uint savePathLen,uint urlLen){return nnHttpDownloadTo(savePathLen,urlLen);}
+bool nnHttpDownloadToTmp(uint urlLen){return nnHttpDownloadTo(0u,urlLen);}
+bool hbHttpDownloadToTmp(uint urlLen){return nnHttpDownloadToTmp(urlLen);}
 #endif
 #endif

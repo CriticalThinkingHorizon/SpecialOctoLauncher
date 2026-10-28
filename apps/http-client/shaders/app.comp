@@ -1,0 +1,79 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+
+void setUrlGet(){
+ uint u[22]=uint[22](104u,116u,116u,112u,58u,47u,47u,104u,116u,116u,112u,98u,105u,110u,46u,111u,114u,103u,47u,103u,101u,116u);
+ for(uint i=0u;i<22u;i++)nnHttpSetUrlByte(i,u[i]);
+}
+
+void setUrlIp(){
+ uint u[21]=uint[21](104u,116u,116u,112u,58u,47u,47u,104u,116u,116u,112u,98u,105u,110u,46u,111u,114u,103u,47u,105u,112u);
+ for(uint i=0u;i<21u;i++)nnHttpSetUrlByte(i,u[i]);
+}
+
+void setUrlRobots(){
+ uint u[29]=uint[29](104u,116u,116u,112u,58u,47u,47u,104u,116u,116u,112u,98u,105u,110u,46u,111u,114u,103u,47u,114u,111u,98u,111u,116u,115u,46u,116u,120u,116u);
+ for(uint i=0u;i<29u;i++)nnHttpSetUrlByte(i,u[i]);
+}
+
+void main(){
+ uint pressed=hbPressed();
+ c.motion.x+=1.0/60.0;
+ c.state.z++;
+
+ // c.game.z: 0=idle, 1=fetching GET, 2=GET ready, 3=downloading, 4=download ready, 5=error
+ if(c.game.z==1u&&!hbBusy()){
+  if(hbResult()==0u){
+   c.game.z=2u;
+   c.piece.x=int(nnHttpResultStatusCode());
+   c.piece.y=int(nnHttpResultTotalBytes());
+   c.piece.z=int(nnHttpResultBodyBytes());
+   c.piece.w=int(nnHttpResultErrno());
+  }else{
+   c.game.z=5u;
+  }
+ }else if(c.game.z==3u&&!hbBusy()){
+  if(hbResult()==0u){
+   c.game.z=4u;
+   c.piece.x=int(nnHttpResultStatusCode());
+   c.piece.y=int(nnHttpResultTotalBytes());
+   c.piece.z=0;
+   c.piece.w=int(nnHttpResultErrno());
+  }else{
+   c.game.z=5u;
+  }
+ }
+
+ // Press A: GET http://httpbin.org/get
+ if((pressed&HB_A)!=0u&&!hbBusy()){
+  setUrlGet();
+  if(nnHttpGet(960u,22u)){
+   c.game.z=1u;
+   c.game.x=0u; // mode: get
+  }
+ }
+
+ // Press X: GET http://httpbin.org/ip
+ if((pressed&HB_X)!=0u&&!hbBusy()){
+  setUrlIp();
+  if(nnHttpGet(960u,21u)){
+   c.game.z=1u;
+   c.game.x=1u; // mode: ip
+  }
+ }
+
+ // Press Y: Download http://httpbin.org/robots.txt -> tmp:/download.bin
+ if((pressed&HB_Y)!=0u&&!hbBusy()){
+  setUrlRobots();
+  if(nnHttpDownloadToTmp(29u)){
+   c.game.z=3u;
+   c.game.x=2u; // mode: download
+  }
+ }
+
+ if(((pressed|hbButtons())&HB_MINUS)!=0u)hbExit();
+ hbEndFrame();
+}
