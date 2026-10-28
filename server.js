@@ -111,6 +111,37 @@ async function main() {
       const qualification = await qualify(native);
       console.log('Qualification passed:', qualification);
 
+      // Clean up any leftover worker pthread from previous dropped session
+      try {
+        const workerStateOffset = native.addresses.scratch + 0x7e000;
+        const prevWorker = await native.read(workerStateOffset, 48);
+        if (prevWorker.readUInt32LE(0) === 0x574f524b) {
+          console.log('[RECOVERY] Detected active worker from previous session. Stopping cleanly...');
+          const selector = Number(prevWorker.readBigUInt64LE(16));
+          const exit = prevWorker.readBigUInt64LE(24);
+          const thread = prevWorker.readBigUInt64LE(32);
+          const prevLayer = Number(prevWorker.readBigUInt64LE(40));
+
+          const exitBuf = Buffer.alloc(8);
+          exitBuf.writeBigUInt64LE(exit);
+          await native.write(selector, exitBuf);
+
+          const threadCode = require('./rpc/thread-code.json').functions;
+          const sdk = native.addresses.sdk;
+          const until = Date.now() + 500;
+          while (Date.now() < until) {
+            const state = (await native.callAddress(sdk + threadCode.tryWait.offset, [thread])).result;
+            if (state === 1n) break;
+            await new Promise(r => setTimeout(r, 10));
+          }
+          await native.callAddress(sdk + threadCode.join.offset, [thread, workerStateOffset + 40]);
+          await native.write(workerStateOffset, Buffer.alloc(48));
+          console.log('[RECOVERY] Previous worker stopped and cleaned up.');
+        }
+      } catch (recoveryErr) {
+        console.warn('[RECOVERY] Worker cleanup notice:', recoveryErr.message);
+      }
+
       console.log('Starting RPC bridge server...');
       bridge = await serve(native);
       bridge.keepAwake(qualification.activity);

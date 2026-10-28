@@ -340,6 +340,17 @@ async function main(directory, attempt = 'auto') {
     const thread = (await rpc.read(base, 8)).readBigUInt64LE();
     console.log('Hello World continuous native frame loop running.');
 
+    // Save worker state for clean reconnection recovery across sessions
+    const workerStateOffset = rpc.a.scratch + 0x7e000;
+    const workerState = Buffer.alloc(48);
+    workerState.writeUInt32LE(0x574f524b, 0); // 'WORK'
+    workerState.writeBigUInt64LE(BigInt(base), 8);
+    workerState.writeBigUInt64LE(BigInt(program.selector), 16);
+    workerState.writeBigUInt64LE(BigInt(program.exit), 24);
+    workerState.writeBigUInt64LE(thread, 32);
+    workerState.writeBigUInt64LE(BigInt(r.layer || 0), 40);
+    await rpc.write(workerStateOffset, workerState);
+
     let stop = false;
     process.on('SIGINT', () => stop = true);
     process.on('SIGTERM', () => stop = true);
@@ -442,6 +453,7 @@ async function main(directory, attempt = 'auto') {
     }
     await rpc.callAddress(sdk + code.join.offset, [thread, base + 8]);
     await sdkRuntime.close();
+    await rpc.write(rpc.a.scratch + 0x7e000, Buffer.alloc(48));
 
     if (closeLayerRequested && r.layer) {
       try {
