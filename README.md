@@ -2,8 +2,12 @@
 
 A cross-platform host & GPU-driven homebrew runtime and a comprehensive suite of **Proof of Concept (POC)** applications for **S2** via **SmileBASIC 4.4.9** (`HOS 23.0.1`), featuring an interactive **Homebrew Launcher**, **Autonomous Offline App Caching**, **Filesystem Explorer**, **On-Console HTTP File Server (`:8080`)**, **`tmp:/` Cache & Persistence Tools**, and a comprehensive **official-aligned `nn::*` GLSL SDK**—all without requiring a Raspberry Pi Pico keyboard server.
 
+![SpecialOctoLauncher on S2](screenshots/screenshot1.jpg)
+
 > **Research & Validation Notice:**  
 > This project is a curated series of **Proof of Concept (POC)** examples built to explore, stress-test, and validate what is technically achievable on the S2 platform. It demonstrates how homebrew applications can leverage Vulkan 1.4 hardware rendering overlays, autonomous 60 FPS native worker threads, direct OS applet invocations (`nn::swkbd`), atomic save data commits, and local memory swapping to run independently of a PC.
+>
+> ⚠️ **Status Note:** Offline mode is currently a **work in progress** and is not working yet. Running applications currently requires an active PC host connection (`node server.js`).
 
 ---
 
@@ -49,7 +53,10 @@ By default, `node server.js` boots into the **Homebrew Launcher** (`apps/launche
 
 ---
 
-## Offline Autonomous Caching Engine
+## Offline Autonomous Caching Engine (Work in Progress)
+
+> [!WARNING]
+> **Work in Progress:** Offline mode and autonomous app switching without the PC server are currently under active development and **not working yet**. An active PC connection (`node server.js`) is currently required to launch and switch applications. The memory staging mechanisms and local dispatcher outlined below represent the architectural implementation currently in progress.
 
 SpecialOctoLauncher provides an on-console caching system that allows running and switching apps without maintaining an active PC connection:
 
