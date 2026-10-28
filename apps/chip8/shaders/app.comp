@@ -1,0 +1,358 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+
+const uint VM_BASE = 65536u;
+
+uint vmRead(uint addr){
+ uint w=c.atlas[VM_BASE+addr/4u];
+ return (w>>((addr%4u)*8u))&255u;
+}
+
+void vmWrite(uint addr,uint val){
+ uint o=VM_BASE+addr/4u,shift=(addr%4u)*8u;
+ c.atlas[o]=(c.atlas[o]&~(255u<<shift))|((val&255u)<<shift);
+}
+
+uint vmGetV(uint reg){
+ uint o=VM_BASE+1024u+reg/4u,shift=(reg%4u)*8u;
+ return (c.atlas[o]>>shift)&255u;
+}
+
+void vmSetV(uint reg,uint val){
+ uint o=VM_BASE+1024u+reg/4u,shift=(reg%4u)*8u;
+ c.atlas[o]=(c.atlas[o]&~(255u<<shift))|((val&255u)<<shift);
+}
+
+uint vmGetI(){return c.atlas[VM_BASE+1028u]&65535u;}
+void vmSetI(uint val){c.atlas[VM_BASE+1028u]=val&65535u;}
+uint vmGetPC(){return c.atlas[VM_BASE+1029u]&65535u;}
+void vmSetPC(uint val){c.atlas[VM_BASE+1029u]=val&65535u;}
+uint vmGetSP(){return c.atlas[VM_BASE+1030u]&255u;}
+void vmSetSP(uint val){c.atlas[VM_BASE+1030u]=val&255u;}
+uint vmGetDT(){return c.atlas[VM_BASE+1031u]&255u;}
+void vmSetDT(uint val){c.atlas[VM_BASE+1031u]=val&255u;}
+uint vmGetST(){return c.atlas[VM_BASE+1032u]&255u;}
+void vmSetST(uint val){c.atlas[VM_BASE+1032u]=val&255u;}
+
+void vmPush(uint addr){
+ uint sp=vmGetSP();
+ if(sp<16u){
+  c.atlas[VM_BASE+1036u+sp]=addr&65535u;
+  vmSetSP(sp+1u);
+ }
+}
+
+uint vmPop(){
+ uint sp=vmGetSP();
+ if(sp>0u){
+  vmSetSP(sp-1u);
+  return c.atlas[VM_BASE+1036u+sp-1u]&65535u;
+ }
+ return 512u;
+}
+
+void vmClearScreen(){
+ for(uint x=0u;x<64u;x++)c.atlas[VM_BASE+1056u+x]=0u;
+}
+
+uint vmDrawSprite(uint x,uint y,uint height){
+ uint collision=0u;
+ for(uint row=0u;row<height&&row<16u;row++){
+  uint py=(y+row)%32u;
+  uint spriteByte=vmRead(vmGetI()+row);
+  for(uint col=0u;col<8u;col++){
+   if(((spriteByte>>(7u-col))&1u)!=0u){
+    uint px=(x+col)%64u;
+    uint mask=1u<<py;
+    if((c.atlas[VM_BASE+1056u+px]&mask)!=0u)collision=1u;
+    c.atlas[VM_BASE+1056u+px]^=mask;
+   }
+  }
+ }
+ return collision;
+}
+
+void loadFont(){
+ uint f[80]=uint[80](
+  240u,144u,144u,144u,240u, // 0
+  32u,96u,32u,32u,112u,     // 1
+  240u,16u,240u,128u,240u,  // 2
+  240u,16u,240u,16u,240u,   // 3
+  144u,144u,240u,16u,16u,   // 4
+  240u,128u,240u,16u,240u,  // 5
+  240u,128u,240u,144u,240u, // 6
+  240u,16u,32u,64u,64u,     // 7
+  240u,144u,240u,144u,240u, // 8
+  240u,144u,240u,16u,240u,  // 9
+  240u,144u,240u,144u,144u, // A
+  224u,144u,224u,144u,224u, // B
+  240u,128u,128u,128u,240u, // C
+  224u,144u,144u,144u,224u, // D
+  240u,128u,240u,128u,240u, // E
+  240u,128u,240u,128u,128u  // F
+ );
+ for(uint i=0u;i<80u;i++)vmWrite(80u+i,f[i]);
+}
+
+void loadBuiltinRom(){
+ // Classic IBM Logo / Bouncing sprite demo (embedded default ROM)
+ uint r[64]=uint[64](
+  0x00u,0xE0u,0xA2u,0x20u,0x62u,0x08u,0x63u,0x08u,0xD2u,0x35u,0x72u,0x08u,0x32u,0x38u,0x12u,0x06u,
+  0x62u,0x08u,0x73u,0x08u,0x33u,0x18u,0x12u,0x06u,0x63u,0x08u,0x12u,0x06u,0x12u,0x1Cu,0x00u,0x00u,
+  0x3Cu,0x42u,0xA5u,0x81u,0xBDu,0x00u,0x00u,0x00u,
+  0x00u,0x00u,0x00u,0x00u,0x00u,0x00u,0x00u,0x00u,
+  0x00u,0x00u,0x00u,0x00u,0x00u,0x00u,0x00u,0x00u,
+  0x00u,0x00u,0x00u,0x00u,0x00u,0x00u,0x00u,0x00u
+ );
+ for(uint i=0u;i<64u;i++)vmWrite(512u+i,r[i]);
+}
+
+uint getKeyMask(uint buttons){
+ uint m=0u;
+ // Up / Down / Left / Right
+ if((buttons&0x00010000u)!=0u)m|=(1u<<2u); // Up -> Key 2
+ if((buttons&0x00020000u)!=0u)m|=(1u<<8u); // Down -> Key 8
+ if((buttons&0x00040000u)!=0u)m|=(1u<<4u); // Left -> Key 4
+ if((buttons&0x00080000u)!=0u)m|=(1u<<6u); // Right -> Key 6
+ // Face buttons
+ if((buttons&0x00000002u)!=0u)m|=(1u<<5u); // B -> Key 5 (Action)
+ if((buttons&0x00000001u)!=0u)m|=(1u<<6u); // A -> Key 6
+ if((buttons&0x00000008u)!=0u)m|=(1u<<7u); // Y -> Key 7
+ if((buttons&0x00000004u)!=0u)m|=(1u<<1u); // X -> Key 1
+ // Shoulder buttons
+ if((buttons&0x00000040u)!=0u)m|=(1u<<1u); // L -> Key 1
+ if((buttons&0x00000080u)!=0u)m|=(1u<<3u); // R -> Key 3
+ if((buttons&0x00000100u)!=0u)m|=(1u<<7u); // ZL -> Key 7
+ if((buttons&0x00000200u)!=0u)m|=(1u<<9u); // ZR -> Key 9
+ return m;
+}
+
+bool isKeyDown(uint k,uint keyMask){
+ return ((keyMask>>(k&15u))&1u)!=0u;
+}
+
+uint findFirstKey(uint keyMask){
+ for(uint i=0u;i<16u;i++)if(((keyMask>>i)&1u)!=0u)return i;
+ return 0u;
+}
+
+void vmReset(){
+ vmSetPC(512u);
+ vmSetSP(0u);
+ vmSetI(0u);
+ vmSetDT(0u);
+ vmSetST(0u);
+ for(uint r=0u;r<16u;r++)vmSetV(r,0u);
+ vmClearScreen();
+}
+
+void stageRomPath(){
+ // "tmp:/rom.ch8" (11 chars)
+ uint p[11]=uint[11](116u,109u,112u,58u,47u,114u,111u,109u,46u,99u,104u);
+ for(uint i=0u;i<11u;i++)nnFsSetPathByte(i,p[i]);
+}
+
+void vmStep(uint keyMask,uint seed){
+ uint pc=vmGetPC();
+ if(pc>=4094u)return;
+ uint op=(vmRead(pc)<<8u)|vmRead(pc+1u);
+ vmSetPC(pc+2u);
+
+ uint nnn=op&0x0FFFu;
+ uint n=op&0x000Fu;
+ uint x=(op>>8u)&0x000Fu;
+ uint y=(op>>4u)&0x000Fu;
+ uint kk=op&0x00FFu;
+ uint top=(op>>12u)&0x000Fu;
+
+ if(top==0x0u){
+  if(op==0x00E0u)vmClearScreen();
+  else if(op==0x00EEu)vmSetPC(vmPop());
+ }else if(top==0x1u){
+  vmSetPC(nnn);
+ }else if(top==0x2u){
+  vmPush(pc+2u);
+  vmSetPC(nnn);
+ }else if(top==0x3u){
+  if(vmGetV(x)==kk)vmSetPC(pc+4u);
+ }else if(top==0x4u){
+  if(vmGetV(x)!=kk)vmSetPC(pc+4u);
+ }else if(top==0x5u){
+  if(vmGetV(x)==vmGetV(y))vmSetPC(pc+4u);
+ }else if(top==0x6u){
+  vmSetV(x,kk);
+ }else if(top==0x7u){
+  vmSetV(x,(vmGetV(x)+kk)&255u);
+ }else if(top==0x8u){
+  if(n==0x0u)vmSetV(x,vmGetV(y));
+  else if(n==0x1u)vmSetV(x,vmGetV(x)|vmGetV(y));
+  else if(n==0x2u)vmSetV(x,vmGetV(x)&vmGetV(y));
+  else if(n==0x3u)vmSetV(x,vmGetV(x)^vmGetV(y));
+  else if(n==0x4u){
+   uint sum=vmGetV(x)+vmGetV(y);
+   vmSetV(x,sum&255u);
+   vmSetV(0xFu,sum>255u?1u:0u);
+  }else if(n==0x5u){
+   uint vx=vmGetV(x),vy=vmGetV(y);
+   vmSetV(x,(vx-vy)&255u);
+   vmSetV(0xFu,vx>=vy?1u:0u);
+  }else if(n==0x6u){
+   uint vx=vmGetV(x);
+   vmSetV(0xFu,vx&1u);
+   vmSetV(x,vx>>1u);
+  }else if(n==0x7u){
+   uint vx=vmGetV(x),vy=vmGetV(y);
+   vmSetV(x,(vy-vx)&255u);
+   vmSetV(0xFu,vy>=vx?1u:0u);
+  }else if(n==0xEu){
+   uint vx=vmGetV(x);
+   vmSetV(0xFu,(vx>>7u)&1u);
+   vmSetV(x,(vx<<1u)&255u);
+  }
+ }else if(top==0x9u){
+  if(vmGetV(x)!=vmGetV(y))vmSetPC(pc+4u);
+ }else if(top==0xAu){
+  vmSetI(nnn);
+ }else if(top==0xBu){
+  vmSetPC(nnn+vmGetV(0u));
+ }else if(top==0xCu){
+  uint rnd=((seed*1103515245u+12345u)>>16u)&255u;
+  vmSetV(x,rnd&kk);
+ }else if(top==0xDu){
+  uint col=vmDrawSprite(vmGetV(x),vmGetV(y),n);
+  vmSetV(0xFu,col);
+ }else if(top==0xEu){
+  if(kk==0x9Eu){if(isKeyDown(vmGetV(x),keyMask))vmSetPC(pc+4u);}
+  else if(kk==0xA1u){if(!isKeyDown(vmGetV(x),keyMask))vmSetPC(pc+4u);}
+ }else if(top==0xFu){
+  if(kk==0x07u)vmSetV(x,vmGetDT());
+  else if(kk==0x0Au){
+   if(keyMask!=0u)vmSetV(x,findFirstKey(keyMask));
+   else vmSetPC(pc);
+  }else if(kk==0x15u)vmSetDT(vmGetV(x));
+  else if(kk==0x18u)vmSetST(vmGetV(x));
+  else if(kk==0x1Eu)vmSetI(vmGetI()+vmGetV(x));
+  else if(kk==0x29u)vmSetI(80u+(vmGetV(x)&15u)*5u);
+  else if(kk==0x33u){
+   uint val=vmGetV(x);
+   vmWrite(vmGetI(),val/100u);
+   vmWrite(vmGetI()+1u,(val/10u)%10u);
+   vmWrite(vmGetI()+2u,val%10u);
+  }else if(kk==0x55u){
+   for(uint i=0u;i<=x;i++)vmWrite(vmGetI()+i,vmGetV(i));
+  }else if(kk==0x65u){
+   for(uint i=0u;i<=x;i++)vmSetV(i,vmRead(vmGetI()+i));
+  }
+ }
+}
+
+void main(){
+ uint pressed=hbPressed();
+ uint held=hbButtons();
+ c.motion.x+=1.0/60.0;
+ c.state.z++;
+
+ // c.game.z state machine:
+ // 0 = uninitialized (init fonts, check tmp:/rom.ch8)
+ // 1 = stat requested
+ // 2 = reading ROM from tmp:/
+ // 3 = running
+ if(c.game.z==0u&&!hbBusy()){
+  loadFont();
+  loadBuiltinRom();
+  vmReset();
+  stageRomPath();
+  if(nnFsGetEntryType(11u)){
+   c.game.z=1u;
+  }else{
+   c.game.z=3u; // run builtin if fs unavailable
+   c.game.x=0u; // mode: builtin
+  }
+ }else if(c.game.z==1u&&!hbBusy()){
+  if(hbResult()==0u&&nnFsResultExists()){
+   // Found tmp:/rom.ch8! Read up to 3584 bytes into RAM at 0x200
+   stageRomPath();
+   if(nnFsReadFile(0u,3584u,11u)){
+    c.game.z=2u;
+   }else{
+    c.game.z=3u;
+    c.game.x=0u;
+   }
+  }else{
+   // File does not exist in tmp:/; run embedded demo
+   c.game.z=3u;
+   c.game.x=0u; // builtin demo
+  }
+ }else if(c.game.z==2u&&!hbBusy()){
+  if(hbResult()==0u){
+   uint bytes=min(nnFsResultBytesTransferred(),3584u);
+   for(uint i=0u;i<bytes;i++)vmWrite(512u+i,nnFsResultByte(i));
+   vmReset();
+   c.game.z=3u;
+   c.game.x=1u; // mode: tmp:/rom.ch8 loaded!
+   c.game.w=bytes;
+  }else{
+   c.game.z=3u;
+   c.game.x=0u;
+  }
+ }
+
+ // Running state
+ if(c.game.z==3u){
+  // Timers at 60 Hz
+  uint dt=vmGetDT();
+  if(dt>0u)vmSetDT(dt-1u);
+  uint st=vmGetST();
+  if(st>0u){
+   vmSetST(st-1u);
+   // Joy-Con HD rumble feedback
+   if(!hbBusy()){
+    nnHidSendVibrationPulse(0u,16u,350u);
+   }
+  }
+
+  // Keypad
+  uint keyMask=getKeyMask(held);
+
+  // Speed: default 12 cycles per frame (~720 Hz)
+  uint cycles=c.piece.y>0?uint(c.piece.y):12u;
+  for(uint step=0u;step<cycles;step++){
+   vmStep(keyMask,c.state.z+step*13u);
+  }
+
+  // Update telemetry for HUD
+  c.piece.x=int(vmGetPC());
+  c.piece.z=int(vmGetI());
+  c.piece.w=int(vmGetDT()|(vmGetST()<<8u));
+ }
+
+ // Controls:
+ // Press A: Reload from tmp:/rom.ch8
+ if((pressed&HB_A)!=0u&&!hbBusy()){
+  c.game.z=0u;
+ }
+
+ // Press X: Cycle Color Palette (0 = Phosphor Green, 1 = Amber, 2 = Cyber Cyan, 3 = Monochrome)
+ if((pressed&HB_X)!=0u){
+  c.flow.x=mod(c.flow.x+1.0,4.0);
+ }
+
+ // Press Y: Cycle Clock Speed (8, 12, 16, 24 cycles/frame)
+ if((pressed&HB_Y)!=0u){
+  if(c.piece.y<=8)c.piece.y=12;
+  else if(c.piece.y<=12)c.piece.y=16;
+  else if(c.piece.y<=16)c.piece.y=24;
+  else c.piece.y=8;
+ }
+
+ // Press + (PLUS): Reset VM
+ if((pressed&HB_PLUS)!=0u){
+  vmReset();
+ }
+
+ if(((pressed|held)&HB_MINUS)!=0u)hbExit();
+ hbEndFrame();
+}

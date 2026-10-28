@@ -1,0 +1,16 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "chip8",
+  "name": "CHIP-8 Virtual Machine",
+  "version": "1.0.0",
+  "description": "On-console compute-shader interpreter running ROMs from tmp:/rom.ch8 with CRT bloom and Joy-Con HD rumble",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  }
+}

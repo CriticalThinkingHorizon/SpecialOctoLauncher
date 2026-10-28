@@ -187,12 +187,14 @@ async function main(directory, attempt = 'auto') {
     report.resources = {device: String(device), queue: String(queue), swapchain: String(swapchain), images: images.map(String), views: views.map(String), semaphores: semaphores.map(String), acquired: String(acquired), pool: String(pool)};
     await save();
 
+    const fsService = await require('../sdk/host/fs.cjs').create(rpc);
     const menuObj = {
       resources: report.resources,
       shaderStaging: report.shaderStaging,
       layout: report.layout,
       controls: report.controls,
-      capture: report.capture
+      capture: report.capture,
+      fsService
     };
 
     const preparedApps = {};
@@ -366,7 +368,12 @@ async function main(directory, attempt = 'auto') {
       const nextSlice = getEffectiveDataSlice(targetApp.files.data.bytes);
       if (!currentAtlasSlice || !nextSlice.equals(currentAtlasSlice)) {
         const writeLen = Math.max(nextSlice.length, currentAtlasSlice ? currentAtlasSlice.length : 0);
-        await rpc.write(mapped + 1024, targetApp.files.data.bytes.subarray(0, writeLen));
+        const cachePath = `tmp:/cache/${targetApp.id}-data.bin`;
+        if (fsService) {
+          await fsService.loadCachedFileDirect(cachePath, mapped + 1024, targetApp.files.data.bytes.subarray(0, writeLen));
+        } else {
+          await rpc.write(mapped + 1024, targetApp.files.data.bytes.subarray(0, writeLen));
+        }
         currentAtlasSlice = nextSlice;
       }
 
