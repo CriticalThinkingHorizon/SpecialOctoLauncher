@@ -39,18 +39,7 @@ async function prepare(rpc,menu,app,directory){
    for(const [binding,bufferHandle,length]of [[0,menu.controls.buffer,menu.controls.bytes],[1,String(buffer),bytes]]){const info=Buffer.alloc(24);info.writeBigUInt64LE(BigInt(bufferHandle));info.writeBigUInt64LE(BigInt(length),16);await put(0x200,info);await put(0x100,struct(64,35,{24:binding,32:1,36:7},{16:descriptor,48:p+0x200}));await call('vkUpdateDescriptorSets',device,1,p+0x100,0,0);}
    report.privateStorage={buffer:String(buffer),memory:String(memory),mapped,bytes,memoryFlags:properties.readUInt32LE(4+type*8),descriptor:String(descriptor),setLayout:String(set),descriptorPool:String(poolHandle)};await save();
   }
-  for(const stage of ['vertex','fragment']){
-   const bytes=app.files[stage].bytes;
-   check(bytes.length<=stagingBytes,'Shader staging capacity exceeded');
-   if(menu.fsService){
-    await menu.fsService.loadCachedFileDirect(`tmp:/cache/${app.id}-${stage}.spv`,shaderStaging,bytes);
-   }else{
-    await rpc.write(shaderStaging,bytes);
-   }
-   await put(0x100,struct(40,16,{}, {24:bytes.length,32:shaderStaging}));
-   await ok('vkCreateShaderModule',device,p+0x100,0,p);
-   shaders.push(await ptr(0));
-  }
+  for(const stage of ['vertex','fragment']){const bytes=app.files[stage].bytes;check(bytes.length<=stagingBytes,'Shader staging capacity exceeded');await rpc.write(shaderStaging,bytes);await put(0x100,struct(40,16,{}, {24:bytes.length,32:shaderStaging}));await ok('vkCreateShaderModule',device,p+0x100,0,p);shaders.push(await ptr(0));}
   await put(0x200,Buffer.from('main\0'));
   await put(0x300,Buffer.concat(shaders.map((shader,i)=>struct(48,18,{20:i?16:1},{24:shader,32:p+0x200}))));
   await put(0x400,struct(48,19));await put(0x500,struct(32,20,{20:3}));
@@ -68,16 +57,7 @@ async function prepare(rpc,menu,app,directory){
   await ok('vkCreateGraphicsPipelines',device,0,1,p+0xe00,0,p);const pipeline=await ptr(0);report.pipeline=String(pipeline);report.layout=String(layout);report.shaders=shaders.map(String);await save();
   const computePipelines={};report.computePipelines={};
   for(const stage of ['compute','computeBegin','computeAfter'].filter(s=>app.files[s])){
-   const bytes=app.files[stage].bytes;
-   check(bytes.length<=stagingBytes,'Compute shader exceeds staging space');
-   if(menu.fsService){
-    await menu.fsService.loadCachedFileDirect(`tmp:/cache/${app.id}-${stage}.spv`,shaderStaging,bytes);
-   }else{
-    await rpc.write(shaderStaging,bytes);
-   }
-   await put(0x100,struct(40,16,{}, {24:bytes.length,32:shaderStaging}));
-   await ok('vkCreateShaderModule',device,p+0x100,0,p);
-   const shader=await ptr(0);
+   const bytes=app.files[stage].bytes;check(bytes.length<=stagingBytes,'Compute shader exceeds staging space');await rpc.write(shaderStaging,bytes);await put(0x100,struct(40,16,{}, {24:bytes.length,32:shaderStaging}));await ok('vkCreateShaderModule',device,p+0x100,0,p);const shader=await ptr(0);
    await put(0x200,Buffer.from('main\0'));const info=struct(96,29,{88:0xffffffff},{72:layout});struct(48,18,{20:32},{24:shader,32:p+0x200}).copy(info,24);await put(0x100,info);
    await ok('vkCreateComputePipelines',device,0,1,p+0x100,0,p);computePipelines[stage]=await ptr(0);report.computePipelines[stage]={pipeline:String(computePipelines[stage]),shader:String(shader)};
   }

@@ -19,7 +19,6 @@ We (Main developer and contributors) are not responsible for any damage to your 
 - **Architecture:**
   - **Console-Side Autonomous 60 FPS Loop:** Runs an independent `nn::vi::Layer` + Vulkan 1.4 swapchain (`1920×1080`) driven by a native `pthread` executing a self-restoring `setcontext`/`longjmp` frame loop on the Switch 2. Controller/touch polling (`nn::hid`) and GPU compute/fragment shader rendering run at 60 FPS directly on the console.
   - **Host-Side RPC Bridge & On-Demand App Loader:** The PC host (`server.js` + `runtime/hello-runner.cjs`) qualifies the native session, prepares Vulkan pipelines **on-demand** when apps are launched, and services asynchronous SDK mailbox requests (`nn::fs`, `nn::socket`, `nn::nifm`, `nn::hid`, `nn::time`, `nn::os`, `nn::irsensor`, `nn::nfc`, `nn::audio`).
-  - **On-Console Shader & Atlas Cache (`tmp:/cache/`):** Prepared `.spv` shaders and data atlases are automatically cached to SmileBASIC's `tmp:/` filesystem on first use. Subsequent app launches and app switching load binaries directly on-device using high-speed native `nn::fs::ReadFile` into GPU staging memory with zero Wi-Fi transmission overhead.
 
 ---
 

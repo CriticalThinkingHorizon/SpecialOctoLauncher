@@ -453,46 +453,6 @@ async function create(rpc) {
       }
       return { result: writeRes, bytesWritten: writeRes === 0 ? dataBuf.length : 0 };
     },
-    async readBytesDirectToAddress(pathStr, offset = 0, destAddress, length) {
-      const pathOff = 0x1000, handleOff = 0x2000;
-      await client.write(pathOff, Buffer.from(pathStr + '\0', 'utf8'));
-      await client.write(handleOff, Buffer.alloc(8));
-      const openRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 1]);
-      if (openRes !== 0) return { result: openRes, bytesRead: 0 };
-      const handle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
-      let readRes = 0;
-      try {
-        readRes = await client.result('ReadFile', [handle, offset, BigInt(destAddress), length]);
-      } finally {
-        await client.call('CloseFile', [handle]);
-      }
-      return { result: readRes, bytesRead: readRes === 0 ? length : 0 };
-    },
-    async ensureDirectory(dirPath) {
-      const pathOff = 0x1000, typeOff = 0x2000;
-      await client.write(pathOff, Buffer.from(dirPath + '\0', 'utf8'));
-      await client.write(typeOff, Buffer.alloc(8));
-      const statRes = await client.result('GetEntryType', [client.base + typeOff, client.base + pathOff]);
-      if (statRes === 0) return 0;
-      return await client.result('CreateDirectory', [client.base + pathOff]);
-    },
-    async loadCachedFileDirect(cachePath, destAddress, localBuffer) {
-      const stat = await this.statPath(cachePath);
-      if (stat.exists !== 1 || stat.fileSize !== localBuffer.length) {
-        await this.ensureDirectory('tmp:/cache');
-        const writeRes = await this.writeBytesAt(cachePath, 0, localBuffer);
-        if (writeRes.result !== 0) {
-          await client.write(destAddress, localBuffer);
-          return { cached: false, method: 'rpc' };
-        }
-      }
-      const directRes = await this.readBytesDirectToAddress(cachePath, 0, destAddress, localBuffer.length);
-      if (directRes.result === 0) {
-        return { cached: true, method: 'tmp-direct', bytes: localBuffer.length };
-      }
-      await client.write(destAddress, localBuffer);
-      return { cached: false, method: 'rpc-fallback' };
-    },
     async renameDirPath(oldPath, newPath) {
       const oldOff = 0x1000, newOff = 0x1400;
       await client.write(oldOff, Buffer.from(oldPath + '\0', 'utf8'));
