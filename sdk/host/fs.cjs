@@ -864,6 +864,15 @@ async function create(rpc) {
         };
       }
 
+      // SmileBASIC requires at least two lines of trailing padding at the end of scripts;
+      // otherwise the interpreter and editor truncate the last real lines.
+      let scriptText = repoBytes.toString('utf8');
+      if (!scriptText.endsWith('\n\n\n') && !scriptText.endsWith('\r\n\r\n\r\n') && !scriptText.includes("' Padding")) {
+        if (!scriptText.endsWith('\n')) scriptText += '\n';
+        scriptText += "' Padding\n' Padding\n' Padding\n";
+        repoBytes = Buffer.from(scriptText, 'utf8');
+      }
+
       const logLines = [];
       logLines.push('=== S2 TNS2 BOOTSTRAP UPDATER & COMMIT ===');
       logLines.push('');
