@@ -133,9 +133,13 @@ async function main() {
     await runScript(path.join(__dirname, 'inspection/vulkan-copy.cjs'), [directory, 'display']);
     console.log('✔ Vulkan display setup completed successfully.');
 
-    console.log('\n[5/5] Inspecting S2 Console Filesystem (nn::fs)...');
+    console.log('\n[5/6] Inspecting S2 Console Filesystem (nn::fs)...');
     await runScript(path.join(__dirname, 'inspection/fs-inspect.cjs'), [directory]);
     console.log('✔ Filesystem inspection completed successfully.');
+
+    console.log('\n[6/6] Probing nn::swkbd Native Subsystem (Safe Research)...');
+    await runScript(path.join(__dirname, 'inspection/swkbd-inspect.cjs'), [directory]);
+    console.log('✔ nn::swkbd probe completed successfully.');
 
     const argApp = process.argv.slice(2).find(a => a.startsWith('--app='))?.split('=')[1]
       || process.argv.slice(3).find(a => !a.startsWith('-'));
