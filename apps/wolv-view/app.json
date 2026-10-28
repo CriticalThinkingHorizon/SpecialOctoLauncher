@@ -1,0 +1,16 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "wolv-view",
+  "name": "Wolverine 1080p Viewer",
+  "version": "1.0.0",
+  "description": "Downloads wolv.png via nn::http and renders 1920x1080 fullscreen",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  }
+}

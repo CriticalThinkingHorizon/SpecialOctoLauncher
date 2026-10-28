@@ -1,4 +1,5 @@
 const L=require('./layout.cjs');
+const { decodePng } = require('./image-decoder.cjs');
 const SUPPORTED_CAPABILITIES = ['vibration','nfc','udp','hid','time','system','display','fs','net','irsensor','audio'];
 function validateManifest(value){
  if(!value)return {capabilities:SUPPORTED_CAPABILITIES,endpoints:[]};
@@ -335,6 +336,39 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
      payload.writeUInt32LE(dlRes.statusCode>>>0,0);
      payload.writeUInt32LE(dlRes.totalBytes>>>0,4);
      payload.writeUInt32LE(dlRes.errno>>>0,12);
+    }else if(subOp===22){
+     // Download and decode PNG image directly into GPU storage buffer (mapped + 1024)
+     const packed=request.readUInt32LE(16)||0;
+     const urlLen=Math.min(packed&0xffff,128);
+     const urlStr=request.subarray(32,32+urlLen).toString('utf8').replace(/\0.*$/, '')||'https://ferreirapablo.com/files/wolv.png';
+     try {
+       console.log(`[HTTP IMAGE] Fetching remote image: ${urlStr}...`);
+       const resp=await fetch(urlStr);
+       if(resp.ok){
+         const fileBuf=Buffer.from(await resp.arrayBuffer());
+         console.log(`[HTTP IMAGE] Downloaded ${fileBuf.length} bytes. Decoding PNG...`);
+         const decoded=decodePng(fileBuf);
+         console.log(`[HTTP IMAGE] Decoded ${decoded.width}x${decoded.height} (${decoded.data.length} bytes). Writing to GPU buffer...`);
+         await rpc.write(mapped+1024,decoded.data);
+         console.log(`[HTTP IMAGE] Direct GPU upload complete!`);
+         payload=Buffer.alloc(24);
+         payload.writeUInt32LE(resp.status>>>0,0);
+         payload.writeUInt32LE(decoded.width>>>0,4);
+         payload.writeUInt32LE(decoded.height>>>0,8);
+         payload.writeUInt32LE(fileBuf.length>>>0,12);
+         payload.writeUInt32LE(decoded.data.length>>>0,16);
+         payload.writeUInt32LE(0,20);
+       }else{
+         payload=Buffer.alloc(24);
+         payload.writeUInt32LE(resp.status>>>0,0);
+         payload.writeUInt32LE(1,20);
+       }
+     }catch(err){
+       console.error(`[HTTP IMAGE] Error:`, err.message);
+       payload=Buffer.alloc(24);
+       payload.writeUInt32LE(0,0);
+       payload.writeUInt32LE(2,20);
+     }
     }else{
      status=L.STATUS.invalid;
     }

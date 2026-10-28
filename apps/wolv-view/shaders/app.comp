@@ -1,0 +1,54 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+
+void stageWolvUrl(){
+ // "https://ferreirapablo.com/files/wolv.png" (40 chars)
+ uint u[40]=uint[40](
+  104u,116u,116u,112u,115u,58u,47u,47u,102u,101u,114u,114u,101u,105u,114u,97u,
+  112u,97u,98u,108u,111u,46u,99u,111u,109u,47u,102u,105u,108u,101u,115u,47u,
+  119u,111u,108u,118u,46u,112u,110u,103u
+ );
+ for(uint i=0u;i<40u;i++)nnHttpSetUrlByte(i,u[i]);
+}
+
+void main(){
+ uint pressed=hbPressed();
+ c.motion.x+=1.0/60.0;
+ c.state.z++;
+
+ // c.game.z: 0 = start fetch, 1 = fetching, 2 = image ready & rendered, 5 = error
+ if(c.game.z==0u&&!hbBusy()){
+  stageWolvUrl();
+  if(nnHttpDownloadImage(40u)){
+   c.game.z=1u;
+  }
+ }
+
+ if(c.game.z==1u&&!hbBusy()){
+  if(hbResult()==0u&&nnHttpResultStatusCode()==200u){
+   c.game.z=2u;
+   c.piece.x=int(nnHttpImageWidth());
+   c.piece.y=int(nnHttpImageHeight());
+   c.piece.z=int(nnHttpImageFileBytes());
+   c.piece.w=int(nnHttpResultStatusCode());
+  }else{
+   c.game.z=5u;
+  }
+ }
+
+ // Press A: Re-fetch image from URL
+ if((pressed&HB_A)!=0u&&!hbBusy()){
+  c.game.z=0u;
+ }
+
+ // Press X: Toggle HUD info overlay on/off
+ if((pressed&HB_X)!=0u){
+  c.game.w^=1u;
+ }
+
+ if(((pressed|hbButtons())&HB_MINUS)!=0u)hbExit();
+ hbEndFrame();
+}

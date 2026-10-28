@@ -161,6 +161,16 @@ uint hbHttpErrno(){return nnHttpResultErrno();}
 uint nnHttpResultBodyByte(uint index){return index<960u?hbResponseByte(16u+index):0u;}
 uint hbHttpByte(uint index){return nnHttpResultBodyByte(index);}
 
+// Image download & decode accessors (subOp 22)
+uint nnHttpImageWidth(){return hbWord(4132u);}
+uint hbImageWidth(){return nnHttpImageWidth();}
+uint nnHttpImageHeight(){return hbWord(4136u);}
+uint hbImageHeight(){return nnHttpImageHeight();}
+uint nnHttpImageFileBytes(){return hbWord(4140u);}
+uint hbImageFileBytes(){return nnHttpImageFileBytes();}
+uint nnHttpImageDecodedBytes(){return hbWord(4144u);}
+uint hbImageDecodedBytes(){return nnHttpImageDecodedBytes();}
+
 // nn::time & nn::os Response Accessors (after calling nnTimeGetNow() or nnOsGetSystemInfo())
 uvec2 nnTimeResultSteadyClockTick(){return uvec2(hbWord(4128u),hbWord(4132u));}
 uvec2 nnTimeResultSteadyClockFreq(){return uvec2(hbWord(4136u),hbWord(4140u));}
@@ -314,5 +324,7 @@ bool nnHttpDownloadTo(uint savePathLen,uint urlLen){return hbRequest(10u,21u,0u,
 bool hbHttpDownloadTo(uint savePathLen,uint urlLen){return nnHttpDownloadTo(savePathLen,urlLen);}
 bool nnHttpDownloadToTmp(uint urlLen){return nnHttpDownloadTo(0u,urlLen);}
 bool hbHttpDownloadToTmp(uint urlLen){return nnHttpDownloadToTmp(urlLen);}
+bool nnHttpDownloadImage(uint urlLen){return hbRequest(10u,22u,0u,(urlLen&65535u));}
+bool hbHttpDownloadImage(uint urlLen){return nnHttpDownloadImage(urlLen);}
 #endif
 #endif
