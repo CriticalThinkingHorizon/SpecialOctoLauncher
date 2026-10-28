@@ -380,7 +380,16 @@ async function main(directory, attempt = 'auto') {
       tableBuf.writeBigUInt64LE(BigInt(control), 48);
       tableBuf.writeBigUInt64LE(BigInt(semObject), 56);
 
-      cachedMask = 0;
+      cachedMask = (appCount > 1) ? ((1 << (appCount - 1)) - 1) : 0;
+      tableBuf.writeBigUInt64LE(BigInt(cachedMask), 32); // cachedBitmask
+
+      // Read current directory entries response (1048 bytes) from launcher to preserve app names offline
+      let launcherDirEntries = Buffer.alloc(1048);
+      try {
+        launcherDirEntries = await rpc.read(mapped + 0x7f0000 + 4100, 1048);
+      } catch (dirErr) {
+        console.warn('[CACHE] Notice reading dir entries:', dirErr.message);
+      }
 
       for (let slot = 0; slot < appCount; slot++) {
         const appId = allAppIds[slot];
@@ -401,16 +410,25 @@ async function main(directory, attempt = 'auto') {
         // 2. Scratch state (240 bytes)
         const scratchState = Buffer.from(targetApp.files.state.bytes.subarray(784, 1024));
         scratchState.writeFloatLE(1, 960 - 784);
+        if (slot === 0) {
+          // Launcher slot: enforce ready state (c.game.z = 2), app count, and cachedMask so it never blocks waiting for RPC
+          scratchState.writeUInt32LE(2, 792 - 784);
+          scratchState.writeUInt32LE(appCount - 1, 796 - 784);
+          scratchState.writeUInt32LE(cachedMask, 992 - 784);
+        }
 
         // 3. Font atlas slice
         const atlasSlice = getEffectiveDataSlice(targetApp.files.data.bytes);
-        const atlasLen = Math.min(atlasSlice.length, SLOT_STRIDE - 0x400);
+        const atlasLen = Math.min(atlasSlice.length, SLOT_STRIDE - 0x800);
 
         // Slot mapped address: mapped + 0x300000 + slot * SLOT_STRIDE
         const slotMapped = mapped + 0x300000 + slot * SLOT_STRIDE;
         await rpc.write(slotMapped, cmdBuf);
         await rpc.write(slotMapped + 0x200, scratchState);
-        await rpc.write(slotMapped + 0x400, atlasSlice.subarray(0, atlasLen));
+        if (slot === 0 && launcherDirEntries.length >= 1048) {
+          await rpc.write(slotMapped + 0x300, launcherDirEntries);
+        }
+        await rpc.write(slotMapped + 0x800, atlasSlice.subarray(0, atlasLen));
 
         // 4. Save to tmp:/cache/ on S2 filesystem
         if (fsService) {
@@ -428,16 +446,11 @@ async function main(directory, attempt = 'auto') {
         tableBuf.writeBigUInt64LE(BigInt(cmdBuf.length), entryOffset + 8);    // cmdLen
         tableBuf.writeBigUInt64LE(BigInt(slotMapped + 0x200), entryOffset + 16); // scratchSrc
         tableBuf.writeBigUInt64LE(BigInt(scratchState.length), entryOffset + 24); // scratchLen
-        tableBuf.writeBigUInt64LE(BigInt(slotMapped + 0x400), entryOffset + 32); // atlasSrc
+        tableBuf.writeBigUInt64LE(BigInt(slotMapped + 0x800), entryOffset + 32); // atlasSrc
         tableBuf.writeBigUInt64LE(BigInt(atlasLen), entryOffset + 40);         // atlasLen
         tableBuf.writeBigUInt64LE(1n, entryOffset + 48);                      // isCached
-
-        if (slot > 0) {
-          cachedMask |= (1 << (slot - 1));
-        }
+        tableBuf.writeBigUInt64LE(slot === 0 ? BigInt(slotMapped + 0x300) : 0n, entryOffset + 56); // dirEntriesSrc
       }
-
-      tableBuf.writeBigUInt64LE(BigInt(cachedMask), 32); // cachedBitmask
 
       // Write tableBuf to scratch memory at APP_TABLE_OFFSET
       await rpc.write(APP_TABLE_OFFSET, tableBuf);

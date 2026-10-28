@@ -87,6 +87,65 @@ float drawCachedBadge(vec2 p,vec2 origin){
  return ink;
 }
 
+float drawDigit(vec2 p,vec2 origin,uint d){
+ if(d>9u)return 0.0;
+ return drawChar(p,origin,48u+d);
+}
+
+float drawUint4(vec2 p,vec2 origin,uint v){
+ float ink=0.0;
+ float gw=float(GLYPH_W);
+ ink=max(ink,drawDigit(p,origin,v>=1000u?(v/1000u)%10u:32u));
+ ink=max(ink,drawDigit(p,origin+vec2(gw,0.0),v>=100u?(v/100u)%10u:32u));
+ ink=max(ink,drawDigit(p,origin+vec2(gw*2.0,0.0),v>=10u?(v/10u)%10u:32u));
+ ink=max(ink,drawDigit(p,origin+vec2(gw*3.0,0.0),v%10u));
+ return ink;
+}
+
+float drawDebugHUD(vec2 p,vec2 origin){
+ float ink=0.0;
+ float gw=float(GLYPH_W);
+ // "ST:" (3 chars)
+ ink=max(ink,drawChar(p,origin+vec2(0.0,0.0),83u));
+ ink=max(ink,drawChar(p,origin+vec2(gw,0.0),84u));
+ ink=max(ink,drawChar(p,origin+vec2(gw*2.0,0.0),58u));
+ ink=max(ink,drawUint4(p,origin+vec2(gw*3.0,0.0),c.stats.y));
+
+ // " ACT:" (5 chars)
+ ink=max(ink,drawChar(p,origin+vec2(gw*8.0,0.0),65u));
+ ink=max(ink,drawChar(p,origin+vec2(gw*9.0,0.0),67u));
+ ink=max(ink,drawChar(p,origin+vec2(gw*10.0,0.0),84u));
+ ink=max(ink,drawChar(p,origin+vec2(gw*11.0,0.0),58u));
+ ink=max(ink,drawUint4(p,origin+vec2(gw*12.0,0.0),c.stats.z));
+
+ // " RZ:" (4 chars)
+ ink=max(ink,drawChar(p,origin+vec2(gw*17.0,0.0),82u));
+ ink=max(ink,drawChar(p,origin+vec2(gw*18.0,0.0),90u));
+ ink=max(ink,drawChar(p,origin+vec2(gw*19.0,0.0),58u));
+ ink=max(ink,drawUint4(p,origin+vec2(gw*20.0,0.0),c.reserved.z));
+
+ // " RW:" (4 chars)
+ ink=max(ink,drawChar(p,origin+vec2(gw*25.0,0.0),82u));
+ ink=max(ink,drawChar(p,origin+vec2(gw*26.0,0.0),87u));
+ ink=max(ink,drawChar(p,origin+vec2(gw*27.0,0.0),58u));
+ ink=max(ink,drawUint4(p,origin+vec2(gw*28.0,0.0),c.reserved.w));
+
+ // " GZ:" (4 chars)
+ ink=max(ink,drawChar(p,origin+vec2(gw*33.0,0.0),71u));
+ ink=max(ink,drawChar(p,origin+vec2(gw*34.0,0.0),90u));
+ ink=max(ink,drawChar(p,origin+vec2(gw*35.0,0.0),58u));
+ ink=max(ink,drawUint4(p,origin+vec2(gw*36.0,0.0),c.game.z));
+
+ // " MSK:" (5 chars)
+ ink=max(ink,drawChar(p,origin+vec2(gw*41.0,0.0),77u));
+ ink=max(ink,drawChar(p,origin+vec2(gw*42.0,0.0),83u));
+ ink=max(ink,drawChar(p,origin+vec2(gw*43.0,0.0),75u));
+ ink=max(ink,drawChar(p,origin+vec2(gw*44.0,0.0),58u));
+ ink=max(ink,drawUint4(p,origin+vec2(gw*45.0,0.0),c.stats.x));
+
+ return ink;
+}
+
 void main(){
  vec2 p=gl_FragCoord.xy;
 
@@ -206,6 +265,10 @@ void main(){
    float pulse=fill(box(sp,vec2(barX,575.0),vec2(90.0,10.0),4.0))*track;
    tubeColor=mix(tubeColor,vec3(0.35,1.0,0.60),pulse);
   }
+
+  // Always render bottom debug telemetry HUD (visible even over modal)
+  float dbgInk=drawDebugHUD(sp,vec2(120.0,990.0));
+  tubeColor=mix(tubeColor,vec3(1.0,0.85,0.20),dbgInk);
 
   // === CRT Raster Post-Processing ===
   // 1. High-frequency horizontal TV scanlines (fine pitch)

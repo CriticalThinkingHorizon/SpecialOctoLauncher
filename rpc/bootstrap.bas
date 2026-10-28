@@ -333,30 +333,54 @@ COMMON DEF RPC()
  IF U#(W$(S#+&H7D000,8))==&H41505053 THEN
   PRINT "OFFLINE APPS READY"
   RETURN LOCAL_DISPATCHER()
+ ELSE
+  PRINT "NO APPS CACHED IN SCRATCH"
  ENDIF
  RETURN 1
 END
 COMMON DEF LOCAL_SWITCH(SLOT)
- VAR TB#,E#,CS#,SS#,AS#,AL#,MP#,CP#,R#,MSK#
+ VAR TB#,E#,CS#,SS#,AS#,AL#,DIR#,MP#,CP#,R#,MSK#
  TB#=S#+&H7D000
  E#=TB#+64+SLOT*64
  CS#=U#(W$(E#,8))
  SS#=U#(W$(E#+16,8))
  AS#=U#(W$(E#+32,8))
  AL#=U#(W$(E#+40,8))
+ DIR#=U#(W$(E#+56,8))
  MP#=U#(W$(TB#+40,8))
  CP#=U#(W$(TB#+48,8))
+
+ ' Set debug status: starting switch (30 + SLOT)
+ PUT &H4200,30+SLOT:PUT &H4204,SLOT:R#=SDK_MEMMOVE(MP#+996,S#+&H4200,8,0)
+
+ ' 1. Copy command buffer (512 bytes) to control + &H1000
  R#=SDK_MEMMOVE(CP#+&H1000,CS#,512,0)
  VSYNC:VSYNC
- R#=SDK_MEMMOVE(MP#+&H7F0000+4100,S#+&H4000,1048,0)
+
+ ' 2. Copy font atlas to mapped + 1024
  R#=SDK_MEMMOVE(MP#+1024,AS#,AL#,0)
+
+ ' 3. Copy scratch state (240 bytes) to mapped + 784
  R#=SDK_MEMMOVE(MP#+784,SS#,240,0)
- R#=SDK_MEMMOVE(MP#+1016,S#+&H4000,8,0)
+
+ ' 4. Put 0 in scratch and copy 8 zero bytes to mapped + 1016 (c.reserved.z and c.reserved.w)
+ PUT &H4200,0:R#=SDK_MEMMOVE(MP#+1016,S#+&H4200,8,0)
+
+ ' 5. Update activeSlot in AppTable
  PUT &H4200,SLOT:R#=SDK_MEMMOVE(TB#+24,S#+&H4200,8,0)
+
+ ' 6. If switching to launcher (slot 0), restore directory entries, set c.game.z = 2, and restore cached mask
  IF SLOT==0 THEN
+  IF DIR#!=0 THEN
+   R#=SDK_MEMMOVE(MP#+&H7F0000+4100,DIR#,1048,0)
+  ENDIF
+  PUT &H4200,2:R#=SDK_MEMMOVE(MP#+792,S#+&H4200,4,0)
   MSK#=U#(W$(TB#+32,8))
   PUT &H4200,MSK#:R#=SDK_MEMMOVE(MP#+992,S#+&H4200,4,0)
  ENDIF
+
+ ' Set debug status: switch complete (40 + SLOT)
+ PUT &H4200,40+SLOT:R#=SDK_MEMMOVE(MP#+996,S#+&H4200,4,0)
 END
 COMMON DEF LOCAL_DISPATCHER()
  VAR TB#,MP#,ST$,EF#,AC#,AS#,CNT#,TS#,R#
@@ -368,13 +392,21 @@ COMMON DEF LOCAL_DISPATCHER()
  MP#=U#(W$(TB#+40,8))
  PRINT "LOCAL DISPATCHER RUNNING"
  PRINT "PRESS MINUS IN LAUNCHER TO EXIT"
+
+ ' Write status 10 (dispatcher loop active) to c.stats.y
+ PUT &H4200,10:R#=SDK_MEMMOVE(MP#+996,S#+&H4200,4,0)
+
  WHILE 1
   ST$=W$(MP#+1016,8)
   EF#=ASC(MID$(ST$,0,1))+ASC(MID$(ST$,1,1))*65536
   AC#=ASC(MID$(ST$,2,1))+ASC(MID$(ST$,3,1))*65536
   AS#=U#(W$(TB#+24,8))
   CNT#=U#(W$(TB#+16,8))
+
   IF EF#!=0 THEN
+   ' Write status 20 and requested action code to c.stats.y & c.stats.z
+   PUT &H4200,20:PUT &H4204,AC#:R#=SDK_MEMMOVE(MP#+996,S#+&H4200,8,0)
+
    IF AS#==0 THEN
     IF AC#==98 THEN
      PRINT "EXIT TO SB4"
@@ -386,16 +418,18 @@ COMMON DEF LOCAL_DISPATCHER()
       IF U#(W$(TB#+64+TS#*64+48,8))!=0 THEN
        LOCAL_SWITCH TS#
       ELSE
-       R#=SDK_MEMMOVE(MP#+1016,S#+&H4000,8,0)
+       PUT &H4200,0:R#=SDK_MEMMOVE(MP#+1016,S#+&H4200,8,0)
       ENDIF
      ELSE
-      R#=SDK_MEMMOVE(MP#+1016,S#+&H4000,8,0)
+      PUT &H4200,0:R#=SDK_MEMMOVE(MP#+1016,S#+&H4200,8,0)
      ENDIF
     ENDIF
    ELSE
+    ' In an app: Minus was pressed to return to launcher (slot 0)
     LOCAL_SWITCH 0
    ENDIF
   ENDIF
+
   IF INKEY$()!="" THEN BREAK
   VSYNC
  WEND
