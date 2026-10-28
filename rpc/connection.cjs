@@ -25,7 +25,7 @@ async function chooseHost(args) {
 }
 
 function connectCommand(host, token) {
-  return `V=START(${[port, ...host.split('.'), ...token].join(',')})`;
+  return `V=START(${[port, ...host.split('.')].join(',')})`;
 }
 
 module.exports={addresses,chooseHost,connectCommand};
