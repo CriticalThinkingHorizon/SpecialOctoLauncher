@@ -412,5 +412,21 @@ bool hbSwkbdShow(uint promptLen, uint guideLen, uint initialLen) {
 uint nnSwkbdGetResult() { return hbWord(4128u); }
 uint nnSwkbdGetTextLength() { return hbWord(4132u); }
 uint nnSwkbdGetTextByte(uint index) { return hbResponseByte(16u + index); }
+
+// --- nn::web (S2 Native Web Browser Applet) ---
+void nnWebSetUrlByte(uint index, uint value) {
+ if (index >= 512u || hbBusy()) return;
+ uint o = HB_EXT + (2048u + 32u)/4u + index/4u, shift = (index % 4u) * 8u;
+ c.atlas[o] = (c.atlas[o] & ~(255u << shift)) | ((value & 255u) << shift);
+}
+void hbWebUrlByte(uint index, uint value) { nnWebSetUrlByte(index, value); }
+
+bool nnWebShowWebPage(uint urlLen) {
+ return hbRequest(14u, 1u, min(urlLen, 512u), 0u);
+}
+bool hbWebShow(uint urlLen) { return nnWebShowWebPage(urlLen); }
+
+uint nnWebGetResult() { return hbWord(4128u); }
+uint nnWebGetExitReason() { return hbWord(4132u); }
 #endif
 #endif

@@ -1,13 +1,13 @@
 const L=require('./layout.cjs');
 const { decodePng, decodePngToRgb565 } = require('./image-decoder.cjs');
-const SUPPORTED_CAPABILITIES = ['vibration','nfc','udp','hid','time','system','display','fs','net','irsensor','audio','swkbd'];
+const SUPPORTED_CAPABILITIES = ['vibration','nfc','udp','hid','time','system','display','fs','net','irsensor','audio','swkbd','web'];
 function validateManifest(value){
  if(!value)return {capabilities:SUPPORTED_CAPABILITIES,endpoints:[]};
  const endpoints=Array.isArray(value.endpoints)?value.endpoints.slice(0,8).map(require('./helpers/network.cjs').endpoint):[];
  return {capabilities:SUPPORTED_CAPABILITIES,endpoints};
 }
 async function create({rpc,mapped,directory,hardware:providedHardware}){
-  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,httpServer,netSockets,timeService,swkbdService,lastSequence=0,lastPoll=0;
+  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,httpServer,netSockets,timeService,swkbdService,webService,lastSequence=0,lastPoll=0;
   const base=mapped+L.OFFSET;
  return {hardware,async atBoundary(app=null){
   if(!lastPoll||Date.now()-lastPoll>5000){await rpc.write(base,(await hardware.poll()).subarray(0,128));lastPoll=Date.now();}
@@ -482,6 +482,19 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
      payload.writeUInt32LE(kbdRes.result>>>0,0);
      payload.writeUInt32LE(textBuf.length>>>0,4);
      textBuf.copy(payload,16);
+    }
+   }else if(op===L.OP.web){
+    webService??=await require('./web.cjs').create(rpc);
+    const subOp=request.readUInt32LE(8);
+    if(subOp===1){
+     const urlLen=Math.min(request.readUInt32LE(12)||0,512);
+     const urlStr=urlLen>0?request.subarray(32,32+urlLen).toString('utf8').replace(/\0.*$/, ''):'https://google.com';
+     console.log(`[WEB] Triggering S2 Browser Applet: "${urlStr}"...`);
+     const webRes=await webService.showWebPage({url:urlStr});
+     console.log(`[WEB] S2 Browser Applet Finished. Result: 0x${webRes.result.toString(16)}, ExitReason: ${webRes.exitReason}`);
+     payload=Buffer.alloc(16);
+     payload.writeUInt32LE(webRes.result>>>0,0);
+     payload.writeUInt32LE(webRes.exitReason>>>0,4);
     }
    }
   }catch(error){

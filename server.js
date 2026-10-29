@@ -190,9 +190,13 @@ async function main() {
       await runScript(path.join(__dirname, 'inspection/fs-inspect.cjs'), [directory]);
       console.log('✔ Filesystem inspection completed successfully.');
 
-      console.log('\n[6/6] Probing nn::swkbd Native Subsystem (Safe Research)...');
+      console.log('\n[6/7] Probing nn::swkbd Native Subsystem (Safe Research)...');
       await runScript(path.join(__dirname, 'inspection/swkbd-inspect.cjs'), [directory]);
       console.log('✔ nn::swkbd probe completed successfully.');
+
+      console.log('\n[7/7] Inspecting nn::web Native Subsystem (Browser Applet Research)...');
+      await runScript(path.join(__dirname, 'inspection/web-inspect.cjs'), [directory]);
+      console.log('✔ nn::web inspection completed successfully.');
 
       const argApp = process.argv.slice(2).find(a => a.startsWith('--app='))?.split('=')[1]
         || process.argv.slice(3).find(a => !a.startsWith('-'));

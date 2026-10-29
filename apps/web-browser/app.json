@@ -1,0 +1,17 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "web-browser",
+  "name": "Web Browser Applet POC",
+  "version": "1.0.0",
+  "description": "POC launching the S2 Native Web Browser Applet (nn::web::ShowWebPage) with customizable bookmarks & keyboard URL input",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  },
+  "capabilities": ["swkbd", "web", "vibration"]
+}

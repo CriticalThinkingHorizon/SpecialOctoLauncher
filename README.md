@@ -26,7 +26,7 @@ We (Main developer and contributors) are not responsible for any damage to your 
 - **System Architecture:**
   - **Console-Side Autonomous 60 FPS Loop:** Runs an independent `nn::vi::Layer` + Vulkan 1.4 swapchain (`1920×1080`) driven by a native `pthread` executing a repeating call frame on the S2. Gamepad, Pro Controller, and touch polling (`nn::hid`) alongside compute and fragment shader rendering run at full 60 FPS directly on hardware.
   - **Host-Side RPC Bridge & On-Demand App Loader:** The PC host (`server.js` + `runtime/hello-runner.cjs`) qualifies the native session, prepares Vulkan pipelines **on-demand** when apps are selected, and services asynchronous SDK mailbox requests (`nn::fs`, `nn::socket`, `nn::nifm`, `nn::hid`, `nn::time`, `nn::os`, `nn::irsensor`, `nn::nfc`, `nn::audio`).
-  - **Offline Memory Staging & Local Dispatcher:** Apps can be pre-cached into S2 cache storage (`tmp:/cache/`) and GPU coherent memory slots (`mapped + 0x300000 + slot * 0x40000`). When the PC server disconnects, SmileBASIC transitions into an autonomous `LOCAL_DISPATCHER` loop that swaps 512-byte command descriptors, font atlases, and scratch states in ~5 microseconds via native `SDK_MEMMOVE`—enabling seamless offline play and switching without a PC connection.
+  - **Offline Memory Staging & Local Dispatcher:** Apps can be pre-cached into S2 cache storage (`tmp:/cache/`) and GPU coherent memory slots (`mapped + 0x300000 + slot * 0x40000`). When the PC server disconnects, SmileBASIC transitions into an autonomous `LOCAL_DISPATCHER` loop that swaps 512-byte command descriptors, font atlases, and scratch states in ~5 microseconds via native `SDK_MEMMOVE`—enabling seamless offline play and swapping without a PC connection.
 
 ---
 
@@ -49,6 +49,7 @@ By default, `node server.js` boots into the **Homebrew Launcher** (`apps/launche
 | `http-server` | **On-Console HTTP File Server (`:8080`)** | Binds a listening TCP socket (`nn::socket`) directly on the S2's LAN IP (`http://<s2-ip>:8080/`). Open the URL on any PC or phone browser to browse `rom:/`, `save:/`, `tmp:/`, and `exefs:/`, preview decompressed files or hex dumps, and download console files directly over Wi-Fi. (`X`: Restart Socket, `-`: Exit). |
 | `http-client` | **HTTP Client & Downloader** | Outbound HTTP `GET` queries and file streaming directly into console storage (`tmp:/download.bin`) using official-aligned `nn::http` abstractions. (`A`: GET /get, `X`: GET /ip, `Y`: Download robots.txt, `-`: Exit). |
 | `swkbd-demo` | **Native Soft Keyboard POC** | Direct on-console integration with the S2 Native Software Keyboard (`nn::swkbd`), invoking the OS library applet for real-time text input into a glowing CRT terminal display. (`A`: Open Keyboard, `X`: Clear Text, `-`: Exit). |
+| `web-browser` | **Native Web Browser Applet POC** | Seamless integration with the S2 Native Web Browser Applet (`nn::web::ShowWebPage`). Features custom URL editing via `nn::swkbd`, 6 curated web bookmarks, interactive CRT tube omnibox UI, and return result code toast inspection. (`A`: Open in Browser Applet, `Y`: Edit URL, `D-Pad`: Select Bookmark, `-`: Exit). |
 | `save-demo` | **Native Save Manager & Commit POC** | Tests raw file operations on the `save:/` mount (`save:/f/###/TTEST`), demonstrating atomic `nn::fs::CommitSaveData` transactions directly on console storage. (`A`: Save & Commit, `Y`: Verify, `X`: Clean, `-`: Exit). |
 | `bootstrap-updater` | **Bootstrap Updater & Committer** | Live on-console updater that reads the latest repository `rpc/bootstrap.bas` from the PC host, injects SmileBASIC trailing padding, writes to `save:/f/###/TNS2` (`TXT:NS2`), and commits to S2 save data. (`A`: Update & Commit, `-`: Exit). |
 | `chip8` | **CHIP-8 Virtual Machine** | On-console compute-shader interpreter running ROM programs directly from `tmp:/rom.ch8` at 60 FPS on the GPU. Features retro CRT bloom, 4 selectable phosphor palettes, Joy-Con controls, and HD rumble sound buzzer (`nnHidSendVibrationPulse`). (`A`: Reload tmp:/rom.ch8, `X`: Palette, `Y`: Speed, `+`: Reset, `-`: Exit). |
@@ -61,9 +62,9 @@ By default, `node server.js` boots into the **Homebrew Launcher** (`apps/launche
 ## Offline Autonomous Caching Engine (Work in Progress)
 
 > [!WARNING]
-> **Work in Progress:** Offline mode and autonomous app switching without the PC server are currently under active development and **not working yet**. An active PC connection (`node server.js`) is currently required to launch and switch applications. The memory staging mechanisms and local dispatcher outlined below represent the architectural implementation currently in progress.
+> **Work in Progress:** Offline mode and autonomous app transitions without the PC server are currently under active development and **not working yet**. An active PC connection (`node server.js`) is currently required to launch and cycle applications. The memory staging mechanisms and local dispatcher outlined below represent the architectural implementation currently in progress.
 
-SpecialOctoLauncher provides an on-console caching system that allows running and switching apps without maintaining an active PC connection:
+SpecialOctoLauncher provides an on-console caching system that allows running and launching apps without maintaining an active PC connection:
 
 1. **Staging to `tmp:/` & GPU Memory (`Y: Cache All`):**
    - Pressing **`Y`** in the Launcher prompts the host to stage up to 15 apps in 256 KiB coherent memory blocks (`mapped + 0x300000 + slot * 0x40000`).
@@ -76,9 +77,9 @@ SpecialOctoLauncher provides an on-console caching system that allows running an
    - Populates a 64-bit aligned `AppTable` at `scratch + 0x7d000` (`APPS` magic `0x41505053`).
    - Emits a bitmask to `mapped + 992` (`c.stats.x`), instantly displaying bright `[CACHED]` badges next to all staged applications.
 
-2. **Autonomous Switching (`LOCAL_DISPATCHER`):**
+2. **Autonomous Dispatcher (`LOCAL_DISPATCHER`):**
    - When `node server.js` is disconnected, SmileBASIC detects the `APPS` magic and transfers execution to `LOCAL_DISPATCHER`.
-   - Switching between the Launcher and any cached app (`LOCAL_SWITCH`) executes via native `SDK_MEMMOVE` in ~5 microseconds without needing PC intervention.
+   - Transitions between the Launcher and any cached app execute via native `SDK_MEMMOVE` in ~5 microseconds without needing PC intervention.
    - Pressing `-` inside any running application returns instantly to the Launcher offline.
 
 ---
@@ -124,6 +125,12 @@ All apps have unrestricted access to the native SDK mailbox (`mapped + 0x7f0000`
 - **Soft Keyboard Applet:** `nnSwkbdShow(...)` (launches native OS keyboard modal)
 - **Clocks & System Info:** `nnTimeStandardSteadyClockNow()` (64-bit ARM `CNTPCT_EL0` tick, `19.2 MHz` frequency, POSIX seconds, and calendar fields), `nnOsGetSystemInfo()` (process `aruid`, steady tick, thread priority, `main`/`sdk` module bases)
 - **Peripherals:** `nnIrSensorGetCameraStatus(npadId)`, `nnNfcScanTag()`, `nnAudioListAudioIns(maxCount)`
+
+### 5. `nn::web` — Web Browser Applet (`OP.web = 14`)
+- **Documentation:** See [`docs/web-applet.md`](docs/web-applet.md) for full architectural documentation, symbol resolution details, and native calling conventions.
+- **URL Staging:** `nnWebSetUrlByte(i, ch)`, `hbWebUrlByte(i, ch)`
+- **Browser Execution:** `nnWebShowWebPage(urlLen)` / `hbWebShow(urlLen)` (constructs `nn::web::ShowWebPageArg`, sets display parameters, and launches the native web applet modal synchronously)
+- **Status & Results:** `nnWebGetResult()` (exit status code, `0 = SUCCESS`), `nnWebGetExitReason()` (reason descriptor, `0 = USER_EXIT`)
 
 ---
 

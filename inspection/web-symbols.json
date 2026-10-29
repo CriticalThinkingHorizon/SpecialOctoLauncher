@@ -1,0 +1,2637 @@
+{
+  "session": "latest",
+  "sdkBase": "0x3c8802d000",
+  "mainBase": "0x3c72605000",
+  "mainWebImports": [
+    {
+      "name": "_ZN2nn3web14ShowWebPageArgC1EPKc",
+      "description": "nn::web::ShowWebPageArg::(constructor) [args: EPKc]",
+      "offset": 0,
+      "size": 0
+    },
+    {
+      "name": "_ZN2nn3web14ShowWebPageArg14SetCallbackUrlEPKc",
+      "description": "nn::web::ShowWebPageArg::SetCallbackUrl [args: PKc]",
+      "offset": 0,
+      "size": 0
+    },
+    {
+      "name": "_ZN2nn3web18WebPageReturnValueC1Ev",
+      "description": "nn::web::WebPageReturnValue::(constructor) [args: Ev]",
+      "offset": 0,
+      "size": 0
+    },
+    {
+      "name": "_ZN2nn3web11ShowWebPageEPNS0_18WebPageReturnValueERKNS0_14ShowWebPageArgE",
+      "description": "nn::web::ShowWebPage [args: PNS0_18WebPageReturnValueERKNS0_14ShowWebPageArgE]",
+      "offset": 0,
+      "size": 0
+    },
+    {
+      "name": "_ZNK2nn3web18WebPageReturnValue16GetWebExitReasonEv",
+      "description": "_ZNK2nn3web18WebPageReturnValue16GetWebExitReasonEv",
+      "offset": 0,
+      "size": 0
+    },
+    {
+      "name": "_ZNK2nn3web18WebPageReturnValue10GetLastUrlEv",
+      "description": "_ZNK2nn3web18WebPageReturnValue10GetLastUrlEv",
+      "offset": 0,
+      "size": 0
+    }
+  ],
+  "totalSdkWebSymbols": 265,
+  "groups": {
+    "showWebPage": [
+      {
+        "name": "_ZN2nn3web11ShowWebPageEPNS0_18WebPageReturnValueERKNS0_14ShowWebPageArgE",
+        "description": "nn::web::ShowWebPage [args: PNS0_18WebPageReturnValueERKNS0_14ShowWebPageArgE]",
+        "offset": 5125680,
+        "address": "0x3c88510630",
+        "size": 344,
+        "section": 1,
+        "type": 2
+      }
+    ],
+    "showOfflineHtmlPage": [],
+    "showWebPageArg": [
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg25SetTouchEnabledOnContentsEb",
+        "description": "nn::web::ShowWebPageArg::SetTouchEnabledOnContents [args: b]",
+        "offset": 5138872,
+        "address": "0x3c885139b8",
+        "size": 124,
+        "section": 1,
+        "type": 2,
+        "hex": "0a00407928000012ea010034090180520b00098b6d0140796c054079bfa50071"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg4DataEv",
+        "description": "nn::web::ShowWebPageArg::Data [args: v]",
+        "offset": 5140332,
+        "address": "0x3c88513f6c",
+        "size": 4,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg22OverrideWebAudioVolumeEf",
+        "description": "nn::web::ShowWebPageArg::OverrideWebAudioVolume [args: f]",
+        "offset": 5140092,
+        "address": "0x3c88513e7c",
+        "size": 120,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArgC1Ev",
+        "description": "nn::web::ShowWebPageArg::(constructor) [args: Ev]",
+        "offset": 5136924,
+        "address": "0x3c8851321c",
+        "size": 72,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg24OverrideMediaAudioVolumeEf",
+        "description": "nn::web::ShowWebPageArg::OverrideMediaAudioVolume [args: f]",
+        "offset": 5140212,
+        "address": "0x3c88513ef4",
+        "size": 120,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg14SetCallbackUrlEPKc",
+        "description": "nn::web::ShowWebPageArg::SetCallbackUrl [args: PKc]",
+        "offset": 5137272,
+        "address": "0x3c88513378",
+        "size": 236,
+        "section": 1,
+        "type": 2,
+        "hex": "fd7bbda9f50b00f9fd030091f44f02a9f50300aae00301aaf30301aa57630394"
+      },
+      {
+        "name": "_ZN2nn3web20SetScreenShotEnabledEPNS0_14ShowWebPageArgE",
+        "description": "nn::web::SetScreenShotEnabled [args: PNS0_14ShowWebPageArgE]",
+        "offset": 5140736,
+        "address": "0x3c88514100",
+        "size": 152,
+        "section": 1,
+        "type": 2,
+        "hex": "fd7bbfa9fd03009102db03940900407909020034080180520a00088b4c014079"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg33SetMediaPlayerSpeedControlEnabledEb",
+        "description": "nn::web::ShowWebPageArg::SetMediaPlayerSpeedControlEnabled [args: b]",
+        "offset": 5139840,
+        "address": "0x3c88513d80",
+        "size": 124,
+        "section": 1,
+        "type": 2,
+        "hex": "0a00407928000012ea010034090180520b00098b6d0140796c054079bfdd0071"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg20SetBootAsMediaPlayerEb",
+        "description": "nn::web::ShowWebPageArg::SetBootAsMediaPlayer [args: b]",
+        "offset": 5137148,
+        "address": "0x3c885132fc",
+        "size": 124,
+        "section": 1,
+        "type": 2,
+        "hex": "0a00407928000012ea010034090180520b00098b6d0140796c054079bf850071"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg18SetCallbackableUrlEPKc",
+        "description": "nn::web::ShowWebPageArg::SetCallbackableUrl [args: PKc]",
+        "offset": 5137508,
+        "address": "0x3c88513464",
+        "size": 236,
+        "section": 1,
+        "type": 2,
+        "hex": "fd7bbda9f50b00f9fd030091f44f02a9f50300aae00301aaf30301aa1c630394"
+      },
+      {
+        "name": "_ZN2nn3web11SetBootModeEPNS0_14ShowWebPageArgENS0_18WebSessionBootModeE",
+        "description": "nn::web::SetBootMode [args: PNS0_14ShowWebPageArgENS0_18WebSessionBootModeE]",
+        "offset": 5140560,
+        "address": "0x3c88514050",
+        "size": 164,
+        "section": 1,
+        "type": 2,
+        "hex": "fd7bbea9f30b00f9fd030091f303012a2cdb0394090040792902003408018052"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArgC2Ev",
+        "description": "nn::web::ShowWebPageArg::(constructor) [args: Ev]",
+        "offset": 5136924,
+        "address": "0x3c8851321c",
+        "size": 72,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg6SetUidERKNS_7account3UidE",
+        "description": "nn::web::ShowWebPageArg::SetUid [args: RKNS_7account3UidE]",
+        "offset": 5137988,
+        "address": "0x3c88513644",
+        "size": 272,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web10WebSession5StartEPPNS_2os15SystemEventTypeERKNS0_14ShowWebPageArgE",
+        "description": "nn::web::WebSession::Start [args: PPNS_2os15SystemEventTypeERKNS0_14ShowWebPageArgE]",
+        "offset": 5142364,
+        "address": "0x3c8851475c",
+        "size": 416,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg17SetPointerEnabledEb",
+        "description": "nn::web::ShowWebPageArg::SetPointerEnabled [args: b]",
+        "offset": 5137744,
+        "address": "0x3c88513550",
+        "size": 124,
+        "section": 1,
+        "type": 2,
+        "hex": "0a00407928000012ea010034090180520b00098b6d0140796c054079bf690071"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg18SetWebAudioEnabledEb",
+        "description": "nn::web::ShowWebPageArg::SetWebAudioEnabled [args: b]",
+        "offset": 5139592,
+        "address": "0x3c88513c88",
+        "size": 124,
+        "section": 1,
+        "type": 2,
+        "hex": "0a00407928000012ea010034090180520b00098b6d0140796c054079bfb90071"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg18SetFooterFixedKindENS0_18WebFooterFixedKindE",
+        "description": "nn::web::ShowWebPageArg::SetFooterFixedKind [args: NS0_18WebFooterFixedKindE]",
+        "offset": 5138260,
+        "address": "0x3c88513754",
+        "size": 120,
+        "section": 1,
+        "type": 2,
+        "hex": "09004079e9010034080180520a00088b4c0140794b0540799fc9007160020054"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg30SetMediaPlayerAutoCloseEnabledEb",
+        "description": "nn::web::ShowWebPageArg::SetMediaPlayerAutoCloseEnabled [args: b]",
+        "offset": 5139220,
+        "address": "0x3c88513b14",
+        "size": 124,
+        "section": 1,
+        "type": 2,
+        "hex": "0a00407928000012ea010034090180520b00098b6d0140796c054079bfb10071"
+      },
+      {
+        "name": "_ZN2nn3web24SetTransferMemoryEnabledEPNS0_14ShowWebPageArgE",
+        "description": "nn::web::SetTransferMemoryEnabled [args: PNS0_14ShowWebPageArgE]",
+        "offset": 5141056,
+        "address": "0x3c88514240",
+        "size": 200,
+        "section": 1,
+        "type": 2,
+        "hex": "ff8301d1fd7b04a9fd030191f32b00f9f30300aae023009126730394e00313aa"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg19RequestUrlMaxLengthE",
+        "description": "nn::web::ShowWebPageArg::RequestUrlMaxLength",
+        "offset": 11866928,
+        "address": "0x3c88b7e330",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web18SetShopJumpEnabledEPNS0_14ShowWebPageArgE",
+        "description": "nn::web::SetShopJumpEnabled [args: PNS0_14ShowWebPageArgE]",
+        "offset": 5140896,
+        "address": "0x3c885141a0",
+        "size": 152,
+        "section": 1,
+        "type": 2,
+        "hex": "fd7bbfa9fd030091dada03940900407909020034080180520a00088b4c014079"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg23SetMediaAutoPlayEnabledEb",
+        "description": "nn::web::ShowWebPageArg::SetMediaAutoPlayEnabled [args: b]",
+        "offset": 5139964,
+        "address": "0x3c88513dfc",
+        "size": 128,
+        "section": 1,
+        "type": 2,
+        "hex": "0a004079e803212a08010012ea010034090180520b00098b6d0140796c054079"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg17SetDisplayUrlKindENS0_17WebDisplayUrlKindE",
+        "description": "nn::web::ShowWebPageArg::SetDisplayUrlKind [args: NS0_17WebDisplayUrlKindE]",
+        "offset": 5138744,
+        "address": "0x3c88513938",
+        "size": 128,
+        "section": 1,
+        "type": 2,
+        "hex": "0a0040793f040071e8179f1aea010034090180520b00098b6d0140796c054079"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg21SetJsExtensionEnabledEb",
+        "description": "nn::web::ShowWebPageArg::SetJsExtensionEnabled [args: b]",
+        "offset": 5138620,
+        "address": "0x3c885138bc",
+        "size": 124,
+        "section": 1,
+        "type": 2,
+        "hex": "0a00407928000012ea010034090180520b00098b6d0140796c054079bf9d0071"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArgC2EPKc",
+        "description": "nn::web::ShowWebPageArg::(constructor) [args: EPKc]",
+        "offset": 5136996,
+        "address": "0x3c88513264",
+        "size": 152,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg19SetPageCacheEnabledEb",
+        "description": "nn::web::ShowWebPageArg::SetPageCacheEnabled [args: b]",
+        "offset": 5139344,
+        "address": "0x3c88513b90",
+        "size": 124,
+        "section": 1,
+        "type": 2,
+        "hex": "0a00407928000012ea010034090180520b00098b6d0140796c054079bfb50071"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArgC1EPKc",
+        "description": "nn::web::ShowWebPageArg::(constructor) [args: EPKc]",
+        "offset": 5136996,
+        "address": "0x3c88513264",
+        "size": 152,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg16SetLeftStickModeENS0_16WebLeftStickModeE",
+        "description": "nn::web::ShowWebPageArg::SetLeftStickMode [args: NS0_16WebLeftStickModeE]",
+        "offset": 5137868,
+        "address": "0x3c885135cc",
+        "size": 120,
+        "section": 1,
+        "type": 2,
+        "hex": "09004079e9010034080180520a00088b4c0140794b0540799f6d007160020054"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg18SetBootDisplayKindENS0_18WebBootDisplayKindE",
+        "description": "nn::web::ShowWebPageArg::SetBootDisplayKind [args: NS0_18WebBootDisplayKindE]",
+        "offset": 5138500,
+        "address": "0x3c88513844",
+        "size": 120,
+        "section": 1,
+        "type": 2,
+        "hex": "09004079e9010034080180520a00088b4c0140794b0540799f5d007160020054"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg24CallbackableUrlMaxLengthE",
+        "description": "nn::web::ShowWebPageArg::CallbackableUrlMaxLength",
+        "offset": 11866944,
+        "address": "0x3c88b7e340",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg34UserAgentAdditionalStringMaxLengthE",
+        "description": "nn::web::ShowWebPageArg::UserAgentAdditionalStringMaxLength",
+        "offset": 11866952,
+        "address": "0x3c88b7e348",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg8DataSizeE",
+        "description": "nn::web::ShowWebPageArg::DataSize",
+        "offset": 11866960,
+        "address": "0x3c88b7e350",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg17SetBackgroundKindENS0_17WebBackgroundKindE",
+        "description": "nn::web::ShowWebPageArg::SetBackgroundKind [args: NS0_17WebBackgroundKindE]",
+        "offset": 5138380,
+        "address": "0x3c885137cc",
+        "size": 120,
+        "section": 1,
+        "type": 2,
+        "hex": "09004079e9010034080180520a00088b4c0140794b0540799f61007160020054"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg18SetPageFadeEnabledEb",
+        "description": "nn::web::ShowWebPageArg::SetPageFadeEnabled [args: b]",
+        "offset": 5139468,
+        "address": "0x3c88513c0c",
+        "size": 124,
+        "section": 1,
+        "type": 2,
+        "hex": "0a00407928000012ea010034090180520b00098b6d0140796c054079bfcd0071"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg20CallbackUrlMaxLengthE",
+        "description": "nn::web::ShowWebPageArg::CallbackUrlMaxLength",
+        "offset": 11866936,
+        "address": "0x3c88b7e338",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZNK2nn3web6detail20ShowWebPageArgWriter15PushToInChannelENS_6applet19LibraryAppletHandleE",
+        "description": "_ZNK2nn3web6detail20ShowWebPageArgWriter15PushToInChannelENS_6applet19LibraryAppletHandleE",
+        "offset": 5143100,
+        "address": "0x3c88514a3c",
+        "size": 108,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg29SetPageScrollIndicatorEnabledEb",
+        "description": "nn::web::ShowWebPageArg::SetPageScrollIndicatorEnabled [args: b]",
+        "offset": 5139716,
+        "address": "0x3c88513d04",
+        "size": 124,
+        "section": 1,
+        "type": 2,
+        "hex": "0a00407928000012ea010034090180520b00098b6d0140796c054079bfd90071"
+      },
+      {
+        "name": "_ZN2nn3web14ShowWebPageArg28SetUserAgentAdditionalStringEPKc",
+        "description": "nn::web::ShowWebPageArg::SetUserAgentAdditionalString [args: PKc]",
+        "offset": 5138996,
+        "address": "0x3c88513a34",
+        "size": 224,
+        "section": 1,
+        "type": 2,
+        "hex": "fd7bbea9f44f01a9fd030091f40300aae00301aaf30301aaa961039402040091"
+      }
+    ],
+    "showOfflineHtmlPageArg": [
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg4DataEv",
+        "description": "nn::web::ShowOfflineHtmlPageArg::Data [args: v]",
+        "offset": 5130784,
+        "address": "0x3c88511a20",
+        "size": 4,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg30SetMediaPlayerAutoCloseEnabledEb",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetMediaPlayerAutoCloseEnabled [args: b]",
+        "offset": 5129424,
+        "address": "0x3c885114d0",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArgC2Ev",
+        "description": "nn::web::ShowOfflineHtmlPageArg::(constructor) [args: Ev]",
+        "offset": 5127524,
+        "address": "0x3c88510d64",
+        "size": 592,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg19SetPageCacheEnabledEb",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetPageCacheEnabled [args: b]",
+        "offset": 5129548,
+        "address": "0x3c8851154c",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArgC2ERKNS_13ApplicationIdEPKc",
+        "description": "nn::web::ShowOfflineHtmlPageArg::(constructor) [args: ERKNS_13ApplicationIdEPKc]",
+        "offset": 5128212,
+        "address": "0x3c88511014",
+        "size": 96,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg18SetWebAudioEnabledEb",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetWebAudioEnabled [args: b]",
+        "offset": 5129796,
+        "address": "0x3c88511644",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web36ShowOfflineHtmlPageArgWithPlayReportC2EPKc",
+        "description": "nn::web::ShowOfflineHtmlPageArgWithPlayReport::(constructor) [args: EPKc]",
+        "offset": 5130848,
+        "address": "0x3c88511a60",
+        "size": 172,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web11SetBootModeEPNS0_22ShowOfflineHtmlPageArgENS0_18WebSessionBootModeE",
+        "description": "nn::web::SetBootMode [args: PNS0_22ShowOfflineHtmlPageArgENS0_18WebSessionBootModeE]",
+        "offset": 5135856,
+        "address": "0x3c88512df0",
+        "size": 164,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web36ShowOfflineHtmlPageArgWithPlayReportC1EPKc",
+        "description": "nn::web::ShowOfflineHtmlPageArgWithPlayReport::(constructor) [args: EPKc]",
+        "offset": 5130848,
+        "address": "0x3c88511a60",
+        "size": 172,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web36ShowOfflineHtmlPageArgWithPlayReportC1ERKNS_13ApplicationIdEPKc",
+        "description": "nn::web::ShowOfflineHtmlPageArgWithPlayReport::(constructor) [args: ERKNS_13ApplicationIdEPKc]",
+        "offset": 5131144,
+        "address": "0x3c88511b88",
+        "size": 172,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web19ShowOfflineHtmlPageEPNS0_26OfflineHtmlPageReturnValueERKNS0_22ShowOfflineHtmlPageArgE",
+        "description": "nn::web::ShowOfflineHtmlPage [args: PNS0_26OfflineHtmlPageReturnValueERKNS0_22ShowOfflineHtmlPageArgE]",
+        "offset": 5126464,
+        "address": "0x3c88510940",
+        "size": 348,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg21SetJsExtensionEnabledEb",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetJsExtensionEnabled [args: b]",
+        "offset": 5129176,
+        "address": "0x3c885113d8",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web17OfflineWebSession5StartEPPNS_2os15SystemEventTypeERKNS0_22ShowOfflineHtmlPageArgE",
+        "description": "nn::web::OfflineWebSession::Start [args: PPNS_2os15SystemEventTypeERKNS0_22ShowOfflineHtmlPageArgE]",
+        "offset": 5136084,
+        "address": "0x3c88512ed4",
+        "size": 416,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web6detail28ShowOfflineHtmlPageArgWriter15PushToInChannelENS_6applet19LibraryAppletHandleE",
+        "description": "_ZNK2nn3web6detail28ShowOfflineHtmlPageArgWriter15PushToInChannelENS_6applet19LibraryAppletHandleE",
+        "offset": 5143340,
+        "address": "0x3c88514b2c",
+        "size": 108,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg20SetBootAsMediaPlayerEb",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetBootAsMediaPlayer [args: b]",
+        "offset": 5128308,
+        "address": "0x3c88511074",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArgC2EPKc",
+        "description": "nn::web::ShowOfflineHtmlPageArg::(constructor) [args: EPKc]",
+        "offset": 5128116,
+        "address": "0x3c88510fb4",
+        "size": 96,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web36ShowOfflineHtmlPageArgWithPlayReport20SetPlayReportEnabledEb",
+        "description": "nn::web::ShowOfflineHtmlPageArgWithPlayReport::SetPlayReportEnabled [args: b]",
+        "offset": 5131020,
+        "address": "0x3c88511b0c",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArgC1EPKc",
+        "description": "nn::web::ShowOfflineHtmlPageArg::(constructor) [args: EPKc]",
+        "offset": 5128116,
+        "address": "0x3c88510fb4",
+        "size": 96,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg33SetMediaPlayerSpeedControlEnabledEb",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetMediaPlayerSpeedControlEnabled [args: b]",
+        "offset": 5130168,
+        "address": "0x3c885117b8",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg25SetBootLoadingIconEnabledEb",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetBootLoadingIconEnabled [args: b]",
+        "offset": 5129920,
+        "address": "0x3c885116c0",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg25SetTouchEnabledOnContentsEb",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetTouchEnabledOnContents [args: b]",
+        "offset": 5129300,
+        "address": "0x3c88511454",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg18SetFooterFixedKindENS0_22OfflineFooterFixedKindE",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetFooterFixedKind [args: NS0_22OfflineFooterFixedKindE]",
+        "offset": 5128568,
+        "address": "0x3c88511178",
+        "size": 120,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg29SetPageScrollIndicatorEnabledEb",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetPageScrollIndicatorEnabled [args: b]",
+        "offset": 5130044,
+        "address": "0x3c8851173c",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg23SetMediaPlayerUiEnabledEb",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetMediaPlayerUiEnabled [args: b]",
+        "offset": 5130420,
+        "address": "0x3c885118b4",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web36ShowOfflineHtmlPageArgWithPlayReportC2ERKNS_13ApplicationIdEPKc",
+        "description": "nn::web::ShowOfflineHtmlPageArgWithPlayReport::(constructor) [args: ERKNS_13ApplicationIdEPKc]",
+        "offset": 5131144,
+        "address": "0x3c88511b88",
+        "size": 172,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg17SetKeyRepeatFrameEii",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetKeyRepeatFrame [args: ii]",
+        "offset": 5128932,
+        "address": "0x3c885112e4",
+        "size": 244,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg18SetPageFadeEnabledEb",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetPageFadeEnabled [args: b]",
+        "offset": 5129672,
+        "address": "0x3c885115c8",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg16SetFooterEnabledEb",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetFooterEnabled [args: b]",
+        "offset": 5128444,
+        "address": "0x3c885110fc",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg17SetPointerEnabledEb",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetPointerEnabled [args: b]",
+        "offset": 5128432,
+        "address": "0x3c885110f0",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg18SetBootDisplayKindENS0_22OfflineBootDisplayKindE",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetBootDisplayKind [args: NS0_22OfflineBootDisplayKindE]",
+        "offset": 5128812,
+        "address": "0x3c8851126c",
+        "size": 120,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg23SetMediaAutoPlayEnabledEb",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetMediaAutoPlayEnabled [args: b]",
+        "offset": 5130292,
+        "address": "0x3c88511834",
+        "size": 128,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg22OverrideWebAudioVolumeEf",
+        "description": "nn::web::ShowOfflineHtmlPageArg::OverrideWebAudioVolume [args: f]",
+        "offset": 5130544,
+        "address": "0x3c88511930",
+        "size": 120,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArgC1ERKNS_13ApplicationIdEPKc",
+        "description": "nn::web::ShowOfflineHtmlPageArg::(constructor) [args: ERKNS_13ApplicationIdEPKc]",
+        "offset": 5128212,
+        "address": "0x3c88511014",
+        "size": 96,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg16SetLeftStickModeERKNS0_20OfflineLeftStickModeE",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetLeftStickMode [args: RKNS0_20OfflineLeftStickModeE]",
+        "offset": 5128440,
+        "address": "0x3c885110f8",
+        "size": 4,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArgC1Ev",
+        "description": "nn::web::ShowOfflineHtmlPageArg::(constructor) [args: Ev]",
+        "offset": 5127524,
+        "address": "0x3c88510d64",
+        "size": 592,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg8DataSizeE",
+        "description": "nn::web::ShowOfflineHtmlPageArg::DataSize",
+        "offset": 11866880,
+        "address": "0x3c88b7e300",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg17SetBackgroundKindERKNS0_21OfflineBackgroundKindE",
+        "description": "nn::web::ShowOfflineHtmlPageArg::SetBackgroundKind [args: RKNS0_21OfflineBackgroundKindE]",
+        "offset": 5128688,
+        "address": "0x3c885111f0",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg21DocumentPathMaxLengthE",
+        "description": "nn::web::ShowOfflineHtmlPageArg::DocumentPathMaxLength",
+        "offset": 11866872,
+        "address": "0x3c88b7e2f8",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web22ShowOfflineHtmlPageArg24OverrideMediaAudioVolumeEf",
+        "description": "nn::web::ShowOfflineHtmlPageArg::OverrideMediaAudioVolume [args: f]",
+        "offset": 5130664,
+        "address": "0x3c885119a8",
+        "size": 120,
+        "section": 1,
+        "type": 2
+      }
+    ],
+    "webPageReturnValue": [
+      {
+        "name": "_ZN2nn3web6detail21WebPageReturnValue6_0C2Ev",
+        "description": "nn::web::detail::WebPageReturnValue6_0::(constructor) [args: Ev]",
+        "offset": 5143208,
+        "address": "0x3c88514aa8",
+        "size": 28,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail21WebPageReturnValue6_0C2Ev",
+        "description": "nn::web::detail::WebPageReturnValue6_0::(constructor) [args: Ev]",
+        "offset": 5143208,
+        "address": "0x3c88514aa8",
+        "size": 28,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web35IsMediaPlayerAutoClosedByCompletionERKNS0_18WebPageReturnValueE",
+        "description": "nn::web::IsMediaPlayerAutoClosedByCompletion [args: RKNS0_18WebPageReturnValueE]",
+        "offset": 5136832,
+        "address": "0x3c885131c0",
+        "size": 92,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web35IsMediaPlayerAutoClosedByCompletionERKNS0_18WebPageReturnValueE",
+        "description": "nn::web::IsMediaPlayerAutoClosedByCompletion [args: RKNS0_18WebPageReturnValueE]",
+        "offset": 5136832,
+        "address": "0x3c885131c0",
+        "size": 92,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail21WebPageReturnValue6_016LastUrlMaxLengthE",
+        "description": "nn::web::detail::WebPageReturnValue6_0::LastUrlMaxLength",
+        "offset": 11867000,
+        "address": "0x3c88b7e378",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web6detail21WebPageReturnValue6_016LastUrlMaxLengthE",
+        "description": "nn::web::detail::WebPageReturnValue6_0::LastUrlMaxLength",
+        "offset": 11867000,
+        "address": "0x3c88b7e378",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZNK2nn3web18WebPageReturnValue10GetLastUrlEv",
+        "description": "_ZNK2nn3web18WebPageReturnValue10GetLastUrlEv",
+        "offset": 5140424,
+        "address": "0x3c88513fc8",
+        "size": 64,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web18WebPageReturnValue10GetLastUrlEv",
+        "description": "_ZNK2nn3web18WebPageReturnValue10GetLastUrlEv",
+        "offset": 5140424,
+        "address": "0x3c88513fc8",
+        "size": 64,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail21WebPageReturnValue6_010SetLastUrlEPKc",
+        "description": "nn::web::detail::WebPageReturnValue6_0::SetLastUrl [args: PKc]",
+        "offset": 5143248,
+        "address": "0x3c88514ad0",
+        "size": 92,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail21WebPageReturnValue6_010SetLastUrlEPKc",
+        "description": "nn::web::detail::WebPageReturnValue6_0::SetLastUrl [args: PKc]",
+        "offset": 5143248,
+        "address": "0x3c88514ad0",
+        "size": 92,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web18WebPageReturnValue8DataSizeE",
+        "description": "nn::web::WebPageReturnValue::DataSize",
+        "offset": 11866976,
+        "address": "0x3c88b7e360",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web18WebPageReturnValue8DataSizeE",
+        "description": "nn::web::WebPageReturnValue::DataSize",
+        "offset": 11866976,
+        "address": "0x3c88b7e360",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZNK2nn3web18WebPageReturnValue4DataEv",
+        "description": "_ZNK2nn3web18WebPageReturnValue4DataEv",
+        "offset": 5140552,
+        "address": "0x3c88514048",
+        "size": 4,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web18WebPageReturnValue4DataEv",
+        "description": "_ZNK2nn3web18WebPageReturnValue4DataEv",
+        "offset": 5140552,
+        "address": "0x3c88514048",
+        "size": 4,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web18WebPageReturnValueC1Ev",
+        "description": "nn::web::WebPageReturnValue::(constructor) [args: Ev]",
+        "offset": 5140336,
+        "address": "0x3c88513f70",
+        "size": 12,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web18WebPageReturnValueC1Ev",
+        "description": "nn::web::WebPageReturnValue::(constructor) [args: Ev]",
+        "offset": 5140336,
+        "address": "0x3c88513f70",
+        "size": 12,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail21WebPageReturnValue6_016SetWebExitReasonENS0_13WebExitReasonE",
+        "description": "nn::web::detail::WebPageReturnValue6_0::SetWebExitReason [args: NS0_13WebExitReasonE]",
+        "offset": 5143236,
+        "address": "0x3c88514ac4",
+        "size": 12,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail21WebPageReturnValue6_016SetWebExitReasonENS0_13WebExitReasonE",
+        "description": "nn::web::detail::WebPageReturnValue6_0::SetWebExitReason [args: NS0_13WebExitReasonE]",
+        "offset": 5143236,
+        "address": "0x3c88514ac4",
+        "size": 12,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowYouTubeVideoEPNS0_18WebPageReturnValueERKNS0_19ShowYouTubeVideoArgE",
+        "description": "nn::web::ShowYouTubeVideo [args: PNS0_18WebPageReturnValueERKNS0_19ShowYouTubeVideoArgE]",
+        "offset": 5126112,
+        "address": "0x3c885107e0",
+        "size": 348,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowYouTubeVideoEPNS0_18WebPageReturnValueERKNS0_19ShowYouTubeVideoArgE",
+        "description": "nn::web::ShowYouTubeVideo [args: PNS0_18WebPageReturnValueERKNS0_19ShowYouTubeVideoArgE]",
+        "offset": 5126112,
+        "address": "0x3c885107e0",
+        "size": 348,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web18WebPageReturnValueC2Ev",
+        "description": "nn::web::WebPageReturnValue::(constructor) [args: Ev]",
+        "offset": 5140336,
+        "address": "0x3c88513f70",
+        "size": 12,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web18WebPageReturnValueC2Ev",
+        "description": "nn::web::WebPageReturnValue::(constructor) [args: Ev]",
+        "offset": 5140336,
+        "address": "0x3c88513f70",
+        "size": 12,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web18WebPageReturnValue16GetWebExitReasonEv",
+        "description": "_ZNK2nn3web18WebPageReturnValue16GetWebExitReasonEv",
+        "offset": 5140348,
+        "address": "0x3c88513f7c",
+        "size": 76,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web18WebPageReturnValue16GetWebExitReasonEv",
+        "description": "_ZNK2nn3web18WebPageReturnValue16GetWebExitReasonEv",
+        "offset": 5140348,
+        "address": "0x3c88513f7c",
+        "size": 76,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web18WebPageReturnValue16LastUrlMaxLengthE",
+        "description": "nn::web::WebPageReturnValue::LastUrlMaxLength",
+        "offset": 11866968,
+        "address": "0x3c88b7e358",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web18WebPageReturnValue16LastUrlMaxLengthE",
+        "description": "nn::web::WebPageReturnValue::LastUrlMaxLength",
+        "offset": 11866968,
+        "address": "0x3c88b7e358",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web10WebSession11WaitForExitEPNS0_18WebPageReturnValueE",
+        "description": "nn::web::WebSession::WaitForExit [args: PNS0_18WebPageReturnValueE]",
+        "offset": 5142780,
+        "address": "0x3c885148fc",
+        "size": 216,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web10WebSession11WaitForExitEPNS0_18WebPageReturnValueE",
+        "description": "nn::web::WebSession::WaitForExit [args: PNS0_18WebPageReturnValueE]",
+        "offset": 5142780,
+        "address": "0x3c885148fc",
+        "size": 216,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail21WebPageReturnValue6_0C1Ev",
+        "description": "nn::web::detail::WebPageReturnValue6_0::(constructor) [args: Ev]",
+        "offset": 5143208,
+        "address": "0x3c88514aa8",
+        "size": 28,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail21WebPageReturnValue6_0C1Ev",
+        "description": "nn::web::detail::WebPageReturnValue6_0::(constructor) [args: Ev]",
+        "offset": 5143208,
+        "address": "0x3c88514aa8",
+        "size": 28,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web18WebPageReturnValue14GetLastUrlSizeEv",
+        "description": "_ZNK2nn3web18WebPageReturnValue14GetLastUrlSizeEv",
+        "offset": 5140488,
+        "address": "0x3c88514008",
+        "size": 64,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web18WebPageReturnValue14GetLastUrlSizeEv",
+        "description": "_ZNK2nn3web18WebPageReturnValue14GetLastUrlSizeEv",
+        "offset": 5140488,
+        "address": "0x3c88514008",
+        "size": 64,
+        "section": 1,
+        "type": 2
+      }
+    ],
+    "libraryApplet": [
+      {
+        "name": "_ZNK2nn3web6detail22ShowLobbyPageArgWriter15PushToInChannelENS_6applet19LibraryAppletHandleE",
+        "description": "_ZNK2nn3web6detail22ShowLobbyPageArgWriter15PushToInChannelENS_6applet19LibraryAppletHandleE",
+        "offset": 5114980,
+        "address": "0x3c8850dc64",
+        "size": 108,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowSharePageArg35SetMediaCreatorApplicationRatingAgeERA32_Ka",
+        "description": "nn::web::ShowSharePageArg::SetMediaCreatorApplicationRatingAge [args: RA32_Ka]",
+        "offset": 5124496,
+        "address": "0x3c88510190",
+        "size": 152,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl22setLibraryAppletHandleERKNS_6applet19LibraryAppletHandleE",
+        "description": "nn::web::detail::WebSessionImpl::setLibraryAppletHandle [args: RKNS_6applet19LibraryAppletHandleE]",
+        "offset": 5145836,
+        "address": "0x3c885154ec",
+        "size": 48,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web16ShowSharePageArg15PushToInChannelENS_6applet19LibraryAppletHandleE",
+        "description": "_ZNK2nn3web16ShowSharePageArg15PushToInChannelENS_6applet19LibraryAppletHandleE",
+        "offset": 5124648,
+        "address": "0x3c88510228",
+        "size": 108,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web40GetOfflineHtmlPageReturnValueFromStorageEPNS0_26OfflineHtmlPageReturnValueERKNS_6applet13StorageHandleE",
+        "description": "nn::web::GetOfflineHtmlPageReturnValueFromStorage [args: PNS0_26OfflineHtmlPageReturnValueERKNS_6applet13StorageHandleE]",
+        "offset": 5127424,
+        "address": "0x3c88510d00",
+        "size": 100,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web21ShowSystemDataPageArg15PushToInChannelENS_6applet19LibraryAppletHandleE",
+        "description": "_ZNK2nn3web21ShowSystemDataPageArg15PushToInChannelENS_6applet19LibraryAppletHandleE",
+        "offset": 5135728,
+        "address": "0x3c88512d70",
+        "size": 108,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web38ShowApplicationLegalInformationPageArg15PushToInChannelENS_6applet19LibraryAppletHandleE",
+        "description": "_ZNK2nn3web38ShowApplicationLegalInformationPageArg15PushToInChannelENS_6applet19LibraryAppletHandleE",
+        "offset": 5132468,
+        "address": "0x3c885120b4",
+        "size": 108,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn2la32NifmToWifiWebAuthArgumentsWriter15PushToInChannelENS_6applet19LibraryAppletHandleE",
+        "description": "_ZNK2nn2la32NifmToWifiWebAuthArgumentsWriter15PushToInChannelENS_6applet19LibraryAppletHandleE",
+        "offset": 3493876,
+        "address": "0x3c88381ff4",
+        "size": 140,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl18StorageHandleQueue7enqueueERKNS_6applet13StorageHandleE",
+        "description": "nn::web::detail::WebSessionImpl::StorageHandleQueue::enqueue [args: RKNS_6applet13StorageHandleE]",
+        "offset": 5146892,
+        "address": "0x3c8851590c",
+        "size": 92,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6common9CommonApi25StartLibraryAppletAndWaitEPvmRNS_6applet19LibraryAppletHandleE",
+        "description": "nn::web::common::CommonApi::StartLibraryAppletAndWait [args: PvmRNS_6applet19LibraryAppletHandleE]",
+        "offset": 5127052,
+        "address": "0x3c88510b8c",
+        "size": 212,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web34GetSharePageReturnValueFromStorageEPNS0_20SharePageReturnValueERKNS_6applet13StorageHandleE",
+        "description": "nn::web::GetSharePageReturnValueFromStorage [args: PNS0_20SharePageReturnValueERKNS_6applet13StorageHandleE]",
+        "offset": 5121744,
+        "address": "0x3c8850f6d0",
+        "size": 96,
+        "section": 1,
+        "type": 2
+      }
+    ],
+    "other": [
+      {
+        "name": "_ZN2nn8settings5fwdbg19SetWebInspectorFlagEb",
+        "description": "_ZN2nn8settings5fwdbg19SetWebInspectorFlagEb",
+        "offset": 3884080,
+        "address": "0x3c883e1430",
+        "size": 48,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web20LobbyPageReturnValue18GetLobbyExitReasonEv",
+        "description": "_ZNK2nn3web20LobbyPageReturnValue18GetLobbyExitReasonEv",
+        "offset": 5114956,
+        "address": "0x3c8850dc4c",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl18StorageHandleQueue2atEi",
+        "description": "nn::web::detail::WebSessionImpl::StorageHandleQueue::at [args: i]",
+        "offset": 5147280,
+        "address": "0x3c88515a90",
+        "size": 32,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web20SharePageReturnValue18GetShareExitReasonEv",
+        "description": "_ZNK2nn3web20SharePageReturnValue18GetShareExitReasonEv",
+        "offset": 5124768,
+        "address": "0x3c885102a0",
+        "size": 76,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowLobbyPageArg8DataSizeE",
+        "description": "nn::web::ShowLobbyPageArg::DataSize",
+        "offset": 11863208,
+        "address": "0x3c88b7d4a8",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web20SharePageReturnValueC2Ev",
+        "description": "nn::web::SharePageReturnValue::(constructor) [args: Ev]",
+        "offset": 5124756,
+        "address": "0x3c88510294",
+        "size": 12,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6common9CommonApi26SetBootFooterButtonVisibleEPhNS1_14FooterButtonIdEb",
+        "description": "nn::web::common::CommonApi::SetBootFooterButtonVisible [args: PhNS1_14FooterButtonIdEb]",
+        "offset": 5132584,
+        "address": "0x3c88512128",
+        "size": 1872,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web21ShowSystemDataPageArg26SetBootFooterButtonVisibleENS0_21OfflineFooterButtonIdEb",
+        "description": "nn::web::ShowSystemDataPageArg::SetBootFooterButtonVisible [args: NS0_21OfflineFooterButtonIdEb]",
+        "offset": 5135836,
+        "address": "0x3c88512ddc",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web26OfflineHtmlPageReturnValueC1Ev",
+        "description": "nn::web::OfflineHtmlPageReturnValue::(constructor) [args: Ev]",
+        "offset": 5130788,
+        "address": "0x3c88511a24",
+        "size": 36,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail24ShowOfflinePageArgDetail15SetDocumentPathEPhmPKc",
+        "description": "nn::web::detail::ShowOfflinePageArgDetail::SetDocumentPath [args: PhmPKc]",
+        "offset": 5143580,
+        "address": "0x3c88514c1c",
+        "size": 260,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl18StorageHandleQueueC2Ev",
+        "description": "nn::web::detail::WebSessionImpl::StorageHandleQueue::(constructor) [args: Ev]",
+        "offset": 5147080,
+        "address": "0x3c885159c8",
+        "size": 52,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowSharePageArg8DataSizeE",
+        "description": "nn::web::ShowSharePageArg::DataSize",
+        "offset": 11866784,
+        "address": "0x3c88b7e2a0",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZNK2nn3web20SharePageReturnValue18GetSharePostResultEv",
+        "description": "_ZNK2nn3web20SharePageReturnValue18GetSharePostResultEv",
+        "offset": 5124972,
+        "address": "0x3c8851036c",
+        "size": 64,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl18StorageHandleQueueD1Ev",
+        "description": "nn::web::detail::WebSessionImpl::StorageHandleQueue::(destructor) [args: Ev]",
+        "offset": 5147132,
+        "address": "0x3c885159fc",
+        "size": 148,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web17OfflineWebSessionC2Ev",
+        "description": "nn::web::OfflineWebSession::(constructor) [args: Ev]",
+        "offset": 5136020,
+        "address": "0x3c88512e94",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web20SharePageReturnValue22GetPostServiceNameSizeEv",
+        "description": "_ZNK2nn3web20SharePageReturnValue22GetPostServiceNameSizeEv",
+        "offset": 5125100,
+        "address": "0x3c885103ec",
+        "size": 64,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web21ShowSystemDataPageArg8DataSizeE",
+        "description": "nn::web::ShowSystemDataPageArg::DataSize",
+        "offset": 11866920,
+        "address": "0x3c88b7e328",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web16ShowLobbyPageArgC1Ev",
+        "description": "nn::web::ShowLobbyPageArg::(constructor) [args: Ev]",
+        "offset": 5113708,
+        "address": "0x3c8850d76c",
+        "size": 824,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web17OfflineWebSessionD1Ev",
+        "description": "nn::web::OfflineWebSession::(destructor) [args: Ev]",
+        "offset": 5136028,
+        "address": "0x3c88512e9c",
+        "size": 4,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web35ShowApplicationLegalInformationPageEPNS0_26OfflineHtmlPageReturnValueERKNS0_38ShowApplicationLegalInformationPageArgE",
+        "description": "nn::web::ShowApplicationLegalInformationPage [args: PNS0_26OfflineHtmlPageReturnValueERKNS0_38ShowApplicationLegalInformationPageArgE]",
+        "offset": 5126896,
+        "address": "0x3c88510af0",
+        "size": 156,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowSharePageArg13SetAlbumEntryERKNS_6capsrv10AlbumEntryE",
+        "description": "nn::web::ShowSharePageArg::SetAlbumEntry [args: RKNS_6capsrv10AlbumEntryE]",
+        "offset": 5122736,
+        "address": "0x3c8850fab0",
+        "size": 152,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web6detail14WebSessionImpl18StorageHandleQueue8getCountEv",
+        "description": "_ZNK2nn3web6detail14WebSessionImpl18StorageHandleQueue8getCountEv",
+        "offset": 5146984,
+        "address": "0x3c88515968",
+        "size": 44,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web17OfflineWebSession6AppearEv",
+        "description": "nn::web::OfflineWebSession::Appear [args: v]",
+        "offset": 5136792,
+        "address": "0x3c88513198",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web10WebSession24TryReceiveContentMessageEPmPcm",
+        "description": "nn::web::WebSession::TryReceiveContentMessage [args: PmPcm]",
+        "offset": 5143092,
+        "address": "0x3c88514a34",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn2la32NifmToWifiWebAuthArgumentsWriterD1Ev",
+        "description": "_ZN2nn2la32NifmToWifiWebAuthArgumentsWriterD1Ev",
+        "offset": 3493872,
+        "address": "0x3c88381ff0",
+        "size": 4,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web17OfflineWebSession17GetWorkBufferSizeEv",
+        "description": "nn::web::OfflineWebSession::GetWorkBufferSize [args: v]",
+        "offset": 5136032,
+        "address": "0x3c88512ea0",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn2la32NifmToWifiWebAuthArgumentsWriter6ExportEPcm",
+        "description": "_ZNK2nn2la32NifmToWifiWebAuthArgumentsWriter6ExportEPcm",
+        "offset": 3494024,
+        "address": "0x3c88382088",
+        "size": 48,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web19ShowYouTubeVideoArg8DataSizeE",
+        "description": "nn::web::ShowYouTubeVideoArg::DataSize",
+        "offset": 11866992,
+        "address": "0x3c88b7e370",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImplC1Ev",
+        "description": "nn::web::detail::WebSessionImpl::(constructor) [args: Ev]",
+        "offset": 5144412,
+        "address": "0x3c88514f5c",
+        "size": 96,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowLobbyPageArg6SetUidERKNS_7account3UidE",
+        "description": "nn::web::ShowLobbyPageArg::SetUid [args: RKNS_7account3UidE]",
+        "offset": 5114532,
+        "address": "0x3c8850daa4",
+        "size": 132,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web19ShowYouTubeVideoArgC2EPKc",
+        "description": "nn::web::ShowYouTubeVideoArg::(constructor) [args: EPKc]",
+        "offset": 5141468,
+        "address": "0x3c885143dc",
+        "size": 332,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl41TotalSendSystemMessageGroupStorageSizeMaxE",
+        "description": "nn::web::detail::WebSessionImpl::TotalSendSystemMessageGroupStorageSizeMax",
+        "offset": 11867020,
+        "address": "0x3c88b7e38c",
+        "size": 4,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web26OfflineHtmlPageReturnValueC2Ev",
+        "description": "nn::web::OfflineHtmlPageReturnValue::(constructor) [args: Ev]",
+        "offset": 5130788,
+        "address": "0x3c88511a24",
+        "size": 36,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowSharePageArg22SetAdditionalMediaDataEPKhm",
+        "description": "nn::web::ShowSharePageArg::SetAdditionalMediaData [args: PKhm]",
+        "offset": 5124236,
+        "address": "0x3c8851008c",
+        "size": 260,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl30SendSystemMessageGroupCountMaxE",
+        "description": "nn::web::detail::WebSessionImpl::SendSystemMessageGroupCountMax",
+        "offset": 11867016,
+        "address": "0x3c88b7e388",
+        "size": 4,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web19ShowYouTubeVideoArg19RequestUrlMaxLengthE",
+        "description": "nn::web::ShowYouTubeVideoArg::RequestUrlMaxLength",
+        "offset": 11866984,
+        "address": "0x3c88b7e368",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web19ShowYouTubeVideoArgC1EPKc",
+        "description": "nn::web::ShowYouTubeVideoArg::(constructor) [args: EPKc]",
+        "offset": 5141468,
+        "address": "0x3c885143dc",
+        "size": 332,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web19ShowYouTubeVideoArg16SetBootAsWebPageEb",
+        "description": "nn::web::ShowYouTubeVideoArg::SetBootAsWebPage [args: b]",
+        "offset": 5142168,
+        "address": "0x3c88514698",
+        "size": 128,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail40WebSessionSendSystemMessageGroupIncludesENS1_25WebSessionSendMessageKindE",
+        "description": "nn::web::detail::WebSessionSendSystemMessageGroupIncludes [args: NS1_25WebSessionSendMessageKindE]",
+        "offset": 5144400,
+        "address": "0x3c88514f50",
+        "size": 12,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl18StorageHandleQueueD2Ev",
+        "description": "nn::web::detail::WebSessionImpl::StorageHandleQueue::(destructor) [args: Ev]",
+        "offset": 5147132,
+        "address": "0x3c885159fc",
+        "size": 148,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web13ShowLobbyPageEPNS0_20LobbyPageReturnValueERKNS0_16ShowLobbyPageArgE",
+        "description": "nn::web::ShowLobbyPage [args: PNS0_20LobbyPageReturnValueERKNS0_16ShowLobbyPageArgE]",
+        "offset": 5113424,
+        "address": "0x3c8850d650",
+        "size": 284,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowSharePageArg18AlbumEntryMaxCountE",
+        "description": "nn::web::ShowSharePageArg::AlbumEntryMaxCount",
+        "offset": 11866776,
+        "address": "0x3c88b7e298",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web38ShowApplicationLegalInformationPageArgC2ERKNS_13ApplicationIdEPKc",
+        "description": "nn::web::ShowApplicationLegalInformationPageArg::(constructor) [args: ERKNS_13ApplicationIdEPKc]",
+        "offset": 5132372,
+        "address": "0x3c88512054",
+        "size": 96,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl10tryReceiveEPNS1_23WebSessionMessageHeaderEPvmNS1_28WebSessionReceiveMessageKindE",
+        "description": "nn::web::detail::WebSessionImpl::tryReceive [args: PNS1_23WebSessionMessageHeaderEPvmNS1_28WebSessionReceiveMessageKindE]",
+        "offset": 5145080,
+        "address": "0x3c885151f8",
+        "size": 552,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web19ShowYouTubeVideoArg33SetMediaPlayerSpeedControlEnabledEb",
+        "description": "nn::web::ShowYouTubeVideoArg::SetMediaPlayerSpeedControlEnabled [args: b]",
+        "offset": 5142044,
+        "address": "0x3c8851461c",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowLobbyPageArgC2Ev",
+        "description": "nn::web::ShowLobbyPageArg::(constructor) [args: Ev]",
+        "offset": 5113708,
+        "address": "0x3c8850d76c",
+        "size": 824,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web17OfflineWebSessionD2Ev",
+        "description": "nn::web::OfflineWebSession::(destructor) [args: Ev]",
+        "offset": 5136028,
+        "address": "0x3c88512e9c",
+        "size": 4,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web10WebSession8FinalizeEv",
+        "description": "nn::web::WebSession::Finalize [args: v]",
+        "offset": 5143016,
+        "address": "0x3c885149e8",
+        "size": 52,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web13ShowSharePageEPNS0_20SharePageReturnValueERKNS0_16ShowSharePageArgE",
+        "description": "nn::web::ShowSharePage [args: PNS0_20SharePageReturnValueERKNS0_16ShowSharePageArgE]",
+        "offset": 5121456,
+        "address": "0x3c8850f5b0",
+        "size": 280,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web20LobbyPageReturnValueC1Ev",
+        "description": "nn::web::LobbyPageReturnValue::(constructor) [args: Ev]",
+        "offset": 5114920,
+        "address": "0x3c8850dc28",
+        "size": 36,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web20LobbyPageReturnValue14GetLastUrlSizeEv",
+        "description": "_ZNK2nn3web20LobbyPageReturnValue14GetLastUrlSizeEv",
+        "offset": 5114972,
+        "address": "0x3c8850dc5c",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail23SharePageReturnValue2_016LastUrlMaxLengthE",
+        "description": "nn::web::detail::SharePageReturnValue2_0::LastUrlMaxLength",
+        "offset": 11866864,
+        "address": "0x3c88b7e2f0",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web18RequestExitWebPageEv",
+        "description": "nn::web::RequestExitWebPage [args: v]",
+        "offset": 5126032,
+        "address": "0x3c88510790",
+        "size": 76,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn2la32NifmToWifiWebAuthArgumentsWriterD2Ev",
+        "description": "_ZN2nn2la32NifmToWifiWebAuthArgumentsWriterD2Ev",
+        "offset": 3493872,
+        "address": "0x3c88381ff0",
+        "size": 4,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl18StorageHandleQueue7dequeueEv",
+        "description": "nn::web::detail::WebSessionImpl::StorageHandleQueue::dequeue [args: v]",
+        "offset": 5147028,
+        "address": "0x3c88515994",
+        "size": 52,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn8settings6detail19SetWebInspectorFlagEb",
+        "description": "_ZN2nn8settings6detail19SetWebInspectorFlagEb",
+        "offset": 3917216,
+        "address": "0x3c883e95a0",
+        "size": 116,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImplC2Ev",
+        "description": "nn::web::detail::WebSessionImpl::(constructor) [args: Ev]",
+        "offset": 5144412,
+        "address": "0x3c88514f5c",
+        "size": 96,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web20SharePageReturnValue24PostServiceNameMaxLengthE",
+        "description": "nn::web::SharePageReturnValue::PostServiceNameMaxLength",
+        "offset": 11866800,
+        "address": "0x3c88b7e2b0",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web16ShowSharePageArgC2ENS0_14ShareStartPageE",
+        "description": "nn::web::ShowSharePageArg::(constructor) [args: ENS0_14ShareStartPageE]",
+        "offset": 5122568,
+        "address": "0x3c8850fa08",
+        "size": 168,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web17OfflineWebSession16NeedsWaitForExitEv",
+        "description": "_ZNK2nn3web17OfflineWebSession16NeedsWaitForExitEv",
+        "offset": 5136720,
+        "address": "0x3c88513150",
+        "size": 20,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web21ShowSystemDataPageArg18SetFooterFixedKindENS0_22OfflineFooterFixedKindE",
+        "description": "nn::web::ShowSystemDataPageArg::SetFooterFixedKind [args: NS0_22OfflineFooterFixedKindE]",
+        "offset": 5135608,
+        "address": "0x3c88512cf8",
+        "size": 120,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web38ShowApplicationLegalInformationPageArg8DataSizeE",
+        "description": "nn::web::ShowApplicationLegalInformationPageArg::DataSize",
+        "offset": 11866904,
+        "address": "0x3c88b7e318",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn2sf4cmif6client6detail13CmifProxyImplINS_7friends6detail3ipc14IFriendServiceENS2_19CmifDomainProxyKindINS0_4hipc6client38Hipc2ClientSessionManagedProxyKindBaseINSB_18Hipc2ProxyKindBaseILNSA_6detail11MessageTypeE6EEEEEEENS0_30MemoryResourceAllocationPolicyES8_NS3_19ProcessModifierImplINS2_21DefaultProxyFilterTagEEEE36_nn_sf_sync_GetSnsAccountLinkPageUrlENS0_3OutINS5_10WebPageUrlEvEERKNS_7account3UidEi",
+        "description": "_ZN2nn2sf4cmif6client6detail13CmifProxyImplINS_7friends6detail3ipc14IFriendServiceENS2_19CmifDomainProxyKindINS0_4hipc6client38Hipc2ClientSessionManagedProxyKindBaseINSB_18Hipc2ProxyKindBaseILNSA_6detail11MessageTypeE6EEEEEEENS0_30MemoryResourceAllocationPolicyES8_NS3_19ProcessModifierImplINS2_21DefaultProxyFilterTagEEEE36_nn_sf_sync_GetSnsAccountLinkPageUrlENS0_3OutINS5_10WebPageUrlEvEERKNS_7account3UidEi",
+        "offset": 3393124,
+        "address": "0x3c88369664",
+        "size": 28,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web10WebSessionC1Ev",
+        "description": "nn::web::WebSession::(constructor) [args: Ev]",
+        "offset": 5142300,
+        "address": "0x3c8851471c",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web10WebSession11RequestExitEv",
+        "description": "nn::web::WebSession::RequestExit [args: v]",
+        "offset": 5143076,
+        "address": "0x3c88514a24",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web10WebSession10InitializeEPvm",
+        "description": "nn::web::WebSession::Initialize [args: Pvm]",
+        "offset": 5142320,
+        "address": "0x3c88514730",
+        "size": 44,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowSharePageArgC1Ev",
+        "description": "nn::web::ShowSharePageArg::(constructor) [args: Ev]",
+        "offset": 5121840,
+        "address": "0x3c8850f730",
+        "size": 596,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail23SharePageReturnValue2_0C1Ev",
+        "description": "nn::web::detail::SharePageReturnValue2_0::(constructor) [args: Ev]",
+        "offset": 5125528,
+        "address": "0x3c88510598",
+        "size": 36,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail22ShowSharePageArgDetail14SetCallbackUrlEPhPKc",
+        "description": "nn::web::detail::ShowSharePageArgDetail::SetCallbackUrl [args: PhPKc]",
+        "offset": 5125292,
+        "address": "0x3c885104ac",
+        "size": 236,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowSharePageArg30AdditionalCommentTextMaxLengthE",
+        "description": "nn::web::ShowSharePageArg::AdditionalCommentTextMaxLength",
+        "offset": 11866760,
+        "address": "0x3c88b7e288",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web16ShowSharePageArg6SetUidERKNS_7account3UidE",
+        "description": "nn::web::ShowSharePageArg::SetUid [args: RKNS_7account3UidE]",
+        "offset": 5122436,
+        "address": "0x3c8850f984",
+        "size": 132,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl7canSendERKNS1_23WebSessionMessageHeaderEm",
+        "description": "nn::web::detail::WebSessionImpl::canSend [args: RKNS1_23WebSessionMessageHeaderEm]",
+        "offset": 5146192,
+        "address": "0x3c88515650",
+        "size": 88,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web38ShowApplicationLegalInformationPageArg21DocumentPathMaxLengthE",
+        "description": "nn::web::ShowApplicationLegalInformationPageArg::DocumentPathMaxLength",
+        "offset": 11866896,
+        "address": "0x3c88b7e310",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web17OfflineWebSession11RequestExitEv",
+        "description": "nn::web::OfflineWebSession::RequestExit [args: v]",
+        "offset": 5136800,
+        "address": "0x3c885131a0",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web20LobbyPageReturnValueC2Ev",
+        "description": "nn::web::LobbyPageReturnValue::(constructor) [args: Ev]",
+        "offset": 5114920,
+        "address": "0x3c8850dc28",
+        "size": 36,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web21ShowSystemDataPageArg21DocumentPathMaxLengthE",
+        "description": "nn::web::ShowSystemDataPageArg::DocumentPathMaxLength",
+        "offset": 11866912,
+        "address": "0x3c88b7e320",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web17OfflineWebSession10InitializeEPvm",
+        "description": "nn::web::OfflineWebSession::Initialize [args: Pvm]",
+        "offset": 5136040,
+        "address": "0x3c88512ea8",
+        "size": 44,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl7trySendERKNS1_23WebSessionMessageHeaderEPKv",
+        "description": "nn::web::detail::WebSessionImpl::trySend [args: RKNS1_23WebSessionMessageHeaderEPKv]",
+        "offset": 5144556,
+        "address": "0x3c88514fec",
+        "size": 352,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowSharePageArg24SetAdditionalCommentTextEPKc",
+        "description": "nn::web::ShowSharePageArg::SetAdditionalCommentText [args: PKc]",
+        "offset": 5124000,
+        "address": "0x3c8850ffa0",
+        "size": 236,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web19ShowYouTubeVideoArg4DataEv",
+        "description": "_ZNK2nn3web19ShowYouTubeVideoArg4DataEv",
+        "offset": 5142296,
+        "address": "0x3c88514718",
+        "size": 4,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn2sf4cmif6client6detail13CmifProxyImplINS_8settings28IFirmwareDebugSettingsServerENS0_4hipc6client18Hipc2ProxyKindBaseILNS7_6detail11MessageTypeE6EEENS0_30MemoryResourceAllocationPolicyES6_NS3_19ProcessModifierImplINS2_21DefaultProxyFilterTagEEEE31_nn_sf_sync_SetWebInspectorFlagEb",
+        "description": "_ZN2nn2sf4cmif6client6detail13CmifProxyImplINS_8settings28IFirmwareDebugSettingsServerENS0_4hipc6client18Hipc2ProxyKindBaseILNS7_6detail11MessageTypeE6EEENS0_30MemoryResourceAllocationPolicyES6_NS3_19ProcessModifierImplINS2_21DefaultProxyFilterTagEEEE31_nn_sf_sync_SetWebInspectorFlagEb",
+        "offset": 3927720,
+        "address": "0x3c883ebea8",
+        "size": 16,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web26RequestExitOfflineHtmlPageEv",
+        "description": "nn::web::RequestExitOfflineHtmlPage [args: v]",
+        "offset": 5126816,
+        "address": "0x3c88510aa0",
+        "size": 76,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web38ShowApplicationLegalInformationPageArg26SetBootFooterButtonVisibleENS0_21OfflineFooterButtonIdEb",
+        "description": "nn::web::ShowApplicationLegalInformationPageArg::SetBootFooterButtonVisible [args: NS0_21OfflineFooterButtonIdEb]",
+        "offset": 5132576,
+        "address": "0x3c88512120",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn2la32NifmToWifiWebAuthArgumentsWriterC2EPKcS3_RKNS_4util4UuidEj",
+        "description": "_ZN2nn2la32NifmToWifiWebAuthArgumentsWriterC2EPKcS3_RKNS_4util4UuidEj",
+        "offset": 3493672,
+        "address": "0x3c88381f28",
+        "size": 200,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web20SharePageReturnValue15PostIdMaxLengthE",
+        "description": "nn::web::SharePageReturnValue::PostIdMaxLength",
+        "offset": 11866808,
+        "address": "0x3c88b7e2b8",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web19ShowYouTubeVideoArg30SetMediaPlayerAutoCloseEnabledEb",
+        "description": "nn::web::ShowYouTubeVideoArg::SetMediaPlayerAutoCloseEnabled [args: b]",
+        "offset": 5141920,
+        "address": "0x3c885145a0",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail24ShowOfflinePageArgDetail16SetApplicationIdEPhRKNS_13ApplicationIdE",
+        "description": "nn::web::detail::ShowOfflinePageArgDetail::SetApplicationId [args: PhRKNS_13ApplicationIdE]",
+        "offset": 5143448,
+        "address": "0x3c88514b98",
+        "size": 132,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl7sendAckEj",
+        "description": "nn::web::detail::WebSessionImpl::sendAck [args: j]",
+        "offset": 5146280,
+        "address": "0x3c885156a8",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web20SharePageReturnValue14GetLastUrlSizeEv",
+        "description": "_ZNK2nn3web20SharePageReturnValue14GetLastUrlSizeEv",
+        "offset": 5124908,
+        "address": "0x3c8851032c",
+        "size": 64,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn2la32NifmToWifiWebAuthArgumentsWriter13GetExportSizeEv",
+        "description": "_ZNK2nn2la32NifmToWifiWebAuthArgumentsWriter13GetExportSizeEv",
+        "offset": 3494016,
+        "address": "0x3c88382080",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl17hasReceiveMessageEv",
+        "description": "nn::web::detail::WebSessionImpl::hasReceiveMessage [args: v]",
+        "offset": 5146824,
+        "address": "0x3c885158c8",
+        "size": 68,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web10WebSessionC2Ev",
+        "description": "nn::web::WebSession::(constructor) [args: Ev]",
+        "offset": 5142300,
+        "address": "0x3c8851471c",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web10WebSession16NeedsWaitForExitEv",
+        "description": "_ZNK2nn3web10WebSession16NeedsWaitForExitEv",
+        "offset": 5142996,
+        "address": "0x3c885149d4",
+        "size": 20,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowSharePageArgC2Ev",
+        "description": "nn::web::ShowSharePageArg::(constructor) [args: Ev]",
+        "offset": 5121840,
+        "address": "0x3c8850f730",
+        "size": 596,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web18ShowSystemDataPageEPNS0_26OfflineHtmlPageReturnValueERKNS0_21ShowSystemDataPageArgE",
+        "description": "nn::web::ShowSystemDataPage [args: PNS0_26OfflineHtmlPageReturnValueERKNS0_21ShowSystemDataPageArgE]",
+        "offset": 5127264,
+        "address": "0x3c88510c60",
+        "size": 156,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web21ShowSystemDataPageArgC2ERKNS_3ncm12SystemDataIdEPKc",
+        "description": "nn::web::ShowSystemDataPageArg::(constructor) [args: ERKNS_3ncm12SystemDataIdEPKc]",
+        "offset": 5135512,
+        "address": "0x3c88512c98",
+        "size": 96,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web19ShowYouTubeVideoArgC1Ev",
+        "description": "nn::web::ShowYouTubeVideoArg::(constructor) [args: Ev]",
+        "offset": 5141256,
+        "address": "0x3c88514308",
+        "size": 212,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web10WebSessionD1Ev",
+        "description": "nn::web::WebSession::(destructor) [args: Ev]",
+        "offset": 5142308,
+        "address": "0x3c88514724",
+        "size": 4,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail23SharePageReturnValue2_0C2Ev",
+        "description": "nn::web::detail::SharePageReturnValue2_0::(constructor) [args: Ev]",
+        "offset": 5125528,
+        "address": "0x3c88510598",
+        "size": 36,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl15ReceiveCountMaxE",
+        "description": "nn::web::detail::WebSessionImpl::ReceiveCountMax",
+        "offset": 11867024,
+        "address": "0x3c88b7e390",
+        "size": 4,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web19ShowYouTubeVideoArg18SetBootDisplayKindENS0_18WebBootDisplayKindE",
+        "description": "nn::web::ShowYouTubeVideoArg::SetBootDisplayKind [args: NS0_18WebBootDisplayKindE]",
+        "offset": 5141800,
+        "address": "0x3c88514528",
+        "size": 120,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl24tryReceiveContentMessageEPmPcm",
+        "description": "nn::web::detail::WebSessionImpl::tryReceiveContentMessage [args: PmPcm]",
+        "offset": 5144908,
+        "address": "0x3c8851514c",
+        "size": 172,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web38ShowApplicationLegalInformationPageArgC1Ev",
+        "description": "nn::web::ShowApplicationLegalInformationPageArg::(constructor) [args: Ev]",
+        "offset": 5131316,
+        "address": "0x3c88511c34",
+        "size": 1056,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowSharePageArg25AddAlbumEntryAndMediaDataERKNS_6capsrv10AlbumEntryEPKhm",
+        "description": "nn::web::ShowSharePageArg::AddAlbumEntryAndMediaData [args: RKNS_6capsrv10AlbumEntryEPKhm]",
+        "offset": 5122888,
+        "address": "0x3c8850fb48",
+        "size": 960,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web20SharePageReturnValue10GetLastUrlEv",
+        "description": "_ZNK2nn3web20SharePageReturnValue10GetLastUrlEv",
+        "offset": 5124844,
+        "address": "0x3c885102ec",
+        "size": 64,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl18StorageHandleQueue5clearEv",
+        "description": "nn::web::detail::WebSessionImpl::StorageHandleQueue::clear [args: v]",
+        "offset": 5146044,
+        "address": "0x3c885155bc",
+        "size": 148,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail23SharePageReturnValue2_018SetShareExitReasonENS0_15ShareExitReasonE",
+        "description": "nn::web::detail::SharePageReturnValue2_0::SetShareExitReason [args: NS0_15ShareExitReasonE]",
+        "offset": 5125564,
+        "address": "0x3c885105bc",
+        "size": 12,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowSharePageArg28AdditionalMediaDataMaxLengthE",
+        "description": "nn::web::ShowSharePageArg::AdditionalMediaDataMaxLength",
+        "offset": 11866768,
+        "address": "0x3c88b7e290",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web17OfflineWebSession11WaitForExitEPNS0_26OfflineHtmlPageReturnValueE",
+        "description": "nn::web::OfflineWebSession::WaitForExit [args: PNS0_26OfflineHtmlPageReturnValueE]",
+        "offset": 5136500,
+        "address": "0x3c88513074",
+        "size": 220,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web20SharePageReturnValue16LastUrlMaxLengthE",
+        "description": "nn::web::SharePageReturnValue::LastUrlMaxLength",
+        "offset": 11866792,
+        "address": "0x3c88b7e2a8",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn2sf4cmif6client6detail13CmifProxyImplINS_8settings21ISystemSettingsServerENS0_4hipc6client18Hipc2ProxyKindBaseILNS7_6detail11MessageTypeE6EEENS0_30MemoryResourceAllocationPolicyES6_NS3_19ProcessModifierImplINS2_21DefaultProxyFilterTagEEEE31_nn_sf_sync_GetWebInspectorFlagENS0_3OutIbvEE",
+        "description": "_ZN2nn2sf4cmif6client6detail13CmifProxyImplINS_8settings21ISystemSettingsServerENS0_4hipc6client18Hipc2ProxyKindBaseILNS7_6detail11MessageTypeE6EEENS0_30MemoryResourceAllocationPolicyES6_NS3_19ProcessModifierImplINS2_21DefaultProxyFilterTagEEEE31_nn_sf_sync_GetWebInspectorFlagENS0_3OutIbvEE",
+        "offset": 3936912,
+        "address": "0x3c883ee290",
+        "size": 12,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web26OfflineHtmlPageReturnValue16LastUrlMaxLengthE",
+        "description": "nn::web::OfflineHtmlPageReturnValue::LastUrlMaxLength",
+        "offset": 11866888,
+        "address": "0x3c88b7e308",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn8settings6detail19GetWebInspectorFlagEPb",
+        "description": "_ZN2nn8settings6detail19GetWebInspectorFlagEPb",
+        "offset": 3917088,
+        "address": "0x3c883e9520",
+        "size": 116,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail23SharePageReturnValue2_010SetLastUrlEPKc",
+        "description": "nn::web::detail::SharePageReturnValue2_0::SetLastUrl [args: PKc]",
+        "offset": 5125576,
+        "address": "0x3c885105c8",
+        "size": 92,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail47WebSessionSendBrowserEngineMessageGroupIncludesENS1_25WebSessionSendMessageKindE",
+        "description": "nn::web::detail::WebSessionSendBrowserEngineMessageGroupIncludes [args: NS1_25WebSessionSendMessageKindE]",
+        "offset": 5144384,
+        "address": "0x3c88514f40",
+        "size": 12,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail24ShowOfflinePageArgDetail15SetDocumentKindEPhRKNS1_19OfflineDocumentKindE",
+        "description": "nn::web::detail::ShowOfflinePageArgDetail::SetDocumentKind [args: PhRKNS1_19OfflineDocumentKindE]",
+        "offset": 5143840,
+        "address": "0x3c88514d20",
+        "size": 132,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web19ShowYouTubeVideoArgC2Ev",
+        "description": "nn::web::ShowYouTubeVideoArg::(constructor) [args: Ev]",
+        "offset": 5141256,
+        "address": "0x3c88514308",
+        "size": 212,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web10WebSessionD2Ev",
+        "description": "nn::web::WebSession::(destructor) [args: Ev]",
+        "offset": 5142308,
+        "address": "0x3c88514724",
+        "size": 4,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl37SendBrowserEngineMessageGroupCountMaxE",
+        "description": "nn::web::detail::WebSessionImpl::SendBrowserEngineMessageGroupCountMax",
+        "offset": 11867008,
+        "address": "0x3c88b7e380",
+        "size": 4,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web6detail24ShowOfflinePageArgDetail17SetPointerEnabledEPhb",
+        "description": "nn::web::detail::ShowOfflinePageArgDetail::SetPointerEnabled [args: Phb]",
+        "offset": 5144100,
+        "address": "0x3c88514e24",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web26OfflineHtmlPageReturnValue14GetLastUrlSizeEv",
+        "description": "_ZNK2nn3web26OfflineHtmlPageReturnValue14GetLastUrlSizeEv",
+        "offset": 5130840,
+        "address": "0x3c88511a58",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web21ShowSystemDataPageArgC1Ev",
+        "description": "nn::web::ShowSystemDataPageArg::(constructor) [args: Ev]",
+        "offset": 5134456,
+        "address": "0x3c88512878",
+        "size": 1056,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web20SharePageReturnValue13GetPostIdSizeEv",
+        "description": "_ZNK2nn3web20SharePageReturnValue13GetPostIdSizeEv",
+        "offset": 5125228,
+        "address": "0x3c8851046c",
+        "size": 64,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web17OfflineWebSession24TryReceiveContentMessageEPmPcm",
+        "description": "nn::web::OfflineWebSession::TryReceiveContentMessage [args: PmPcm]",
+        "offset": 5136816,
+        "address": "0x3c885131b0",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web10WebSession21TrySendContentMessageEPKcm",
+        "description": "nn::web::WebSession::TrySendContentMessage [args: PKcm]",
+        "offset": 5143084,
+        "address": "0x3c88514a2c",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web26OfflineHtmlPageReturnValue10GetLastUrlEv",
+        "description": "_ZNK2nn3web26OfflineHtmlPageReturnValue10GetLastUrlEv",
+        "offset": 5130832,
+        "address": "0x3c88511a50",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web38ShowApplicationLegalInformationPageArgC2Ev",
+        "description": "nn::web::ShowApplicationLegalInformationPageArg::(constructor) [args: Ev]",
+        "offset": 5131316,
+        "address": "0x3c88511c34",
+        "size": 1056,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web26OfflineHtmlPageReturnValue20GetOfflineExitReasonEv",
+        "description": "_ZNK2nn3web26OfflineHtmlPageReturnValue20GetOfflineExitReasonEv",
+        "offset": 5130824,
+        "address": "0x3c88511a48",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web10WebSession6AppearEv",
+        "description": "nn::web::WebSession::Appear [args: v]",
+        "offset": 5143068,
+        "address": "0x3c88514a1c",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl21receiveStorageHandlesEv",
+        "description": "nn::web::detail::WebSessionImpl::receiveStorageHandles [args: v]",
+        "offset": 5146404,
+        "address": "0x3c88515724",
+        "size": 420,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl5clearEv",
+        "description": "nn::web::detail::WebSessionImpl::clear [args: v]",
+        "offset": 5145884,
+        "address": "0x3c8851551c",
+        "size": 160,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web20LobbyPageReturnValue10GetLastUrlEv",
+        "description": "_ZNK2nn3web20LobbyPageReturnValue10GetLastUrlEv",
+        "offset": 5114964,
+        "address": "0x3c8850dc54",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web17OfflineWebSession21TrySendContentMessageEPKcm",
+        "description": "nn::web::OfflineWebSession::TrySendContentMessage [args: PKcm]",
+        "offset": 5136808,
+        "address": "0x3c885131a8",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowSharePageArg24SetApplicationAlbumEntryERKNS_6capsrv21ApplicationAlbumEntryE",
+        "description": "nn::web::ShowSharePageArg::SetApplicationAlbumEntry [args: RKNS_6capsrv21ApplicationAlbumEntryE]",
+        "offset": 5123848,
+        "address": "0x3c8850ff08",
+        "size": 152,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl21trySendContentMessageEPKcj",
+        "description": "nn::web::detail::WebSessionImpl::trySendContentMessage [args: PKcj]",
+        "offset": 5144508,
+        "address": "0x3c88514fbc",
+        "size": 48,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web20SharePageReturnValue18GetPostServiceNameEv",
+        "description": "_ZNK2nn3web20SharePageReturnValue18GetPostServiceNameEv",
+        "offset": 5125036,
+        "address": "0x3c885103ac",
+        "size": 64,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web20SharePageReturnValue8DataSizeE",
+        "description": "nn::web::SharePageReturnValue::DataSize",
+        "offset": 11866816,
+        "address": "0x3c88b7e2c0",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web6detail24ShowOfflinePageArgDetail15SetSystemDataIdEPhRKNS_3ncm12SystemDataIdE",
+        "description": "nn::web::detail::ShowOfflinePageArgDetail::SetSystemDataId [args: PhRKNS_3ncm12SystemDataIdE]",
+        "offset": 5143972,
+        "address": "0x3c88514da4",
+        "size": 128,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl11isAvaliableEv",
+        "description": "nn::web::detail::WebSessionImpl::isAvaliable [args: v]",
+        "offset": 5145780,
+        "address": "0x3c885154b4",
+        "size": 56,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web20SharePageReturnValueC1Ev",
+        "description": "nn::web::SharePageReturnValue::(constructor) [args: Ev]",
+        "offset": 5124756,
+        "address": "0x3c88510294",
+        "size": 12,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web10WebSession17GetWorkBufferSizeEv",
+        "description": "nn::web::WebSession::GetWorkBufferSize [args: v]",
+        "offset": 5142312,
+        "address": "0x3c88514728",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZNK2nn3web20SharePageReturnValue9GetPostIdEv",
+        "description": "_ZNK2nn3web20SharePageReturnValue9GetPostIdEv",
+        "offset": 5125164,
+        "address": "0x3c8851042c",
+        "size": 64,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowLobbyPageArg17SetLobbyParameterEPKc",
+        "description": "nn::web::ShowLobbyPageArg::SetLobbyParameter [args: PKc]",
+        "offset": 5114664,
+        "address": "0x3c8850db28",
+        "size": 256,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail33GetWebSessionSendMessageGroupKindENS1_25WebSessionSendMessageKindE",
+        "description": "nn::web::detail::GetWebSessionSendMessageGroupKind [args: NS1_25WebSessionSendMessageKindE]",
+        "offset": 5144352,
+        "address": "0x3c88514f20",
+        "size": 24,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl18StorageHandleQueueC1Ev",
+        "description": "nn::web::detail::WebSessionImpl::StorageHandleQueue::(constructor) [args: Ev]",
+        "offset": 5147080,
+        "address": "0x3c885159c8",
+        "size": 52,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web17OfflineWebSession8FinalizeEv",
+        "description": "nn::web::OfflineWebSession::Finalize [args: v]",
+        "offset": 5136740,
+        "address": "0x3c88513164",
+        "size": 52,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail24ShowOfflinePageArgDetail16SetLeftStickModeEPhRKNS0_20OfflineLeftStickModeE",
+        "description": "nn::web::detail::ShowOfflinePageArgDetail::SetLeftStickMode [args: PhRKNS0_20OfflineLeftStickModeE]",
+        "offset": 5144224,
+        "address": "0x3c88514ea0",
+        "size": 124,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn8settings6system16UsesWebInspectorEv",
+        "description": "_ZN2nn8settings6system16UsesWebInspectorEv",
+        "offset": 3884272,
+        "address": "0x3c883e14f0",
+        "size": 56,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowLobbyPageArg23LobbyParameterMaxLengthE",
+        "description": "nn::web::ShowLobbyPageArg::LobbyParameterMaxLength",
+        "offset": 11863200,
+        "address": "0x3c88b7d4a0",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl6appearEv",
+        "description": "nn::web::detail::WebSessionImpl::appear [args: v]",
+        "offset": 5145632,
+        "address": "0x3c88515420",
+        "size": 84,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowSharePageArgC1ENS0_14ShareStartPageE",
+        "description": "nn::web::ShowSharePageArg::(constructor) [args: ENS0_14ShareStartPageE]",
+        "offset": 5122568,
+        "address": "0x3c8850fa08",
+        "size": 168,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web21ShowSystemDataPageArgC1ERKNS_3ncm12SystemDataIdEPKc",
+        "description": "nn::web::ShowSystemDataPageArg::(constructor) [args: ERKNS_3ncm12SystemDataIdEPKc]",
+        "offset": 5135512,
+        "address": "0x3c88512c98",
+        "size": 96,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web21ShowSystemDataPageArgC2Ev",
+        "description": "nn::web::ShowSystemDataPageArg::(constructor) [args: Ev]",
+        "offset": 5134456,
+        "address": "0x3c88512878",
+        "size": 1056,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web20LobbyPageReturnValue16LastUrlMaxLengthE",
+        "description": "nn::web::LobbyPageReturnValue::LastUrlMaxLength",
+        "offset": 11863216,
+        "address": "0x3c88b7d4b0",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web17OfflineWebSessionC1Ev",
+        "description": "nn::web::OfflineWebSession::(constructor) [args: Ev]",
+        "offset": 5136020,
+        "address": "0x3c88512e94",
+        "size": 8,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web16ShowSharePageArg24CallbackableUrlMaxLengthE",
+        "description": "nn::web::ShowSharePageArg::CallbackableUrlMaxLength",
+        "offset": 11866752,
+        "address": "0x3c88b7e280",
+        "size": 8,
+        "section": 10,
+        "type": 1
+      },
+      {
+        "name": "_ZN2nn3web38ShowApplicationLegalInformationPageArgC1ERKNS_13ApplicationIdEPKc",
+        "description": "nn::web::ShowApplicationLegalInformationPageArg::(constructor) [args: ERKNS_13ApplicationIdEPKc]",
+        "offset": 5132372,
+        "address": "0x3c88512054",
+        "size": 96,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn2la32NifmToWifiWebAuthArgumentsWriterC1EPKcS3_RKNS_4util4UuidEj",
+        "description": "_ZN2nn2la32NifmToWifiWebAuthArgumentsWriterC1EPKcS3_RKNS_4util4UuidEj",
+        "offset": 3493672,
+        "address": "0x3c88381f28",
+        "size": 200,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl11requestExitEv",
+        "description": "nn::web::detail::WebSessionImpl::requestExit [args: v]",
+        "offset": 5145716,
+        "address": "0x3c88515474",
+        "size": 64,
+        "section": 1,
+        "type": 2
+      },
+      {
+        "name": "_ZN2nn3web6detail14WebSessionImpl48TotalSendBrowserEngineMessageGroupStorageSizeMaxE",
+        "description": "nn::web::detail::WebSessionImpl::TotalSendBrowserEngineMessageGroupStorageSizeMax",
+        "offset": 11867012,
+        "address": "0x3c88b7e384",
+        "size": 4,
+        "section": 10,
+        "type": 1
+      }
+    ]
+  },
+  "resolvedDefinitions": {
+    "ShowWebPage": {
+      "symbol": "_ZN2nn3web11ShowWebPageEPNS0_18WebPageReturnValueERKNS0_14ShowWebPageArgE",
+      "offset": 5125680,
+      "size": 344,
+      "hex": "ff4301d1fd7b02a9fd830091f51b00f9f44f04a9f30300aa404000d000802891f40301aac771039461028052e0030091e2031f2ae3920394a01b00b9c0070035"
+    },
+    "WebPageReturnValueConstructor": {
+      "symbol": "_ZN2nn3web6detail21WebPageReturnValue6_0C1Ev",
+      "offset": 5143208,
+      "size": 28,
+      "hex": "fd7bbfa9fd03009102028252e1031f2aca560394fd7bc1a8c0035fd6"
+    },
+    "ShowWebPageArgConstructor": {
+      "symbol": "_ZN2nn3web14ShowWebPageArgC1EPKc",
+      "offset": 5136996,
+      "size": 152,
+      "hex": "fd7bbea9f44f01a9fd030091f40301aae1031f2a02008452f30300aad85c0394a80080d2e00314aa7f0e00b9a801c0f22800e0f2684200f82800805268420039"
+    },
+    "GetWebExitReason": {
+      "symbol": "_ZNK2nn3web18WebPageReturnValue16GetWebExitReasonEv",
+      "offset": 5140348,
+      "size": 76,
+      "hex": "09004079c9010034e80300aa0a018052800280520b010a8b6c0140799f050071200100546b054079290500714a010b8b4a21009101ffff54c0035fd680028052"
+    }
+  }
+}
