@@ -94,25 +94,53 @@ async function create(rpc) {
         name,
         type: 'dir',
         size: totalSize,
+        address: codeReg.address,
         children: [
-          { name: `${name}.nso`, type: 'file', size: totalSize },
-          { name: '.text', type: 'file', size: textSize },
-          ...(rodataSize > 0 ? [{ name: '.rodata', type: 'file', size: rodataSize }] : []),
-          ...(dataSize > 0 ? [{ name: '.data', type: 'file', size: dataSize }] : []),
-          { name: `base_0x${codeReg.address.toString(16)}`, type: 'file', size: 0 }
+          { name: `${name}.nso`, type: 'file', size: totalSize, address: codeReg.address },
+          { name: '.text', type: 'file', size: textSize, address: codeReg.address },
+          ...(rodataSize > 0 ? [{ name: '.rodata', type: 'file', size: rodataSize, address: codeReg.address + textSize }] : []),
+          ...(dataSize > 0 ? [{ name: '.data', type: 'file', size: dataSize, address: codeReg.address + textSize + rodataSize }] : []),
+          { name: `base_0x${codeReg.address.toString(16)}`, type: 'file', size: 0, address: codeReg.address }
         ]
       });
     }
 
     exefsCache = [
       ...modules,
-      { name: 'main.npdm', type: 'file', size: 0 }
+      { name: 'main.npdm', type: 'file', size: 0, address: 0 }
     ];
     return exefsCache;
   }
 
+  async function resolveExefsPath(pathStr) {
+    if (!pathStr || !pathStr.startsWith('exefs:')) return null;
+    const entries = await getExefsEntries();
+    const sub = pathStr.slice('exefs:'.length).replace(/^\/+|\/+$/g, '');
+    if (!sub) {
+      return { isDir: true, name: 'exefs:', size: 0, children: entries };
+    }
+    const parts = sub.split('/').filter(Boolean);
+    if (parts.length === 1) {
+      const mod = entries.find(m => m.name === parts[0]);
+      if (!mod) return null;
+      if (mod.type === 'dir') {
+        return { isDir: true, name: mod.name, size: mod.size, address: mod.address, children: mod.children };
+      }
+      return { isDir: false, name: mod.name, size: mod.size, address: mod.address || 0 };
+    }
+    if (parts.length === 2) {
+      const mod = entries.find(m => m.type === 'dir' && m.name === parts[0]);
+      if (!mod) return null;
+      const file = mod.children?.find(c => c.name === parts[1]);
+      if (!file) return null;
+      return { isDir: false, name: file.name, size: file.size, address: file.address };
+    }
+    return null;
+  }
+
   return {
     client,
+    resolveExefsPath,
     async OpenFile(handleOut, path, mode) {
       return await client.call('OpenFile', [handleOut, path, mode]);
     },
@@ -216,6 +244,31 @@ async function create(rpc) {
       return { result: readResult, total: allEntries.length, entries };
     },
     async readTextFile(pathStr, lineStart = 0, maxLines = 16, maxCols = 80) {
+      if (pathStr.startsWith('exefs:')) {
+        const item = await resolveExefsPath(pathStr);
+        if (!item || item.isDir) {
+          return { result: 0x00202, totalLines: 0, lines: [] };
+        }
+        if (!item.address || item.size === 0) {
+          return { result: 0, totalLines: 1, lines: ['(Empty or unmapped section)'] };
+        }
+        const toRead = Math.min(item.size, 4096);
+        let buf = Buffer.alloc(0);
+        try {
+          buf = await rpc.read(item.address, toRead);
+        } catch {
+          return { result: 0x00201, totalLines: 1, lines: ['(Error reading memory section)'] };
+        }
+        const allLines = [];
+        for (let off = 0; off < buf.length; off += 16) {
+          const slice = buf.subarray(off, off + 16);
+          const hex = Array.from(slice, b => b.toString(16).padStart(2, '0')).join(' ').padEnd(47, ' ');
+          const asc = Array.from(slice, b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.').join('');
+          allLines.push(`${off.toString(16).padStart(6, '0')}  ${hex}  |${asc}|`.slice(0, maxCols));
+        }
+        const lines = allLines.slice(lineStart, lineStart + maxLines);
+        return { result: 0, totalLines: allLines.length, lines };
+      }
       const pathOff = 0x1000;
       const handleOff = 0x2000;
       const sizeOff = 0x2010;
@@ -293,6 +346,26 @@ async function create(rpc) {
       return { result: 0, totalLines, lines };
     },
     async readRawFile(pathStr, maxBytes = 0xB000) {
+      if (pathStr.startsWith('exefs:')) {
+        const item = await resolveExefsPath(pathStr);
+        if (!item || item.isDir) {
+          return { result: 0x00202, fileSize: 0, buffer: Buffer.alloc(0), isSbContainer: false };
+        }
+        if (!item.address || item.size === 0) {
+          return { result: 0, fileSize: 0, buffer: Buffer.alloc(0), isSbContainer: false, address: 0 };
+        }
+        const toRead = Math.max(0, Math.min(item.size, maxBytes));
+        let buffer = Buffer.alloc(0);
+        if (toRead > 0) {
+          try {
+            buffer = await rpc.read(item.address, toRead);
+          } catch (readErr) {
+            console.warn(`[EXEFS READ ERROR] Address: 0x${item.address.toString(16)}, size: ${toRead}:`, readErr.message);
+            return { result: 0x00201, fileSize: item.size, buffer: Buffer.alloc(0), isSbContainer: false, address: item.address };
+          }
+        }
+        return { result: 0, fileSize: item.size, buffer, isSbContainer: false, address: item.address };
+      }
       const pathOff = 0x1000;
       const handleOff = 0x2000;
       const sizeOff = 0x2010;
@@ -317,10 +390,18 @@ async function create(rpc) {
       let rawBuf = Buffer.alloc(0);
       let readResult = 0;
       if (toRead > 0) {
-        await client.write(readOff, Buffer.alloc(toRead));
-        readResult = await client.result('ReadFile', [handle, 0, client.base + readOff, toRead]);
+        const chunkSize = 0x8000;
+        const parts = [];
+        let curOff = 0;
+        while (curOff < toRead) {
+          const thisRead = Math.min(chunkSize, toRead - curOff);
+          readResult = await client.result('ReadFile', [handle, curOff, client.base + readOff, thisRead]);
+          if (readResult !== 0) break;
+          parts.push(await client.read(readOff, thisRead));
+          curOff += thisRead;
+        }
         if (readResult === 0) {
-          rawBuf = await client.read(readOff, toRead);
+          rawBuf = Buffer.concat(parts);
         }
       }
       await client.call('CloseFile', [handle]);
@@ -350,6 +431,16 @@ async function create(rpc) {
     },
     // Generic low-level nn::fs primitives for shader SDK calls (subOp 10..17)
     async statPath(pathStr) {
+      if (pathStr.startsWith('exefs:')) {
+        const item = await resolveExefsPath(pathStr);
+        if (!item) return { exists: 0, entryType: 0xffffffff, fileSize: 0, result: 0x00202 };
+        return {
+          exists: 1,
+          entryType: item.isDir ? 1 : 0,
+          fileSize: item.size || 0,
+          result: 0
+        };
+      }
       const pathOff = 0x1000, typeOff = 0x2000, handleOff = 0x2010, sizeOff = 0x2020;
       await client.write(pathOff, Buffer.from(pathStr + '\0', 'utf8'));
       await client.write(typeOff, Buffer.alloc(8));
@@ -405,6 +496,23 @@ async function create(rpc) {
       return { result: res };
     },
     async readBytesAt(pathStr, offset = 0, length = 960) {
+      if (pathStr.startsWith('exefs:')) {
+        const item = await resolveExefsPath(pathStr);
+        if (!item || item.isDir) return { result: 0x00202, fileSize: 0, data: Buffer.alloc(0) };
+        if (!item.address || offset >= item.size) return { result: 0, fileSize: item.size || 0, data: Buffer.alloc(0) };
+        const avail = Math.max(0, item.size - offset);
+        const toRead = Math.max(0, Math.min(avail, Math.min(length, 960)));
+        let data = Buffer.alloc(0);
+        let readRes = 0;
+        if (toRead > 0) {
+          try {
+            data = await rpc.read(item.address + offset, toRead);
+          } catch {
+            readRes = 0x00201;
+          }
+        }
+        return { result: readRes, fileSize: item.size, data };
+      }
       const pathOff = 0x1000, handleOff = 0x2000, sizeOff = 0x2010, readOff = 0x4000;
       await client.write(pathOff, Buffer.from(pathStr + '\0', 'utf8'));
       await client.write(handleOff, Buffer.alloc(8));

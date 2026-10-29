@@ -139,7 +139,7 @@ async function create(rpc, fsService) {
       const href = isDir
         ? `/?path=${encodeURIComponent(nextPath)}`
         : `/?view=${encodeURIComponent(nextPath)}`;
-      const dlHref = !isDir && !cleanPath.startsWith('exefs:')
+      const dlHref = !isDir
         ? `<a class="btn" href="/?raw=${encodeURIComponent(nextPath)}">Download</a>`
         : '';
       const badge = isDir ? '<span class="tag dir">DIR</span>' : '<span class="tag file">FILE</span>';
@@ -217,7 +217,7 @@ async function create(rpc, fsService) {
         const asc = Array.from(slice, b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.').join('');
         lines.push(`${off.toString(16).padStart(6, '0')}  ${hex}  |${asc}|`);
       }
-      if (buf.length > limit) lines.push(`... (${buf.length - limit} more bytes — click Download for full file)`);
+      if ((info.fileSize || buf.length) > limit) lines.push(`... (${(info.fileSize || buf.length) - limit} more bytes — click Download for full file)`);
       contentText = lines.join('\n');
     } else {
       contentText = buf.toString('utf8');
@@ -284,17 +284,63 @@ async function create(rpc, fsService) {
 
       if (rawParam) {
         recentLogs.unshift(`GET raw ${rawParam}`);
-        const info = await fsService.readRawFile(rawParam, 0xB000);
-        if (info.result !== 0) {
-          const body = Buffer.from(`Error reading ${rawParam}: 0x${info.result.toString(16)}`);
-          const hdr = Buffer.from(`HTTP/1.1 404 Not Found\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n`);
-          await sendAll(clientFd, Buffer.concat([hdr, body]));
+        if (rawParam.startsWith('exefs:')) {
+          const item = await fsService.resolveExefsPath(rawParam);
+          if (!item || item.isDir) {
+            const body = Buffer.from(`Entry not found: ${rawParam}`);
+            const hdr = Buffer.from(`HTTP/1.1 404 Not Found\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n`);
+            await sendAll(clientFd, Buffer.concat([hdr, body]));
+          } else {
+            const rawParts = rawParam.split('/').filter(Boolean);
+            let filename = rawParts.pop() || 'dump.bin';
+            if (filename.startsWith('.') && rawParts.length > 0) {
+              filename = `${rawParts[rawParts.length - 1]}${filename}.bin`;
+            }
+            const total = item.size || 0;
+            const hdr = Buffer.from(
+              `HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename="${filename}"\r\nContent-Length: ${total}\r\nConnection: close\r\n\r\n`
+            );
+            await sendAll(clientFd, hdr);
+
+            if (total > 0 && item.address) {
+              let offset = 0;
+              const CHUNK = 0x8000;
+              while (offset < total) {
+                const thisLen = Math.min(CHUNK, total - offset);
+                // Attempt direct zero-copy pointer send from S2 RAM first
+                let sent = Number(BigInt.asIntN(32, await api.call('send', [clientFd, item.address + offset, thisLen, 0])));
+                if (sent <= 0) {
+                  // Fallback: read chunk via RPC into host and send via SEND_OFF
+                  try {
+                    const chunkBuf = await rpc.read(item.address + offset, thisLen);
+                    await api.write(SEND_OFF, chunkBuf);
+                    sent = Number(BigInt.asIntN(32, await api.call('send', [clientFd, api.base + SEND_OFF, chunkBuf.length, 0])));
+                  } catch (readErr) {
+                    recentLogs.unshift(`[ERR] stream 0x${(item.address + offset).toString(16)}: ${readErr.message}`);
+                    break;
+                  }
+                  if (sent <= 0) break;
+                }
+                offset += sent;
+                bytesSent += sent;
+              }
+              recentLogs.unshift(`[DUMP] ${filename} (${formatBytes(offset)})`);
+            }
+          }
         } else {
-          const filename = rawParam.split('/').filter(Boolean).pop() || 'download.bin';
-          const hdr = Buffer.from(
-            `HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename="${filename}"\r\nContent-Length: ${info.buffer.length}\r\nConnection: close\r\n\r\n`
-          );
-          await sendAll(clientFd, Buffer.concat([hdr, info.buffer]));
+          const info = await fsService.readRawFile(rawParam, 0x4000000);
+          if (info.result !== 0) {
+            const body = Buffer.from(`Error reading ${rawParam}: 0x${info.result.toString(16)}`);
+            const hdr = Buffer.from(`HTTP/1.1 404 Not Found\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n`);
+            await sendAll(clientFd, Buffer.concat([hdr, body]));
+          } else {
+            const filename = rawParam.split('/').filter(Boolean).pop() || 'download.bin';
+            const hdr = Buffer.from(
+              `HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename="${filename}"\r\nContent-Length: ${info.buffer.length}\r\nConnection: close\r\n\r\n`
+            );
+            await sendAll(clientFd, hdr);
+            await sendAll(clientFd, info.buffer);
+          }
         }
       } else if (viewParam) {
         recentLogs.unshift(`GET view ${viewParam}`);

@@ -81,6 +81,8 @@ Controller handles and state management functions in the public `nn::hid` namesp
 | `GetNpadState` (JoyDual) | `_ZN2nn3hid12GetNpadStateEPNS0_16NpadJoyDualStateERKj` | Gets dual Joy-Con state.<br>**Args:** `NpadJoyDualState *outState`, `const uint32_t &npadId` |
 | `GetNpadState` (JoyLeft) | `_ZN2nn3hid12GetNpadStateEPNS0_16NpadJoyLeftStateERKj` | Gets left Joy-Con state.<br>**Args:** `NpadJoyLeftState *outState`, `const uint32_t &npadId` |
 | `GetNpadState` (JoyRight) | `_ZN2nn3hid12GetNpadStateEPNS0_17NpadJoyRightStateERKj` | Gets right Joy-Con state.<br>**Args:** `NpadJoyRightState *outState`, `const uint32_t &npadId` |
+| `GetTouchScreenState` | `_ZN2nn3hid19GetTouchScreenStateILm16EEEvPNS0_16TouchScreenStateIXT_EEE` | Gets multi-touch screen state (supporting up to 16 simultaneous contact points with coordinates, bounding diameters, and timestamps).<br>**Args:** `TouchScreenState<16> *outState` |
+| `GetNpadStyleSet` | `_ZN2nn3hid15GetNpadStyleSetERKj` | Gets active controller style mask tag.<br>**Args:** `const uint32_t &npadId` |
 | `GetSixAxisSensorHandles` (`motionHandles`) | `_ZN2nn3hid23GetSixAxisSensorHandlesEPNS0_19SixAxisSensorHandleEiRKjNS_4util10BitFlagSetILi32ENS0_12NpadStyleTagEEE` | Gets six-axis motion sensor handles.<br>**Args:** `SixAxisSensorHandle *outHandles`, `int maxCount`, `const uint32_t &npadId`, `BitFlagSet<32, NpadStyleTag> styleSet` |
 | `GetVibrationDeviceHandles` (`vibrationHandles`) | `_ZN2nn3hid25GetVibrationDeviceHandlesEPNS0_21VibrationDeviceHandleEiRKjNS_4util10BitFlagSetILi32ENS0_12NpadStyleTagEEE` | Gets vibration device handles.<br>**Args:** `VibrationDeviceHandle *outHandles`, `int maxCount`, `const uint32_t &npadId`, `BitFlagSet<32, NpadStyleTag> styleSet` |
 
@@ -92,7 +94,7 @@ Detailed or internal HID, motion, vibration, keyboard, mouse, and peripheral sup
 
 | Function Name | C++ Symbol | Description & Arguments |
 | --- | --- | --- |
-| `GetNpadStyleSet` (`style`) | `_ZN2nn3hid6detail15GetNpadStyleSetEPNS_4util10BitFlagSetILi32ENS0_12NpadStyleTagEEERKj` | Gets active controller style set.<br>**Args:** `BitFlagSet<32, NpadStyleTag> *outStyleSet`, `const uint32_t &npadId` |
+| `GetNpadStyleSet` (`style`) | `_ZN2nn3hid6detail15GetNpadStyleSetEPNS_4util10BitFlagSetILi32ENS0_12NpadStyleTagEEERKj` | Gets active controller style set bitflags.<br>**Args:** `BitFlagSet<32, NpadStyleTag> *outStyleSet`, `const uint32_t &npadId` |
 | `StartSixAxisSensor` (`motionStart`) | `_ZN2nn3hid6detail18StartSixAxisSensorERKNS0_19SixAxisSensorHandleE` | Starts six-axis motion sensor acquisition.<br>**Args:** `const SixAxisSensorHandle &handle` |
 | `StopSixAxisSensor` (`motionStop`) | `_ZN2nn3hid6detail17StopSixAxisSensorERKNS0_19SixAxisSensorHandleE` | Stops six-axis motion sensor acquisition.<br>**Args:** `const SixAxisSensorHandle &handle` |
 | `GetSixAxisSensorStates` (`motionRead`) | `_ZN2nn3hid6detail22GetSixAxisSensorStatesEPiPNS0_18SixAxisSensorStateEiRKNS0_19SixAxisSensorHandleE` | Reads six-axis sensor states (96-byte structure).<br>**Args:** `int *outCount`, `SixAxisSensorState *outStates`, `int maxCount`, `const SixAxisSensorHandle &handle` |
@@ -200,15 +202,71 @@ Near Field Communication (NFC / Amiibo) functions.
 
 ## 13. `nn::audio`
 
-Audio management and device listing.
+Audio management, output device listing, and audio rendering / playback pipeline.
 
 | Function Name | C++ Symbol | Description & Arguments |
 | --- | --- | --- |
 | `ListAudioIns` (`audioInputs`) | `_ZN2nn5audio12ListAudioInsEPNS0_11AudioInInfoEi` | Lists connected audio input devices.<br>**Args:** `AudioInInfo *outInfos`, `int maxCount` |
+| `OpenDefaultAudioOut` | `_ZN2nn5audio19OpenDefaultAudioOutEPNS0_8AudioOutEPNS_2os11SystemEventERKNS0_17AudioOutParameterE` | Opens the default hardware audio output device with an event handle.<br>**Args:** `AudioOut *outAudioOut`, `nn::os::SystemEvent *outEvent`, `const AudioOutParameter &param` |
+| `CloseAudioOut` | `_ZN2nn5audio13CloseAudioOutEPNS0_8AudioOutE` | Closes an opened audio output device.<br>**Args:** `AudioOut *audioOut` |
+| `StartAudioOut` | `_ZN2nn5audio13StartAudioOutEPNS0_8AudioOutE` | Starts audio output stream playback.<br>**Args:** `AudioOut *audioOut` |
+| `StopAudioOut` | `_ZN2nn5audio12StopAudioOutEPNS0_8AudioOutE` | Stops audio output stream playback.<br>**Args:** `AudioOut *audioOut` |
+| `AppendAudioOutBuffer` | `_ZN2nn5audio20AppendAudioOutBufferEPNS0_8AudioOutEPNS0_14AudioOutBufferE` | Enqueues a PCM audio buffer for playback.<br>**Args:** `AudioOut *audioOut`, `AudioOutBuffer *buffer` |
+| `GetReleasedAudioOutBuffer` | `_ZN2nn5audio25GetReleasedAudioOutBufferEPNS0_8AudioOutE` | Retrieves the next finished/released audio playback buffer.<br>**Args:** `AudioOut *audioOut` |
+| `GetAudioOutState` | `_ZN2nn5audio16GetAudioOutStateEPKNS0_8AudioOutE` | Queries current audio output stream state (Started vs Stopped).<br>**Args:** `const AudioOut *audioOut` |
+| `GetAudioOutVolume` | `_ZN2nn5audio17GetAudioOutVolumeEPKNS0_8AudioOutE` | Queries current audio output volume gain.<br>**Args:** `const AudioOut *audioOut` |
+| `SetAudioOutVolume` | `_ZN2nn5audio17SetAudioOutVolumeEPNS0_8AudioOutEf` | Sets master audio output playback volume (`0.0` - `1.0`).<br>**Args:** `AudioOut *audioOut`, `float volume` |
+| `FlushAudioOutBuffers` | `_ZN2nn5audio20FlushAudioOutBuffersEPNS0_8AudioOutE` | Flushes all pending audio output playback buffers.<br>**Args:** `AudioOut *audioOut` |
+| `InitializeAudioOutParameter` | `_ZN2nn5audio27InitializeAudioOutParameterEPNS0_17AudioOutParameterE` | Initializes default audio output parameters (48000 Hz, 2 channels).<br>**Args:** `AudioOutParameter *outParam` |
 
 ---
 
-## 14. Internal / Low-Level IPC Helpers (`ipc-functions.json`)
+## 14. `nn::swkbd`
+
+Native Software Keyboard Subsystem, Library Applet, buffer sizing, and inline keyboard routines.
+
+| Function Name | C++ Symbol | Description & Arguments |
+| --- | --- | --- |
+| `ShowKeyboard` | `_ZN2nn5swkbd12ShowKeyboardEPNS0_6StringERKNS0_15ShowKeyboardArgE` | Synchronously launches the native software keyboard modal applet.<br>**Args:** `String *outResultString`, `const ShowKeyboardArg &arg` |
+| `InitializeKeyboardConfig` | `_ZN2nn5swkbd24InitializeKeyboardConfigEPNS0_14KeyboardConfigE` | Initializes keyboard configuration struct with platform defaults.<br>**Args:** `KeyboardConfig *outConfig` |
+| `MakePresetDefault` | `_ZN2nn5swkbd17MakePresetDefaultEPNS0_14KeyboardConfigE` | Configures keyboard layout for standard default text entry.<br>**Args:** `KeyboardConfig *outConfig` |
+| `MakePresetPassword` | `_ZN2nn5swkbd18MakePresetPasswordEPNS0_14KeyboardConfigE` | Configures keyboard for masked password / pin entry.<br>**Args:** `KeyboardConfig *outConfig` |
+| `MakePresetUserName` | `_ZN2nn5swkbd18MakePresetUserNameEPNS0_14KeyboardConfigE` | Configures keyboard for alphanumeric username entry.<br>**Args:** `KeyboardConfig *outConfig` |
+| `MakePresetDownloadCode` | `_ZN2nn5swkbd22MakePresetDownloadCodeEPNS0_14KeyboardConfigE` | Configures keyboard for alphanumeric download code entry.<br>**Args:** `KeyboardConfig *outConfig` |
+| `SetHeaderTextUtf8` | `_ZN2nn5swkbd17SetHeaderTextUtf8EPNS0_14KeyboardConfigEPKc` | Sets header title text displayed above the keyboard (UTF-8).<br>**Args:** `KeyboardConfig *config`, `const char *utf8Text` |
+| `SetSubTextUtf8` | `_ZN2nn5swkbd14SetSubTextUtf8EPNS0_14KeyboardConfigEPKc` | Sets descriptive subtitle caption text (UTF-8).<br>**Args:** `KeyboardConfig *config`, `const char *utf8Text` |
+| `SetGuideTextUtf8` | `_ZN2nn5swkbd16SetGuideTextUtf8EPNS0_14KeyboardConfigEPKc` | Sets placeholder guide text inside the input box (UTF-8).<br>**Args:** `KeyboardConfig *config`, `const char *utf8Text` |
+| `SetOkTextUtf8` | `_ZN2nn5swkbd13SetOkTextUtf8EPNS0_14KeyboardConfigEPKc` | Sets custom text on positive confirmation button (UTF-8).<br>**Args:** `KeyboardConfig *config`, `const char *utf8Text` |
+| `SetInitialTextUtf8` | `_ZN2nn5swkbd18SetInitialTextUtf8EPNS0_15ShowKeyboardArgEPKc` | Populates initial editable text inside the input field (UTF-8).<br>**Args:** `ShowKeyboardArg *arg`, `const char *utf8Text` |
+| `GetRequiredWorkBufferSize` | `_ZN2nn5swkbd25GetRequiredWorkBufferSizeEb` | Returns required work buffer bytes (4,096 B without dict, 53,248 B with dict).<br>**Args:** `bool hasCustomizeDic` |
+| `GetRequiredStringBufferSize` | `_ZN2nn5swkbd27GetRequiredStringBufferSizeEv` | Returns required buffer size for receiving output strings (2,004 bytes).<br>**Args:** None (`void`) |
+| `GetRequiredTextCheckWorkBufferSize` | `_ZN2nn5swkbd34GetRequiredTextCheckWorkBufferSizeEv` | Returns required buffer size for text verification callbacks (2,004 bytes).<br>**Args:** None (`void`) |
+| `InlineKeyboard::GetRequiredWorkBufferSize` | `_ZN2nn5swkbd14InlineKeyboard25GetRequiredWorkBufferSizeEv` | Returns required work buffer size for inline overlay keyboard mode (1,760 bytes).<br>**Args:** None (`void`) |
+| `InlineKeyboard::Launch` | `_ZN2nn5swkbd14InlineKeyboard6LaunchEv` | Launches background worker for non-modal inline keyboard overlay.<br>**Args:** `InlineKeyboard *this` |
+| `InlineKeyboard::Appear` | `_ZN2nn5swkbd14InlineKeyboard6AppearERKNS0_9AppearArgE` | Shows and animates the inline keyboard onto screen.<br>**Args:** `InlineKeyboard *this`, `const AppearArg &arg` |
+| `InlineKeyboard::Disappear` | `_ZN2nn5swkbd6detail18InlineKeyboardImpl9DisappearEv` | Hides and dismisses the inline keyboard.<br>**Args:** `InlineKeyboardImpl *this` |
+
+---
+
+## 15. `nn::web`
+
+Native Web Browser Applet Subsystem, argument configuration, and return telemetry.
+
+| Function Name | C++ Symbol | Description & Arguments |
+| --- | --- | --- |
+| `ShowWebPage` | `_ZN2nn3web11ShowWebPageEPNS0_18WebPageReturnValueERKNS0_14ShowWebPageArgE` | Synchronously launches the native S2 OS Web Browser Library Applet modal.<br>**Args:** `WebPageReturnValue *outReturnValue`, `const ShowWebPageArg &arg` |
+| `ShowWebPageArg` (constructor) | `_ZN2nn3web14ShowWebPageArgC1EPKc` | Constructs argument container initialized with target URL.<br>**Args:** `ShowWebPageArg *this`, `const char *url` |
+| `ShowWebPageArg::SetCallbackUrl` | `_ZN2nn3web14ShowWebPageArg14SetCallbackUrlEPKc` | Sets callback intercept URL to trigger automatic closure on navigation match.<br>**Args:** `ShowWebPageArg *this`, `const char *callbackUrl` |
+| `ShowWebPageArg::SetTouchEnabledOnContents` | `_ZN2nn3web14ShowWebPageArg25SetTouchEnabledOnContentsEb` | Enables or disables capacitive touch interaction inside webpage contents.<br>**Args:** `ShowWebPageArg *this`, `bool enabled` |
+| `ShowWebPageArg::OverrideWebAudioVolume` | `_ZN2nn3web14ShowWebPageArg22OverrideWebAudioVolumeEf` | Overrides master gain volume for Web Audio API audio elements (`0.0` - `1.0`).<br>**Args:** `ShowWebPageArg *this`, `float volume` |
+| `ShowWebPageArg::OverrideMediaAudioVolume` | `_ZN2nn3web14ShowWebPageArg24OverrideMediaAudioVolumeEf` | Overrides audio volume gain for HTML5 `<audio>` and `<video>` tags (`0.0` - `1.0`).<br>**Args:** `ShowWebPageArg *this`, `float volume` |
+| `WebPageReturnValue` (constructor) | `_ZN2nn3web18WebPageReturnValueC1Ev` | Constructs and initializes the return value output block.<br>**Args:** `WebPageReturnValue *this` |
+| `WebPageReturnValue::GetWebExitReason` | `_ZNK2nn3web18WebPageReturnValue16GetWebExitReasonEv` | Extracts exit reason code enum (`0 = USER_EXIT`, `1 = CALLBACK_URL`, `2 = ERROR`).<br>**Args:** `const WebPageReturnValue *this` |
+| `WebPageReturnValue::GetLastUrl` | `_ZNK2nn3web18WebPageReturnValue10GetLastUrlEv` | Retrieves pointer to the last visited URL string when applet was closed.<br>**Args:** `const WebPageReturnValue *this` |
+
+---
+
+## 16. Internal / Low-Level IPC Helpers (`ipc-functions.json`)
 
 Internal utility routines used by the runtime bridge.
 
