@@ -30,6 +30,7 @@ class NativeClient {
     this.queue = Promise.resolve();
     this.calls = 0;
     this.functions = new Set();
+    this.regionCache = [];
   }
 
   exchange(calls, data = Buffer.alloc(0)) {
@@ -84,13 +85,28 @@ class NativeClient {
     return this.exchange([{address, args}]);
   }
 
-  async query(address) {
+  async query(address, forceRefresh = false) {
+    if (!forceRefresh && this.regionCache) {
+      const addrBig = BigInt(address);
+      const cached = this.regionCache.find(r => addrBig >= r.address && addrBig < r.end);
+      if (cached) return cached;
+    }
     const {result, output: bytes} = await this.call(0x158314, this.output, this.output + 0x40, address);
     if (result) throw Error('QueryMemory failed: 0x' + result.toString(16));
-    return {address: bytes.readBigUInt64LE(), size: bytes.readBigUInt64LE(8),
-      type: bytes.readUInt32LE(16), attributes: bytes.readUInt32LE(20),
-      permissions: bytes.readUInt32LE(24), ipcReferences: bytes.readUInt32LE(28),
-      deviceReferences: bytes.readUInt32LE(32)};
+    const info = {
+      address: bytes.readBigUInt64LE(),
+      size: bytes.readBigUInt64LE(8),
+      type: bytes.readUInt32LE(16),
+      attributes: bytes.readUInt32LE(20),
+      permissions: bytes.readUInt32LE(24),
+      ipcReferences: bytes.readUInt32LE(28),
+      deviceReferences: bytes.readUInt32LE(32)
+    };
+    info.end = info.address + info.size;
+    if (this.regionCache) {
+      this.regionCache.push(info);
+    }
+    return info;
   }
 
   async guard(address, length, permission) {

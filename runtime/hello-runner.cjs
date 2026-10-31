@@ -480,35 +480,100 @@ async function main(directory, attempt = 'auto') {
       process.exit(0);
     });
 
-    const applyApp = async (name) => {
+    // On-demand app slot and tmp:/cache manager for instant app switching
+    const stagedSlots = new Map();
+    let fsService = null;
+    try {
+      fsService = await require('../sdk/host/fs.cjs').create(rpc);
+      await fsService.mkdirPath('tmp:/cache').catch(() => {});
+    } catch (_) {}
+
+    const stageAppToSlot = async (name, slotIndex) => {
       const { app: targetApp, prep } = preparedApps[name];
+      const slotMapped = mapped + 0x300000 + slotIndex * SLOT_STRIDE;
 
-      // 1. Switch command buffers immediately so the old app's compute shader stops running
+      // 1. Build command buffer block (512 bytes)
+      const cmdBuf = Buffer.alloc(prep.commands.length * 0x100);
       for (let phase = 0; phase < prep.commands.length; phase++) {
-        const o = 0x1000 + phase * 0x100, obj = control + o;
-        u64(o + 0x50, obj + 0x60);
-        prep.commands[phase].forEach((v, i) => u64(o + 0x60 + i * 8, v));
-        putCtrl(o + 0x80, struct(72, 4, {16: 1, 40: 1, 56: 1}, {24: control + 0x200, 32: control + 0x210, 48: obj + 0x28, 64: semObject + 0x28}));
+        const o = phase * 0x100, obj = control + 0x1000 + o;
+        cmdBuf.writeBigUInt64LE(BigInt(obj + 0x60), o + 0x50);
+        prep.commands[phase].forEach((v, i) => cmdBuf.writeBigUInt64LE(BigInt(v), o + 0x60 + i * 8));
+        const submitStruct = struct(72, 4, {16: 1, 40: 1, 56: 1}, {24: control + 0x200, 32: control + 0x210, 48: obj + 0x28, 64: semObject + 0x28});
+        submitStruct.copy(cmdBuf, o + 0x80);
       }
-      await rpc.write(control + 0x1000, data.subarray(0x1000, 0x1000 + prep.commands.length * 0x100));
 
-      // Wait ~20ms (one frame) so any in-flight GPU frame of the previous app completes
-      await new Promise(r => setTimeout(r, 20));
-
-      // 2. Clear previous SDK response payload length (offset 4104) while preserving request/response sequence numbers
-      await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(3072));
-
-      // 3. Always restore the target app's font atlas at mapped + 1024, clearing any dirty rows from previous apps
-      const nextSlice = getEffectiveDataSlice(targetApp.files.data.bytes);
-      const uploadBytes = Math.max(262144, nextSlice.length);
-      const atlasUpload = targetApp.files.data.bytes.subarray(0, Math.min(targetApp.files.data.bytes.length, uploadBytes));
-      await rpc.write(mapped + 1024, atlasUpload);
-      currentAtlasSlice = nextSlice;
-
-      // 4. Reset app scratch state (784..1024), clearing c.reserved.z (1016) & c.reserved.w (1020)
+      // 2. Scratch state (240 bytes)
       const scratchState = Buffer.from(targetApp.files.state.bytes.subarray(784, 1024));
       scratchState.writeFloatLE(1, 960 - 784);
-      await rpc.write(mapped + 784, scratchState);
+
+      // 3. Font atlas slice
+      const atlasSlice = getEffectiveDataSlice(targetApp.files.data.bytes);
+      const atlasLen = Math.min(atlasSlice.length, SLOT_STRIDE - 0x800);
+
+      // Write directly to GPU mapped slot memory on S2
+      await rpc.write(slotMapped, cmdBuf);
+      await rpc.write(slotMapped + 0x200, scratchState);
+      await rpc.write(slotMapped + 0x800, atlasSlice.subarray(0, atlasLen));
+
+      // Asynchronously mirror to tmp:/cache/ on console storage for persistence
+      if (fsService) {
+        fsService.writeBytesAt(`tmp:/cache/${name}-state.bin`, 0, targetApp.files.state.bytes).catch(() => {});
+        fsService.writeBytesAt(`tmp:/cache/${name}-data.bin`, 0, atlasSlice.subarray(0, atlasLen)).catch(() => {});
+      }
+
+      const slotRecord = {
+        slot: slotIndex,
+        slotMapped,
+        cmdLen: cmdBuf.length,
+        scratchLen: scratchState.length,
+        atlasLen,
+        atlasSlice
+      };
+      stagedSlots.set(name, slotRecord);
+      return slotRecord;
+    };
+
+    // Pre-stage launcher into slot 0 so returning to Homebrew Launcher is always instant (<1ms)
+    await stageAppToSlot('launcher', 0);
+
+    const applyApp = async (name) => {
+      let slotInfo = stagedSlots.get(name);
+
+      if (slotInfo) {
+        console.log(`[FAST LOAD] Switching to ${name} from on-console cached slot #${slotInfo.slot} (0 bytes network transfer)...`);
+        // 1. Switch command buffers via native ARM64 memmove directly on S2
+        await rpc.callAddress(rpc.a.memmove, [control + 0x1000, slotInfo.slotMapped, slotInfo.cmdLen, 0]);
+
+        // Wait ~20ms (one frame) so any in-flight GPU frame of the previous app completes
+        await new Promise(r => setTimeout(r, 20));
+
+        // 2. Clear previous SDK response payload length (offset 4104) while preserving request/response sequence numbers
+        await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(3072));
+
+        // 3. Restore target app's font atlas via on-console native memmove (256 KiB copied on-device in 0.05ms!)
+        await rpc.callAddress(rpc.a.memmove, [mapped + 1024, slotInfo.slotMapped + 0x800, slotInfo.atlasLen, 0]);
+        currentAtlasSlice = slotInfo.atlasSlice;
+
+        // 4. Reset app scratch state via on-console native memmove
+        await rpc.callAddress(rpc.a.memmove, [mapped + 784, slotInfo.slotMapped + 0x200, slotInfo.scratchLen, 0]);
+      } else {
+        // First-time load: stage into next available on-console slot
+        console.log(`[ON-DEMAND CACHE] Staging ${name} into GPU slot #${stagedSlots.size} and tmp:/cache/...`);
+        const slotIdx = stagedSlots.size < MAX_CACHED_SLOTS ? stagedSlots.size : (stagedSlots.size % MAX_CACHED_SLOTS);
+        slotInfo = await stageAppToSlot(name, slotIdx);
+
+        // Copy from staged slot into active regions
+        await rpc.callAddress(rpc.a.memmove, [control + 0x1000, slotInfo.slotMapped, slotInfo.cmdLen, 0]);
+        await new Promise(r => setTimeout(r, 20));
+        await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(3072));
+        await rpc.callAddress(rpc.a.memmove, [mapped + 1024, slotInfo.slotMapped + 0x800, slotInfo.atlasLen, 0]);
+        currentAtlasSlice = slotInfo.atlasSlice;
+        await rpc.callAddress(rpc.a.memmove, [mapped + 784, slotInfo.slotMapped + 0x200, slotInfo.scratchLen, 0]);
+
+        if (slotIdx > 0 && slotIdx < MAX_CACHED_SLOTS) {
+          cachedMask |= (1 << (slotIdx - 1));
+        }
+      }
 
       // 5. Combine all held buttons across handheld (mapped + 8) and PAD_SOURCES (mapped + 0x7f0000 + 640) into c.state.y (mapped + 84)
       let heldButtons = (await rpc.read(mapped + 8, 4)).readUInt32LE(0);

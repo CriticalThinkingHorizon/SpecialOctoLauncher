@@ -2,7 +2,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const {spawn, execSync} = require('node:child_process');
 const {chooseHost, connectCommand} = require('./rpc/connection.cjs');
-const {pairingCode, listen} = require('./rpc/engine-connection.cjs');
+const {pairingCode, createMultiServer} = require('./rpc/engine-connection.cjs');
 const {NativeClient} = require('./rpc/native.cjs');
 const {qualify} = require('./rpc/qualify.cjs');
 const {serve} = require('./rpc/bridge.cjs');
@@ -51,8 +51,31 @@ function ensurePythonAndPillow() {
   }
 }
 
+async function mirrorToLatest(sessionDir) {
+  try {
+    const latestDir = path.join(__dirname, 'runs', 'latest');
+    await fs.rm(latestDir, {recursive: true, force: true});
+    await fs.mkdir(latestDir, {recursive: true});
+
+    // Copy essential connection and display metadata
+    const filesToCopy = ['connection.json', 'display-inspection.json', 'compatibility-module.json', 'vulkan-display.json'];
+    for (const file of filesToCopy) {
+      const src = path.join(sessionDir, file);
+      const dst = path.join(latestDir, file);
+      try {
+        await fs.copyFile(src, dst);
+      } catch (_) {}
+    }
+    await fs.mkdir(path.join(latestDir, 'shared'), {recursive: true});
+    await fs.copyFile(path.join(__dirname, 'rpc/rpc.cjs'), path.join(latestDir, 'shared/rpc.cjs'));
+  } catch (err) {
+    // Non-critical mirror failure
+  }
+}
+
 async function main() {
   const verbose = process.argv.includes('--verbose') || process.argv.includes('--debug');
+  const fullInspect = process.argv.includes('--full-inspect') || process.argv.includes('--probe');
   global.VERBOSE = verbose;
 
   console.log('[SETUP] Verifying Python and Pillow dependencies...');
@@ -60,73 +83,79 @@ async function main() {
 
   const host = await chooseHost(process.argv.slice(2));
   const token = pairingCode(process.argv.slice(2));
-  
-  console.log('==================================================');
-  console.log(' HelloWorldS2 Windows RPC Server & Hello World Runner');
-  console.log('==================================================');
+
+  console.log('========================================================================');
+  console.log('  HelloWorldS2 Multi-Client RPC Server & Hello World Runner');
+  console.log('  Supports Multiple Concurrent S2 Consoles (LAN / Cloud WAN)');
+  console.log('========================================================================');
   console.log(`Host IP: ${host}`);
-  console.log(`Port: 39380`);
+  console.log(`Port:    39380`);
   console.log('\nManual Connection Command for SmileBASIC on S2:');
   console.log(connectCommand(host, token));
-  console.log('==================================================\n');
+  console.log('========================================================================\n');
 
   await fs.mkdir(path.join(__dirname, 'runs'), {recursive: true, mode: 0o700});
-  const directory = path.join(__dirname, 'runs', 'latest');
 
-  let native = null, bridge = null, loopChild = null;
+  const activeSessions = new Map();
+  let sessionCounter = 0;
+
   const onSignal = () => {
-    console.log('\n[SERVER] Ctrl+C received. Exiting server...');
-    if (loopChild) {
-      try { loopChild.kill('SIGTERM'); } catch (e) {}
+    console.log('\n[SERVER] Shutdown signal received. Terminating all active console sessions...');
+    for (const [id, session] of activeSessions.entries()) {
+      console.log(`[SERVER] Cleaning up session ${id}...`);
+      if (session.loopChild) {
+        try { session.loopChild.kill('SIGTERM'); } catch (_) {}
+      }
+      session.bridge?.close().catch(() => {});
+      session.native?.stop().catch(() => {});
     }
+    activeSessions.clear();
     process.exit(0);
   };
   process.on('SIGINT', onSignal);
   process.on('SIGTERM', onSignal);
 
-  let sessionCount = 0;
+  const argApp = process.argv.slice(2).find(a => a.startsWith('--app='))?.split('=')[1]
+    || process.argv.slice(3).find(a => !a.startsWith('-'));
+  const targetApp = argApp || 'launcher';
 
-  while (true) {
-    sessionCount++;
-    await fs.rm(directory, {recursive: true, force: true});
-    await fs.mkdir(directory, {recursive: true});
+  // Handler for an individual S2 console session
+  async function handleSession(connected) {
+    const sessionNum = ++sessionCounter;
+    const clientIp = connected.clientIp || '127.0.0.1';
+    const clientPort = connected.clientPort || 0;
+    const sessionId = `session-${sessionNum}-${clientIp.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+    const sessionDir = path.join(__dirname, 'runs', sessionId);
 
-    native = null;
-    bridge = null;
-    loopChild = null;
+    console.log(`\n========================================================================`);
+    console.log(`[CLIENT CONNECTED] S2 Console #${sessionNum} connected from ${clientIp}:${clientPort}`);
+    console.log(`  Assigned Session ID: ${sessionId}`);
+    console.log(`  Workspace Directory: ${sessionDir}`);
+    console.log(`========================================================================`);
+
+    await fs.rm(sessionDir, {recursive: true, force: true});
+    await fs.mkdir(sessionDir, {recursive: true});
+
+    let native = null;
+    let bridge = null;
+    let loopChild = null;
+
     try {
-      const connected = await listen({
-        host,
-        port: 39380,
-        token,
-        onRejected: console.error,
-        onWaiting() {
-          if (sessionCount > 1) {
-            console.log(`\n[RECONNECT #${sessionCount}] Waiting for S2 console to connect on port 39380...`);
-          } else {
-            console.log('Waiting for SmileBASIC console connection on port 39380...');
-            console.log('Run the REMOVE and START commands manually on the console now.');
-          }
-        }
-      });
-
-      console.log(`\n[SESSION #${sessionCount}] Console connected! Initializing native client...`);
       native = new NativeClient(connected.connection, connected.addresses);
-      
-      console.log('Qualifying native session...');
+
+      console.log(`[SESSION #${sessionNum}] Qualifying native session...`);
       const qualification = await qualify(native);
-      console.log('Qualification passed:', qualification);
+      console.log(`[SESSION #${sessionNum}] Qualification passed (platform=${qualification.platform})`);
 
       // Clean up any leftover worker pthread from previous dropped session
       try {
         const workerStateOffset = native.addresses.scratch + 0x7e000;
         const prevWorker = await native.read(workerStateOffset, 48);
         if (prevWorker.readUInt32LE(0) === 0x574f524b) {
-          console.log('[RECOVERY] Detected active worker from previous session. Stopping cleanly...');
+          console.log(`[SESSION #${sessionNum}] [RECOVERY] Detected active worker from previous session. Stopping cleanly...`);
           const selector = Number(prevWorker.readBigUInt64LE(16));
           const exit = prevWorker.readBigUInt64LE(24);
           const thread = prevWorker.readBigUInt64LE(32);
-          const prevLayer = Number(prevWorker.readBigUInt64LE(40));
 
           const exitBuf = Buffer.alloc(8);
           exitBuf.writeBigUInt64LE(exit);
@@ -142,72 +171,84 @@ async function main() {
           }
           await native.callAddress(sdk + threadCode.join.offset, [thread, workerStateOffset + 40]);
           await native.write(workerStateOffset, Buffer.alloc(48));
-          console.log('[RECOVERY] Previous worker stopped and cleaned up.');
+          console.log(`[SESSION #${sessionNum}] [RECOVERY] Previous worker stopped and cleaned up.`);
         }
       } catch (recoveryErr) {
-        console.warn('[RECOVERY] Worker cleanup notice:', recoveryErr.message);
+        console.warn(`[SESSION #${sessionNum}] [RECOVERY] Worker cleanup notice:`, recoveryErr.message);
       }
 
-      console.log('Starting RPC bridge server...');
+      console.log(`[SESSION #${sessionNum}] Starting dedicated RPC bridge server...`);
       bridge = await serve(native);
       bridge.keepAwake(qualification.activity);
 
-      await fs.mkdir(path.join(directory, 'shared'), {recursive: true});
+      await fs.mkdir(path.join(sessionDir, 'shared'), {recursive: true});
       await fs.copyFile(
         path.join(__dirname, 'rpc/rpc.cjs'),
-        path.join(directory, 'shared/rpc.cjs')
+        path.join(sessionDir, 'shared/rpc.cjs')
       );
       await fs.writeFile(
-        path.join(directory, 'connection.json'),
+        path.join(sessionDir, 'connection.json'),
         JSON.stringify({
           port: bridge.port,
           token: bridge.token,
-          addresses: {...native.addresses, session: 'latest', target: 's2'}
+          addresses: {...native.addresses, session: sessionId, target: 's2'}
         }, null, 2)
       );
 
-      console.log(`Bridge server ready on port ${bridge.port}. Run folder: ${directory}`);
+      console.log(`[SESSION #${sessionNum}] Bridge ready on local port ${bridge.port}.`);
 
-      console.log('\n--- Running Console Inspection & Setup Pipeline ---');
+      // Track active session
+      const sessionRecord = {
+        id: sessionId,
+        num: sessionNum,
+        clientIp,
+        clientPort,
+        native,
+        bridge,
+        loopChild: null,
+        dir: sessionDir,
+        startedAt: new Date()
+      };
+      activeSessions.set(sessionId, sessionRecord);
 
-      console.log('\n[1/4] Inspecting Display Imports (VI & NVN Bootstrap)...');
-      await runScript(path.join(__dirname, 'inspection/inspect-display.cjs'), [directory]);
-      console.log('✔ Display inspection completed successfully.');
+      // Fast, streamlined setup pipeline for Vulkan display initialization
+      console.log(`\n[SESSION #${sessionNum}] Setting up S2 Vulkan display pipeline...`);
 
-      console.log('\n[2/4] Inspecting Compatibility & Driver Symbol Module...');
-      await runScript(path.join(__dirname, 'inspection/inspect-compatibility.cjs'), [directory]);
-      console.log('✔ Compatibility inspection completed successfully.');
+      console.log(`[SESSION #${sessionNum}] [1/4] Inspecting Display Imports (VI & NVN Bootstrap)...`);
+      await runScript(path.join(__dirname, 'inspection/inspect-display.cjs'), [sessionDir]);
 
-      console.log('\n[3/4] Inspecting Input & HID State Functions...');
-      await runScript(path.join(__dirname, 'inspection/inspect-input.cjs'), [directory]);
-      console.log('✔ Input inspection completed successfully.');
+      console.log(`[SESSION #${sessionNum}] [2/4] Inspecting Driver Compatibility Module...`);
+      await runScript(path.join(__dirname, 'inspection/inspect-compatibility.cjs'), [sessionDir]);
 
-      console.log('\n[4/4] Setting Up Vulkan Display Resources...');
-      await runScript(path.join(__dirname, 'inspection/vulkan-copy.cjs'), [directory, 'display']);
-      console.log('✔ Vulkan display setup completed successfully.');
+      console.log(`[SESSION #${sessionNum}] [3/4] Inspecting Input & Controller State...`);
+      await runScript(path.join(__dirname, 'inspection/inspect-input.cjs'), [sessionDir]);
 
-      console.log('\n[5/6] Inspecting S2 Console Filesystem (nn::fs)...');
-      await runScript(path.join(__dirname, 'inspection/fs-inspect.cjs'), [directory]);
-      console.log('✔ Filesystem inspection completed successfully.');
+      console.log(`[SESSION #${sessionNum}] [4/4] Setting Up Vulkan Display Resources...`);
+      await runScript(path.join(__dirname, 'inspection/vulkan-copy.cjs'), [sessionDir, 'display']);
+      console.log(`✔ [SESSION #${sessionNum}] Vulkan display pipeline ready.`);
 
-      console.log('\n[6/7] Probing nn::swkbd Native Subsystem (Safe Research)...');
-      await runScript(path.join(__dirname, 'inspection/swkbd-inspect.cjs'), [directory]);
-      console.log('✔ nn::swkbd probe completed successfully.');
+      // Optional deep probes (enabled with --full-inspect)
+      if (fullInspect) {
+        console.log(`\n[SESSION #${sessionNum}] Running Deep Subsystem Probes (--full-inspect enabled)...`);
+        await runScript(path.join(__dirname, 'inspection/fs-inspect.cjs'), [sessionDir]);
+        await runScript(path.join(__dirname, 'inspection/swkbd-inspect.cjs'), [sessionDir]);
+        await runScript(path.join(__dirname, 'inspection/web-inspect.cjs'), [sessionDir]);
+      }
 
-      console.log('\n[7/7] Inspecting nn::web Native Subsystem (Browser Applet Research)...');
-      await runScript(path.join(__dirname, 'inspection/web-inspect.cjs'), [directory]);
-      console.log('✔ nn::web inspection completed successfully.');
+      // Update runs/latest mirror for standalone inspection scripts
+      await mirrorToLatest(sessionDir);
 
-      const argApp = process.argv.slice(2).find(a => a.startsWith('--app='))?.split('=')[1]
-        || process.argv.slice(3).find(a => !a.startsWith('-'));
-      const targetApp = argApp || 'launcher';
-      console.log(`\n--- Starting ${targetApp} Direct Execution Loop ---`);
-      loopChild = spawn(process.execPath, [path.join(__dirname, 'runtime/hello-runner.cjs'), directory, 'auto', targetApp], {
+      // Launch independent hello-runner for this console
+      console.log(`\n[SESSION #${sessionNum}] Starting ${targetApp} Direct Execution Loop...`);
+      loopChild = spawn(process.execPath, [path.join(__dirname, 'runtime/hello-runner.cjs'), sessionDir, 'auto', targetApp], {
         cwd: __dirname,
         stdio: 'inherit'
       });
+      sessionRecord.loopChild = loopChild;
 
-      console.log('\nSession running. S2 connected. Press Ctrl+C to terminate server.');
+      console.log(`\n[SESSION #${sessionNum} ACTIVE] S2 Console (${clientIp}) running ${targetApp}. Total active consoles: ${activeSessions.size}`);
+
+      // Wait until this specific console disconnects
       await new Promise(resolve => {
         const done = () => resolve();
         connected.connection.socket.once('close', done);
@@ -215,20 +256,42 @@ async function main() {
         loopChild.once('close', done);
       });
 
-    } catch (error) {
-      console.error(`[SESSION #${sessionCount}] Error:`, error.message);
+    } catch (sessionErr) {
+      console.error(`[SESSION #${sessionNum} ERROR]:`, sessionErr.message);
     } finally {
       if (loopChild) {
-        try { loopChild.kill('SIGTERM'); } catch (e) {}
+        try { loopChild.kill('SIGTERM'); } catch (_) {}
       }
       await bridge?.close().catch(() => {});
       await native?.stop().catch(() => {});
-      console.log(`\n[SESSION #${sessionCount} ENDED] Connection dropped or closed. Ready for reconnection.`);
-      await new Promise(r => setTimeout(r, 1000));
+      activeSessions.delete(sessionId);
+      console.log(`\n[SESSION #${sessionNum} CLOSED] Console ${clientIp} disconnected. Active sessions remaining: ${activeSessions.size}`);
     }
   }
 
-  console.log('Server stopped.');
+  // Start Multi-Client TCP Server
+  createMultiServer({
+    host,
+    port: 39380,
+    token,
+    onWaiting() {
+      console.log(`[SERVER LISTENING] Waiting for S2 console connections on port 39380...`);
+      console.log(`Multiple consoles can connect simultaneously!`);
+      console.log(`Run 'START' on each S2 console to connect.\n`);
+    },
+    onConnect(connected) {
+      // Handle each connected console concurrently without blocking the server listener
+      handleSession(connected).catch(err => {
+        console.error('[SESSION FATAL ERROR]:', err);
+      });
+    },
+    onRejected(msg) {
+      console.warn('[CONNECTION REJECTED]:', msg);
+    }
+  });
+
+  // Keep process running
+  await new Promise(() => {});
 }
 
 if (require.main === module) {

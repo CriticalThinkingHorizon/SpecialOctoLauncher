@@ -12,6 +12,7 @@ class Connection {
     this.timeout = timeout;
     this.buffer = Buffer.alloc(0);
     socket.setNoDelay(true);
+    socket.setKeepAlive(true, 15000);
     socket.on('data', bytes => {
       this.buffer = Buffer.concat([this.buffer, bytes]);
       if (this.buffer.length > 0x100000) this.fail(Error('Unexpected console output'));
@@ -152,4 +153,54 @@ async function listen({host, port, token, onWaiting, onRejected, timeout = 30 * 
   });
 }
 
-module.exports = {Connection, HELLO_BYTES, MAGIC, pairingCode, parseHello, listen};
+// Persistent Multi-Client TCP Server for concurrent S2 console connections
+function createMultiServer({host, port, token, onConnect, onWaiting, onRejected}) {
+  if (!net.isIPv4(host)) throw Error('Use the computer\'s LAN/WAN IPv4 address');
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) throw Error('Port must be 1024..65535');
+
+  const pending = new Set();
+  const server = net.createServer();
+
+  server.on('error', error => {
+    onRejected?.(error.message);
+  });
+
+  server.on('connection', socket => {
+    socket.setNoDelay(true);
+    socket.setKeepAlive(true, 15000);
+    const clientIp = socket.remoteAddress?.replace(/^.*:/, '') || 'unknown';
+    const clientPort = socket.remotePort;
+    const connection = new Connection(socket, 600000);
+    pending.add(connection);
+
+    connection.read(HELLO_BYTES).then(bytes => {
+      const addresses = parseHello(bytes, token);
+      pending.delete(connection);
+      onConnect?.({
+        connection,
+        addresses,
+        clientIp,
+        clientPort
+      });
+    }).catch(error => {
+      pending.delete(connection);
+      connection.close();
+      onRejected?.(`[CONNECTION REJECTED from ${clientIp}:${clientPort}] ${error.message}`);
+    });
+  });
+
+  server.listen(port, () => {
+    try { onWaiting?.(); }
+    catch (err) { onRejected?.(err.message); }
+  });
+
+  return {
+    server,
+    close: () => {
+      for (const conn of pending) conn.close();
+      server.close();
+    }
+  };
+}
+
+module.exports = {Connection, HELLO_BYTES, MAGIC, pairingCode, parseHello, listen, createMultiServer};
