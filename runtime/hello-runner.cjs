@@ -528,6 +528,13 @@ async function main(directory, attempt = 'auto') {
       // 2. Scratch state (240 bytes)
       const scratchState = Buffer.from(targetApp.files.state.bytes.subarray(784, 1024));
       scratchState.writeFloatLE(1, 960 - 784);
+      if (name === 'launcher') {
+        scratchState.writeUInt32LE(2, 792 - 784); // c.game.z = 2 (ready state)
+        scratchState.writeUInt32LE(launchableIds.length, 796 - 784); // c.game.w = app count
+        scratchState.writeUInt32LE(cachedMask, 992 - 784); // c.stats.x = cachedMask
+      }
+      scratchState.writeUInt32LE(0, 1016 - 784); // c.reserved.z = 0
+      scratchState.writeUInt32LE(0, 1020 - 784); // c.reserved.w = 0
 
       // 3. Font atlas slice
       const atlasSlice = getEffectiveDataSlice(targetApp.files.data.bytes);
@@ -575,8 +582,17 @@ async function main(directory, attempt = 'auto') {
         // Wait ~20ms (one frame) so any in-flight GPU frame of the previous app completes
         await new Promise(r => setTimeout(r, 20));
 
-        // 2. Clear previous SDK response payload length (offset 4104) while preserving request/response sequence numbers
-        await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(3072));
+        // 2. Response payload handling
+        if (name === 'launcher') {
+          // If returning to launcher, preserve directory entries and ensure c.game.z = 2
+          const readyBuf = Buffer.alloc(8);
+          readyBuf.writeUInt32LE(2, 0); // c.game.z = 2
+          readyBuf.writeUInt32LE(launchableIds.length, 4); // c.game.w = app count
+          await rpc.write(mapped + 792, readyBuf);
+        } else {
+          // Switching to an app: clear previous SDK response payload length (offset 4104)
+          await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(3072));
+        }
 
         // 3. Restore target app's font atlas via on-console native memmove (256 KiB copied on-device in 0.05ms!)
         await nativeMemmove(mapped + 1024, slotInfo.slotMapped + 0x800, slotInfo.atlasLen);
@@ -584,6 +600,9 @@ async function main(directory, attempt = 'auto') {
 
         // 4. Reset app scratch state via on-console native memmove
         await nativeMemmove(mapped + 784, slotInfo.slotMapped + 0x200, slotInfo.scratchLen);
+
+        // 5. Explicitly clear exit flags c.reserved.z and c.reserved.w on S2
+        await rpc.write(mapped + 1016, Buffer.alloc(8));
       } else {
         // First-time load: stage into next available on-console slot
         console.log(`[ON-DEMAND CACHE] Staging ${name} into GPU slot #${stagedSlots.size} and tmp:/cache/...`);
@@ -593,10 +612,18 @@ async function main(directory, attempt = 'auto') {
         // Copy from staged slot into active regions
         await nativeMemmove(control + 0x1000, slotInfo.slotMapped, slotInfo.cmdLen);
         await new Promise(r => setTimeout(r, 20));
-        await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(3072));
+        if (name === 'launcher') {
+          const readyBuf = Buffer.alloc(8);
+          readyBuf.writeUInt32LE(2, 0);
+          readyBuf.writeUInt32LE(launchableIds.length, 4);
+          await rpc.write(mapped + 792, readyBuf);
+        } else {
+          await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(3072));
+        }
         await nativeMemmove(mapped + 1024, slotInfo.slotMapped + 0x800, slotInfo.atlasLen);
         currentAtlasSlice = slotInfo.atlasSlice;
         await nativeMemmove(mapped + 784, slotInfo.slotMapped + 0x200, slotInfo.scratchLen);
+        await rpc.write(mapped + 1016, Buffer.alloc(8));
 
         refreshCachedMask();
       }
@@ -637,8 +664,6 @@ async function main(directory, attempt = 'auto') {
     // Service SDK requests and launcher app selection / live reload while the native frame loop runs.
     while (!stop) {
       try {
-        const currentEntry = preparedApps[activeAppId];
-        await sdkRuntime.atBoundary({ fingerprint: `${currentEntry.app.id}-${currentEntry.app.fingerprint.slice(0, 8)}`, manifest: currentEntry.app.manifest });
         const reserved = await rpc.read(mapped + 1008, 16);
         const exitFlag = reserved.readUInt32LE(8);     // c.reserved.z (1016)
         const actionCode = reserved.readUInt32LE(12);  // c.reserved.w (1020)
@@ -657,6 +682,9 @@ async function main(directory, attempt = 'auto') {
           await rpc.write(mapped + 992, maskBuf);
           console.log('[LIVE UPDATE] Catalog updated:', launchableIds.join(', '));
         } else if (exitFlag !== 0) {
+          // Immediately clear exitFlag and actionCode on S2 to prevent re-triggering loops
+          await rpc.write(mapped + 1016, Buffer.alloc(8));
+
           if (activeAppId === 'launcher') {
             if (actionCode === 98) {
               console.log('[EXIT] Closing Vulkan layer and returning to SmileBASIC...');
@@ -672,14 +700,20 @@ async function main(directory, attempt = 'auto') {
               console.log(`[LAUNCHER] Switching to app: ${targetId}`);
               await ensureAppPrepared(targetId);
               await applyApp(targetId);
-            } else {
-              await rpc.write(mapped + 1016, Buffer.alloc(8));
             }
           } else {
             console.log(`[LAUNCHER] Returning from ${activeAppId} to Homebrew Launcher...`);
             await applyApp('launcher');
           }
+          continue;
         }
+      } catch (error) {
+        console.warn('[RUNNER] Menu polling notice:', error.message);
+      }
+
+      try {
+        const currentEntry = preparedApps[activeAppId];
+        await sdkRuntime.atBoundary({ fingerprint: `${currentEntry.app.id}-${currentEntry.app.fingerprint.slice(0, 8)}`, manifest: currentEntry.app.manifest });
       } catch (error) {
         console.error('[SDK] request failed:', error.message);
       }
