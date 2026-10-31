@@ -205,8 +205,34 @@ async function main(directory, attempt = 'auto') {
       return preparedApps[targetId];
     };
 
+    let launcherDirReply = null;
+    const buildLauncherDirReply = async () => {
+      const scanned = await catalogTools.scan();
+      const apps = scanned.apps.filter(a => a.id !== 'launcher');
+      const rows = [
+        ...apps.map(a => ({ id: a.id, title: `[APP] ${a.name} (${a.id})`, type: 1 })),
+        { id: '__refresh__', title: '[UPDATE] Rescan & Reload Apps from Server', type: 2 }
+      ];
+      const payload = Buffer.alloc(8 + rows.length * 64);
+      payload.writeUInt32LE(rows.length, 0);
+      payload.writeUInt32LE(rows.length, 4);
+      for (let i = 0; i < rows.length; i++) {
+        const o = 8 + i * 64, r = rows[i];
+        payload.write(r.title.substring(0, 47), o, 48, 'utf8');
+        payload.writeUInt32LE(r.type, o + 48);
+        payload.writeBigInt64LE(BigInt(i), o + 56);
+      }
+      const reply = Buffer.alloc(Math.max(1056, 32 + payload.length));
+      reply.writeUInt32LE(1, 0); // sequence = 1
+      reply.writeUInt32LE(0, 4); // status = OK
+      reply.writeUInt32LE(payload.length, 8); // payload length (4104)
+      payload.copy(reply, 32); // entries start at 4128
+      return reply;
+    };
+
     const reloadCatalog = async () => {
       const scanned = await catalogTools.scan();
+      launcherDirReply = await buildLauncherDirReply();
       return scanned.apps.filter(a => a.id !== 'launcher').map(a => a.id);
     };
 
@@ -580,7 +606,10 @@ async function main(directory, attempt = 'auto') {
 
         // 2. Response payload handling
         if (name === 'launcher') {
-          // If returning to launcher, preserve directory entries and ensure c.game.z = 2
+          // If returning to launcher, restore directory entries (titles & types) and ensure c.game.z = 2
+          if (!launcherDirReply) launcherDirReply = await buildLauncherDirReply();
+          await rpc.write(mapped + 0x7f0000 + 4096, launcherDirReply);
+
           const readyBuf = Buffer.alloc(8);
           readyBuf.writeUInt32LE(2, 0); // c.game.z = 2
           readyBuf.writeUInt32LE(launchableIds.length, 4); // c.game.w = app count
@@ -609,6 +638,8 @@ async function main(directory, attempt = 'auto') {
         await nativeMemmove(control + 0x1000, slotInfo.slotMapped, slotInfo.cmdLen);
         await new Promise(r => setTimeout(r, 20));
         if (name === 'launcher') {
+          if (!launcherDirReply) launcherDirReply = await buildLauncherDirReply();
+          await rpc.write(mapped + 0x7f0000 + 4096, launcherDirReply);
           const readyBuf = Buffer.alloc(8);
           readyBuf.writeUInt32LE(2, 0);
           readyBuf.writeUInt32LE(launchableIds.length, 4);
@@ -662,6 +693,8 @@ async function main(directory, attempt = 'auto') {
           const clearW = Buffer.alloc(4);
           await rpc.write(mapped + 1020, clearW);
           launchableIds = await reloadCatalog();
+          launcherDirReply = await buildLauncherDirReply();
+          await rpc.write(mapped + 0x7f0000 + 4096, launcherDirReply);
           refreshCachedMask();
           const maskBuf = Buffer.alloc(4);
           maskBuf.writeUInt32LE(cachedMask, 0);
