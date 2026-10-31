@@ -1,0 +1,216 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+
+const uint URL_0_LEN = 18u;
+const uint URL_0_CHARS[18] = uint[18](104u,116u,116u,112u,115u,58u,47u,47u,103u,111u,111u,103u,108u,101u,46u,99u,111u,109u);
+const uint URL_1_LEN = 21u;
+const uint URL_1_CHARS[21] = uint[21](104u,116u,116u,112u,115u,58u,47u,47u,119u,105u,107u,105u,112u,101u,100u,105u,97u,46u,111u,114u,103u);
+const uint URL_2_LEN = 28u;
+const uint URL_2_CHARS[28] = uint[28](104u,116u,116u,112u,115u,58u,47u,47u,110u,101u,119u,115u,46u,121u,99u,111u,109u,98u,105u,110u,97u,116u,111u,114u,46u,99u,111u,109u);
+const uint URL_3_LEN = 18u;
+const uint URL_3_CHARS[18] = uint[18](104u,116u,116u,112u,115u,58u,47u,47u,103u,105u,116u,104u,117u,98u,46u,99u,111u,109u);
+const uint URL_4_LEN = 22u;
+const uint URL_4_CHARS[22] = uint[22](104u,116u,116u,112u,115u,58u,47u,47u,100u,117u,99u,107u,100u,117u,99u,107u,103u,111u,46u,99u,111u,109u);
+const uint URL_5_LEN = 20u;
+const uint URL_5_CHARS[20] = uint[20](104u,116u,116u,112u,115u,58u,47u,47u,110u,111u,110u,111u,112u,111u,115u,116u,46u,99u,111u,109u);
+
+const uint KBD_PROMPT_LEN = 17u;
+const uint KBD_PROMPT[17] = uint[17](69u,78u,84u,69u,82u,32u,87u,69u,66u,80u,65u,71u,69u,32u,85u,82u,76u);
+
+const uint KBD_GUIDE_LEN = 56u;
+const uint KBD_GUIDE[56] = uint[56](84u,121u,112u,101u,32u,102u,117u,108u,108u,32u,85u,82u,76u,32u,40u,101u,46u,103u,46u,32u,104u,116u,116u,112u,115u,58u,47u,47u,103u,111u,111u,103u,108u,101u,46u,99u,111u,109u,41u,32u,97u,110u,100u,32u,112u,114u,101u,115u,115u,32u,40u,43u,41u,46u,46u,46u);
+
+void main(){
+ uint pressed = hbPressed();
+ uint held = hbButtons();
+ vec2 stick = hbStick(false);
+
+ c.motion.x += 1.0 / 60.0;
+ c.motion.w += 1.0;
+
+ // Universal Exit: Press MINUS to return to Launcher
+ if (((pressed | held) & HB_MINUS) != 0u) {
+  hbExit();
+  hbEndFrame();
+  return;
+ }
+
+ // Boot Initialization with magic signature
+ const uint CRUISER_MAGIC = 0x57435255u; // 'WCRU'
+ if (c.reserved.x != CRUISER_MAGIC) {
+  c.reserved.x = CRUISER_MAGIC;
+  c.game.x = 0u; // idle
+  c.game.y = 0u; // selected bookmark = 0 (Google)
+  c.game.z = 0u; // last result
+  c.game.w = 0u; // last exit reason
+  c.reserved.y = 3u; // Bit 0 = Flag 0x2BC (1), Bit 1 = Touch (1), Bit 2 = Pointer (0)
+  c.flow.x = 0.0;
+
+  // Initialize custom URL to "https://google.com" (18 chars)
+  c.piece.x = 18;
+  for (uint i = 0u; i < 20u; i++) c.rows[i] = 0u;
+  for (uint i = 0u; i < 18u; i++) {
+   uint ch = URL_0_CHARS[i];
+   uint wIdx = i / 4u;
+   uint shift = (i % 4u) * 8u;
+   c.rows[wIdx] |= ((ch & 255u) << shift);
+  }
+ }
+
+ // Decrement feedback banner timer
+ if (c.flow.x > 0.0) c.flow.x -= 1.0;
+
+ // State 1: Browser Applet in flight
+ if (c.game.x == 1u && !hbBusy()) {
+  uint res = nnWebGetResult();
+  uint exitReason = nnWebGetExitReason();
+  c.game.z = res;
+  c.game.w = exitReason;
+  c.game.x = 3u; // Finished banner
+  c.flow.x = 240.0; // 4s banner
+  hbVibrate(2u, 50u, 700u);
+ }
+
+ // State 2: Native Soft Keyboard in flight
+ if (c.game.x == 2u && !hbBusy()) {
+  uint res = nnSwkbdGetResult();
+  uint len = min(nnSwkbdGetTextLength(), 80u);
+  if (len > 0u) {
+   for (uint i = 0u; i < 20u; i++) c.rows[i] = 0u;
+   for (uint i = 0u; i < len; i++) {
+    uint ch = nnSwkbdGetTextByte(i);
+    uint wIdx = i / 4u;
+    uint shift = (i % 4u) * 8u;
+    c.rows[wIdx] |= ((ch & 255u) << shift);
+   }
+   c.piece.x = int(len);
+   c.game.y = 6u; // Automatically select custom URL bookmark
+   c.flow.x = 180.0;
+   hbVibrate(2u, 35u, 550u);
+  }
+  c.game.x = 0u;
+ }
+
+ // State 3: Finished banner dismiss
+ if (c.game.x == 3u && c.flow.x == 0.0) {
+  c.game.x = 0u;
+ }
+
+ // State 0: Idle Browsing & Input
+ if (c.game.x == 0u && !hbBusy()) {
+  // Analog stick navigation with debounce
+  bool stickDown = (stick.y < -0.5);
+  bool stickUp = (stick.y > 0.5);
+  bool navDown = ((pressed & HB_DOWN) != 0u);
+  bool navUp = ((pressed & HB_UP) != 0u);
+
+  if (c.flow.y > 0.0) c.flow.y -= 1.0;
+  if (!stickDown && !stickUp) {
+   c.flow.y = 0.0;
+  } else if (c.flow.y == 0.0) {
+   if (stickDown) {
+    navDown = true;
+    c.flow.y = 16.0;
+   } else if (stickUp) {
+    navUp = true;
+    c.flow.y = 16.0;
+   }
+  }
+
+  // Navigate bookmarks (0 to 6)
+  if (navDown) {
+   c.game.y = (c.game.y + 1u) % 7u;
+   hbVibrate(2u, 15u, 250u);
+  }
+  if (navUp) {
+   c.game.y = (c.game.y + 6u) % 7u;
+   hbVibrate(2u, 15u, 250u);
+  }
+
+  // (X) Press: Toggle Flag 0x2BC (CommonArgData + 700)
+  if ((pressed & HB_X) != 0u) {
+   c.reserved.y ^= 1u;
+   c.flow.x = 90.0;
+   hbVibrate(1u, 30u, 500u);
+  }
+
+  // (L) Press: Toggle Touch Controls
+  if ((pressed & HB_L) != 0u) {
+   c.reserved.y ^= 2u;
+   c.flow.x = 90.0;
+   hbVibrate(1u, 20u, 350u);
+  }
+
+  // (R) Press: Toggle Pointer Cursor Mode
+  if ((pressed & HB_R) != 0u) {
+   c.reserved.y ^= 4u;
+   c.flow.x = 90.0;
+   hbVibrate(1u, 20u, 350u);
+  }
+
+  // (A) Press: Launch Browser Applet for selected bookmark with active flags
+  if ((pressed & HB_A) != 0u) {
+   uint sel = c.game.y;
+   uint urlLen = 0u;
+
+   if (sel == 0u) {
+    urlLen = URL_0_LEN;
+    for (uint i = 0u; i < urlLen; i++) nnWebSetUrlByte(i, URL_0_CHARS[i]);
+   } else if (sel == 1u) {
+    urlLen = URL_1_LEN;
+    for (uint i = 0u; i < urlLen; i++) nnWebSetUrlByte(i, URL_1_CHARS[i]);
+   } else if (sel == 2u) {
+    urlLen = URL_2_LEN;
+    for (uint i = 0u; i < urlLen; i++) nnWebSetUrlByte(i, URL_2_CHARS[i]);
+   } else if (sel == 3u) {
+    urlLen = URL_3_LEN;
+    for (uint i = 0u; i < urlLen; i++) nnWebSetUrlByte(i, URL_3_CHARS[i]);
+   } else if (sel == 4u) {
+    urlLen = URL_4_LEN;
+    for (uint i = 0u; i < urlLen; i++) nnWebSetUrlByte(i, URL_4_CHARS[i]);
+   } else if (sel == 5u) {
+    urlLen = URL_5_LEN;
+    for (uint i = 0u; i < urlLen; i++) nnWebSetUrlByte(i, URL_5_CHARS[i]);
+   } else {
+    // Custom URL from c.rows
+    urlLen = uint(max(c.piece.x, 0));
+    for (uint i = 0u; i < urlLen; i++) {
+     uint wIdx = i / 4u;
+     uint shift = (i % 4u) * 8u;
+     uint ch = (c.rows[wIdx] >> shift) & 255u;
+     nnWebSetUrlByte(i, ch);
+    }
+   }
+
+   uint flags = c.reserved.y;
+   if (urlLen > 0u && nnWebShowWebPageWithFlags(urlLen, flags)) {
+    c.game.x = 1u;
+    hbVibrate(2u, 60u, 800u);
+   }
+  }
+
+  // (Y) Press: Open Native Soft Keyboard to type a custom URL
+  if ((pressed & HB_Y) != 0u) {
+   for (uint i = 0u; i < KBD_PROMPT_LEN; i++) nnSwkbdSetPromptByte(i, KBD_PROMPT[i]);
+   for (uint i = 0u; i < KBD_GUIDE_LEN; i++) nnSwkbdSetGuideByte(i, KBD_GUIDE[i]);
+
+   uint initLen = uint(clamp(c.piece.x, 0, 60));
+   for (uint i = 0u; i < initLen; i++) {
+    uint wIdx = i / 4u;
+    uint shift = (i % 4u) * 8u;
+    uint ch = (c.rows[wIdx] >> shift) & 255u;
+    nnSwkbdSetInitialByte(i, ch);
+   }
+
+   if (hbSwkbdShow(KBD_PROMPT_LEN, KBD_GUIDE_LEN, initLen)) {
+    c.game.x = 2u;
+    hbVibrate(0u, 25u, 450u);
+   }
+  }
+ }
+
+ hbEndFrame();
+}

@@ -426,6 +426,11 @@ bool nnWebShowWebPage(uint urlLen) {
 }
 bool hbWebShow(uint urlLen) { return nnWebShowWebPage(urlLen); }
 
+bool nnWebShowWebPageWithFlags(uint urlLen, uint flags) {
+ return hbRequest(14u, 1u, min(urlLen, 512u), flags);
+}
+bool hbWebShowFlags(uint urlLen, uint flags) { return nnWebShowWebPageWithFlags(urlLen, flags); }
+
 uint nnWebGetResult() { return hbWord(4128u); }
 uint nnWebGetExitReason() { return hbWord(4132u); }
 #endif

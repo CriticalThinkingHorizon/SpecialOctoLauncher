@@ -1,0 +1,17 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "web-cruiser",
+  "name": "Web Cruiser Lab",
+  "version": "1.0.0",
+  "description": "Native Browser POC with configurable CommonArgData internal parameters & flag toggles (0x2BC / 700)",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  },
+  "capabilities": ["swkbd", "web", "vibration"]
+}

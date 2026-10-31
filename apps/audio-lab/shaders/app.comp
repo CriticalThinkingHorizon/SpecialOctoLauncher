@@ -1,0 +1,188 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+
+const uint SFX_COIN = 0u;
+const uint SFX_LASER = 1u;
+const uint SFX_JUMP = 2u;
+const uint SFX_EXPLOSION = 3u;
+const uint SFX_POWERUP = 4u;
+const uint SFX_HIT = 5u;
+const uint SFX_ONEUP = 6u;
+const uint SFX_BEEP = 7u;
+
+// Piano frequencies for octave 4: C4, D4, E4, F4, G4, A4, B4, C5
+const uint PIANO_NOTES[8] = uint[8](262u, 294u, 330u, 349u, 392u, 440u, 494u, 523u);
+
+void main(){
+ uint pressed = hbPressed();
+ uint held = hbButtons();
+ vec2 stick = hbStick(false);
+
+ c.motion.x += 1.0 / 60.0;
+ c.motion.w += 1.0;
+
+ // Universal Exit: Press MINUS to return to Homebrew Launcher
+ if (((pressed | held) & HB_MINUS) != 0u) {
+  hbExit();
+  hbEndFrame();
+  return;
+ }
+
+ // Boot initialization
+ const uint AUDIO_MAGIC = 0x41554449u; // 'AUDI'
+ if (c.reserved.x != AUDIO_MAGIC) {
+  c.reserved.x = AUDIO_MAGIC;
+  c.game.x = 0u;   // Mode: 0 = Soundboard, 1 = Synth
+  c.game.y = 0u;   // Selected SFX index (0..7)
+  c.game.z = 85u;  // Volume (0..100)
+  c.game.w = 0u;   // Waveform type (0=Sine, 1=Square, 2=Triangle, 3=Saw, 4=Noise)
+  c.piece.x = 440; // Frequency (Hz)
+  c.piece.y = 200; // Duration (ms)
+  c.piece.z = 5;   // Selected Piano Note index (5 = A4 440Hz)
+  c.piece.w = 0;   // Last triggered SFX / action
+  c.flow.x = 0.0;  // Banner timer
+  c.flow.y = 0.0;  // Waveform phase accumulator
+  c.flow.z = 0.0;  // Left channel peak meter
+  c.flow.w = 0.0;  // Right channel peak meter
+  nnAudioQueryStatus();
+  hbEndFrame();
+  return;
+ }
+
+ // Decrement feedback banner timer
+ if (c.flow.x > 0.0) c.flow.x -= 1.0;
+
+ // Smooth peak meter decay
+ if (c.flow.z > 0.0) c.flow.z = max(0.0, c.flow.z - 0.025);
+ if (c.flow.w > 0.0) c.flow.w = max(0.0, c.flow.w - 0.025);
+
+ // Toggle mode between Soundboard (0) and Synthesizer (1) with (+) PLUS
+ if ((pressed & HB_PLUS) != 0u) {
+  c.game.x = (c.game.x ^ 1u);
+  c.flow.x = 60.0;
+  hbVibrate(1u, 15u, 300u);
+ }
+
+ // Master volume adjustment with D-Pad UP / DOWN
+ if ((pressed & HB_UP) != 0u) {
+  c.game.z = min(100u, c.game.z + 5u);
+  nnAudioSetVolume(c.game.z);
+  c.flow.x = 60.0;
+  hbVibrate(2u, 10u, 200u);
+ }
+ if ((pressed & HB_DOWN) != 0u) {
+  c.game.z = (c.game.z >= 5u) ? (c.game.z - 5u) : 0u;
+  nnAudioSetVolume(c.game.z);
+  c.flow.x = 60.0;
+  hbVibrate(2u, 10u, 200u);
+ }
+
+ uint vol = c.game.z;
+
+ // =========================================================================
+ // MODE 0: Retro SFX Soundboard
+ // =========================================================================
+ if (c.game.x == 0u) {
+  // Analog stick navigation across soundboard slots (0..7)
+  bool stickLeft = (stick.x < -0.5);
+  bool stickRight = (stick.x > 0.5);
+  bool navLeft = ((pressed & HB_LEFT) != 0u) || stickLeft;
+  bool navRight = ((pressed & HB_RIGHT) != 0u) || stickRight;
+
+  if (navLeft) {
+   c.game.y = (c.game.y + 7u) % 8u;
+   hbVibrate(2u, 8u, 150u);
+  }
+  if (navRight) {
+   c.game.y = (c.game.y + 1u) % 8u;
+   hbVibrate(2u, 8u, 150u);
+  }
+
+  // Quick Joy-Con Button Triggers:
+  uint triggerSfx = 999u;
+
+  if ((pressed & HB_A) != 0u) triggerSfx = c.game.y; // Play selected card on (A)
+  else if ((pressed & HB_X) != 0u) triggerSfx = SFX_LASER;
+  else if ((pressed & HB_Y) != 0u) triggerSfx = SFX_JUMP;
+  else if ((pressed & HB_B) != 0u) triggerSfx = SFX_EXPLOSION;
+  else if ((pressed & HB_L) != 0u) triggerSfx = SFX_POWERUP;
+  else if ((pressed & HB_R) != 0u) triggerSfx = SFX_HIT;
+
+  if (triggerSfx != 999u) {
+   c.game.y = triggerSfx;
+   c.piece.w = int(triggerSfx);
+   c.flow.x = 75.0; // 1.25s banner
+   c.flow.z = 0.95;
+   c.flow.w = 0.95;
+   nnAudioPlaySfx(triggerSfx, vol);
+
+   // Haptic vibration pairing: Explosion gets powerful rumble; others get crisp clicks
+   if (triggerSfx == SFX_EXPLOSION) {
+    hbVibrate(0u, 100u, 900u); // Powerful stereo explosion rumble
+   } else if (triggerSfx == SFX_COIN || triggerSfx == SFX_POWERUP) {
+    hbVibrate(2u, 25u, 450u);
+   } else {
+    hbVibrate(1u, 18u, 320u);
+   }
+  }
+ }
+ // =========================================================================
+ // MODE 1: Procedural Synthesizer
+ // =========================================================================
+ else {
+  // Cycle waveform with (X)
+  if ((pressed & HB_X) != 0u) {
+   c.game.w = (c.game.w + 1u) % 5u; // 0=Sine, 1=Square, 2=Triangle, 3=Saw, 4=Noise
+   c.flow.x = 60.0;
+   hbVibrate(2u, 12u, 220u);
+  }
+
+  // Cycle notes with D-Pad LEFT / RIGHT
+  if ((pressed & HB_LEFT) != 0u) {
+   c.piece.z = (c.piece.z + 7) % 8;
+   c.piece.x = int(PIANO_NOTES[c.piece.z]);
+   c.flow.x = 60.0;
+   hbVibrate(2u, 8u, 150u);
+  }
+  if ((pressed & HB_RIGHT) != 0u) {
+   c.piece.z = (c.piece.z + 1) % 8;
+   c.piece.x = int(PIANO_NOTES[c.piece.z]);
+   c.flow.x = 60.0;
+   hbVibrate(2u, 8u, 150u);
+  }
+
+  // Adjust duration with L / R (50ms - 800ms)
+  if ((pressed & HB_L) != 0u) {
+   c.piece.y = max(50, c.piece.y - 50);
+   c.flow.x = 60.0;
+   hbVibrate(2u, 8u, 150u);
+  }
+  if ((pressed & HB_R) != 0u) {
+   c.piece.y = min(800, c.piece.y + 50);
+   c.flow.x = 60.0;
+   hbVibrate(2u, 8u, 150u);
+  }
+
+  // Play Tone with (A)
+  if ((pressed & HB_A) != 0u) {
+   uint wave = c.game.w;
+   uint freq = uint(c.piece.x);
+   uint dur = uint(c.piece.y);
+   c.flow.x = 80.0;
+   c.flow.z = 0.85;
+   c.flow.w = 0.85;
+   nnAudioPlayTone(wave, freq, dur);
+   hbVibrate(1u, 20u, 350u);
+  }
+ }
+
+ // Query audio status periodically for oscilloscope and played count
+ if (mod(c.motion.w, 30.0) == 0.0 && !hbBusy()) {
+  nnAudioQueryStatus();
+ }
+
+ hbEndFrame();
+}

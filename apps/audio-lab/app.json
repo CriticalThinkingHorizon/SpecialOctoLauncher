@@ -1,0 +1,19 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "audio-lab",
+  "name": "Audio Lab & Soundboard",
+  "version": "1.0.0",
+  "description": "Hardware audio playback, 8 retro sound effects, tone synth & CRT oscilloscope",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  },
+  "sdk": {
+    "capabilities": ["audio", "vibration"]
+  }
+}

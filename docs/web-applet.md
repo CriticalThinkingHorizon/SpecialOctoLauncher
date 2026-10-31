@@ -79,18 +79,21 @@ The host adapter uses the native client dispatcher (`sdk/native/client.cjs`) to 
 ### Memory Layout
 - **`0x2000` (8 KiB)**: `ShowWebPageArg` storage.
 - **`0x4000` (1 KiB)**: `WebPageReturnValue` storage.
-- **`0x5000` (4 KiB)**: Null-terminated UTF-8 URL string.
+- **`0x5000` (4 KiB)**: Null-terminated UTF-8 target URL string.
+- **`0x6000` (4 KiB)**: Null-terminated UTF-8 callback URL string (`http://localhost/callback`).
 
 ### Execution Flow
 1. **Initialize `WebPageReturnValue`**:
    Calls `WebPageReturnValueCtor(retValPtr)` to set default struct state.
-2. **Format & Write URL**:
-   Ensures standard `https://` prefix, encodes null-terminated UTF-8 bytes, and writes to `urlPtr`.
+2. **Format & Write URLs**:
+   Ensures standard `https://` prefix for target URL, and stages both target URL and callback URL buffers.
 3. **Construct `ShowWebPageArg`**:
    Invokes `ShowWebPageArgCtor(argPtr, urlPtr)` via native call convention (`x0 = argPtr`, `x1 = urlPtr`).
-4. **Launch Browser Applet**:
+4. **Configure Mandatory S2 Session Parameters**:
+   Invokes `SetCallbackUrl(argPtr, callbackUrlPtr)` to satisfy the S2 OS requirement for third-party web applet sessions. Applies optional flags (Touch, Pointer, custom args) as configured.
+5. **Launch Browser Applet**:
    Executes `ShowWebPage(retValPtr, argPtr)`. Execution on the S2 suspends into the native browser modal until dismissed by the user.
-5. **Extract Exit Telemetry**:
+6. **Extract Exit Telemetry**:
    Invokes `GetWebExitReason(retValPtr)` to read the native exit reason descriptor back into GPU memory.
 
 ---
@@ -109,6 +112,13 @@ void hbWebUrlByte(uint i, uint byteVal);
 // Trigger launch of the native browser applet with a staged URL of length urlLen
 void nnWebShowWebPage(uint urlLen);
 void hbWebShow(uint urlLen);
+
+// Trigger launch of the native browser applet with custom flags bitmask
+// Bit 0: Flag 0x2BC (CommonArgData / InternalArgs + 0x2BC set to 1)
+// Bit 1: SetTouchEnabledOnContents
+// Bit 2: SetPointerEnabled
+void nnWebShowWebPageWithFlags(uint urlLen, uint flags);
+void hbWebShowFlags(uint urlLen, uint flags);
 
 // Read the OS return code (0 = SUCCESS)
 uint nnWebGetResult();
@@ -134,16 +144,19 @@ void stageUrlAndLaunch() {
         nnWebSetUrlByte(i, URL_CHARS[i]);
     }
 
-    // Launch native browser modal
-    nnWebShowWebPage(URL_LEN);
+    // Launch native browser modal with Flag 0x2BC (Bit 0) and Touch (Bit 1)
+    uint flags = 3u;
+    nnWebShowWebPageWithFlags(URL_LEN, flags);
 }
 ```
 
 ---
 
-## 5. Proof of Concept Application (`apps/web-browser`)
+## 5. Proof of Concept Applications
 
-The included **`web-browser`** application provides a complete reference implementation:
+### 5.1 Standard Browser (`apps/web-browser`)
+
+The standard **`web-browser`** application provides an essential reference implementation:
 
 - **Interactive CRT Tube UI**: Renders an omnibox with live cursor blink, SSL lock icon, bookmark cards, and scanlines.
 - **Pre-configured Bookmarks**:
@@ -156,3 +169,14 @@ The included **`web-browser`** application provides a complete reference impleme
 - **Custom URL Input**: Pressing **`Y`** opens the S2 native soft keyboard (`nn::swkbd`) to enter any custom website address.
 - **Feedback & Exit Telemetry**: Displays a real-time toast notification displaying exit reason codes upon returning from the browser.
 - **Universal Exit**: Pressing **`-` (MINUS)** exits cleanly back to the Homebrew Launcher.
+
+### 5.2 Web Cruiser & Flag Explorer (`apps/web-cruiser`)
+
+The **`web-cruiser`** application is an extended browser tool that allows users to interactively configure `ShowWebPageArg` parameters before launching the OS browser applet:
+
+- **Configurable Flags**:
+  - `[X]` **Flag 0x2BC**: Sets the 32-bit field at `InternalArgs + 0x2BC` (decimal 700) in `CommonArgData` to `1` or `0`.
+  - `[L]` **Touch**: Calls `nn::web::ShowWebPageArg::SetTouchEnabledOnContents` to toggle capacitive touch interaction.
+  - `[R]` **Pointer**: Calls `nn::web::ShowWebPageArg::SetPointerEnabled` to toggle Joy-Con analog pointer navigation.
+- **Omnibox & Bookmarks**: Full URL editing with `nn::swkbd` (`Y`) and bookmark navigation.
+- **Real-Time Indicators**: Status bar renders active flag states and parameter bitmasks in real time.

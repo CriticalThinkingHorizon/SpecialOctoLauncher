@@ -496,7 +496,7 @@ async function main(directory, attempt = 'auto') {
       await new Promise(r => setTimeout(r, 20));
 
       // 2. Clear previous SDK response payload length (offset 4104) while preserving request/response sequence numbers
-      await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(1048));
+      await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(3072));
 
       // 3. Always restore the target app's font atlas at mapped + 1024, clearing any dirty rows from previous apps
       const nextSlice = getEffectiveDataSlice(targetApp.files.data.bytes);

@@ -102,7 +102,7 @@ uint hbJoyMouseAttributes(uint player,uint side){
 // ============================================================================
 bool hbBusy(){return hbWord(2048u)!=hbWord(4096u);}
 uint hbResult(){return hbWord(4100u);}
-uint hbResponseBytes(){return min(hbWord(4104u),1024u);}
+uint hbResponseBytes(){return min(hbWord(4104u),3072u);}
 uint hbResponseByte(uint index){return index<hbResponseBytes()?(hbWord(4128u+(index/4u)*4u)>>((index%4u)*8u))&255u:0u;}
 
 // Directory & Text Reader Response Accessors
@@ -234,6 +234,17 @@ uint nnIrSensorResultHandle(){return hbWord(4128u);}
 uint nnIrSensorResultStatus(){return hbWord(4132u);}
 uint nnAudioResultInputCount(){return hbWord(4128u);}
 uint nnAudioResultInputNameByte(uint devIndex,uint charIndex){return devIndex<8u&&charIndex<64u?hbResponseByte(16u+devIndex*64u+charIndex):0u;}
+uint nnAudioGetResult(){return hbWord(4128u);}
+uint nnAudioGetPlayedCount(){return hbWord(4136u);}
+uint nnAudioGetVolume(){return hbWord(4140u);}
+int nnAudioGetWaveSample(uint index){
+ if(index>=32u)return 0;
+ uint b0=hbResponseByte(16u+index*4u);
+ uint b1=hbResponseByte(16u+index*4u+1u);
+ int val=int(b0|(b1<<8u));
+ if(val>=32768)val-=65536;
+ return val;
+}
 
 #ifndef HB_READONLY
 void hbEndFrame(){c.state.y=nnHidGetNpadButtons();}
@@ -276,8 +287,22 @@ bool hbSystemInfo(){return nnOsGetSystemInfo();}
 // --- nn::irsensor::detail & nn::audio ---
 bool nnIrSensorGetCameraStatus(uint npadId){return hbRequest(11u,npadId,1u,0u);}
 bool hbIrStatus(uint npadId){return nnIrSensorGetCameraStatus(npadId);}
-bool nnAudioListAudioIns(uint maxCount){return hbRequest(12u,maxCount,0u,0u);}
+bool nnAudioListAudioIns(uint maxCount){return hbRequest(12u,10u,maxCount,0u);}
 bool hbAudioListInputs(uint maxCount){return nnAudioListAudioIns(maxCount);}
+bool nnAudioQueryStatus(){return hbRequest(12u,1u,0u,0u);}
+bool hbAudioQuery(){return nnAudioQueryStatus();}
+bool nnAudioPlaySfx(uint sfxId,uint volumePercent){return hbRequest(12u,2u,sfxId,volumePercent);}
+bool hbAudioSfx(uint sfxId,uint volumePercent){return nnAudioPlaySfx(sfxId,volumePercent);}
+bool hbAudioSfx(uint sfxId){return nnAudioPlaySfx(sfxId,85u);}
+bool nnAudioPlayTone(uint waveType,uint freqHz,uint durationMs){
+ uint packed=(freqHz&0xffffu)|((durationMs&0xffffu)<<16u);
+ return hbRequest(12u,3u,waveType,packed);
+}
+bool hbAudioTone(uint waveType,uint freqHz,uint durationMs){return nnAudioPlayTone(waveType,freqHz,durationMs);}
+bool nnAudioSetVolume(uint volumePercent){return hbRequest(12u,4u,min(volumePercent,100u),0u);}
+bool hbAudioVolume(uint volumePercent){return nnAudioSetVolume(volumePercent);}
+bool nnAudioStop(){return hbRequest(12u,5u,0u,0u);}
+bool hbAudioStopPlayback(){return nnAudioStop();}
 
 // --- nn::fs (Complete 18-Function Filesystem Suite + High-Level Helpers) ---
 void nnFsSetPathByte(uint index,uint value){if(index>=64u||hbBusy())return;uint o=HB_EXT+(2048u+32u)/4u+index/4u,shift=(index%4u)*8u;c.atlas[o]=(c.atlas[o]&~(255u<<shift))|((value&255u)<<shift);}
@@ -425,6 +450,11 @@ bool nnWebShowWebPage(uint urlLen) {
  return hbRequest(14u, 1u, min(urlLen, 512u), 0u);
 }
 bool hbWebShow(uint urlLen) { return nnWebShowWebPage(urlLen); }
+
+bool nnWebShowWebPageWithFlags(uint urlLen, uint flags) {
+ return hbRequest(14u, 1u, min(urlLen, 512u), flags);
+}
+bool hbWebShowFlags(uint urlLen, uint flags) { return nnWebShowWebPageWithFlags(urlLen, flags); }
 
 uint nnWebGetResult() { return hbWord(4128u); }
 uint nnWebGetExitReason() { return hbWord(4132u); }

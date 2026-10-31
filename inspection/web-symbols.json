@@ -1,7 +1,7 @@
 {
   "session": "latest",
-  "sdkBase": "0x665e02d000",
-  "mainBase": "0x6648605000",
+  "sdkBase": "0x29e502d000",
+  "mainBase": "0x29cf605000",
   "mainWebImports": [
     {
       "name": "_ZN2nn3web14ShowWebPageArgC1EPKc",
@@ -47,7 +47,7 @@
         "name": "_ZN2nn3web11ShowWebPageEPNS0_18WebPageReturnValueERKNS0_14ShowWebPageArgE",
         "description": "nn::web::ShowWebPage [args: PNS0_18WebPageReturnValueERKNS0_14ShowWebPageArgE]",
         "offset": 5125680,
-        "address": "0x665e510630",
+        "address": "0x29e5510630",
         "size": 344,
         "section": 1,
         "type": 2
@@ -59,7 +59,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg25SetTouchEnabledOnContentsEb",
         "description": "nn::web::ShowWebPageArg::SetTouchEnabledOnContents [args: b]",
         "offset": 5138872,
-        "address": "0x665e5139b8",
+        "address": "0x29e55139b8",
         "size": 124,
         "section": 1,
         "type": 2,
@@ -69,7 +69,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg4DataEv",
         "description": "nn::web::ShowWebPageArg::Data [args: v]",
         "offset": 5140332,
-        "address": "0x665e513f6c",
+        "address": "0x29e5513f6c",
         "size": 4,
         "section": 1,
         "type": 2
@@ -78,7 +78,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg22OverrideWebAudioVolumeEf",
         "description": "nn::web::ShowWebPageArg::OverrideWebAudioVolume [args: f]",
         "offset": 5140092,
-        "address": "0x665e513e7c",
+        "address": "0x29e5513e7c",
         "size": 120,
         "section": 1,
         "type": 2
@@ -87,7 +87,7 @@
         "name": "_ZN2nn3web14ShowWebPageArgC1Ev",
         "description": "nn::web::ShowWebPageArg::(constructor) [args: Ev]",
         "offset": 5136924,
-        "address": "0x665e51321c",
+        "address": "0x29e551321c",
         "size": 72,
         "section": 1,
         "type": 2
@@ -96,7 +96,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg24OverrideMediaAudioVolumeEf",
         "description": "nn::web::ShowWebPageArg::OverrideMediaAudioVolume [args: f]",
         "offset": 5140212,
-        "address": "0x665e513ef4",
+        "address": "0x29e5513ef4",
         "size": 120,
         "section": 1,
         "type": 2
@@ -105,7 +105,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg14SetCallbackUrlEPKc",
         "description": "nn::web::ShowWebPageArg::SetCallbackUrl [args: PKc]",
         "offset": 5137272,
-        "address": "0x665e513378",
+        "address": "0x29e5513378",
         "size": 236,
         "section": 1,
         "type": 2,
@@ -115,7 +115,7 @@
         "name": "_ZN2nn3web20SetScreenShotEnabledEPNS0_14ShowWebPageArgE",
         "description": "nn::web::SetScreenShotEnabled [args: PNS0_14ShowWebPageArgE]",
         "offset": 5140736,
-        "address": "0x665e514100",
+        "address": "0x29e5514100",
         "size": 152,
         "section": 1,
         "type": 2,
@@ -125,7 +125,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg33SetMediaPlayerSpeedControlEnabledEb",
         "description": "nn::web::ShowWebPageArg::SetMediaPlayerSpeedControlEnabled [args: b]",
         "offset": 5139840,
-        "address": "0x665e513d80",
+        "address": "0x29e5513d80",
         "size": 124,
         "section": 1,
         "type": 2,
@@ -135,7 +135,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg20SetBootAsMediaPlayerEb",
         "description": "nn::web::ShowWebPageArg::SetBootAsMediaPlayer [args: b]",
         "offset": 5137148,
-        "address": "0x665e5132fc",
+        "address": "0x29e55132fc",
         "size": 124,
         "section": 1,
         "type": 2,
@@ -145,7 +145,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg18SetCallbackableUrlEPKc",
         "description": "nn::web::ShowWebPageArg::SetCallbackableUrl [args: PKc]",
         "offset": 5137508,
-        "address": "0x665e513464",
+        "address": "0x29e5513464",
         "size": 236,
         "section": 1,
         "type": 2,
@@ -155,7 +155,7 @@
         "name": "_ZN2nn3web11SetBootModeEPNS0_14ShowWebPageArgENS0_18WebSessionBootModeE",
         "description": "nn::web::SetBootMode [args: PNS0_14ShowWebPageArgENS0_18WebSessionBootModeE]",
         "offset": 5140560,
-        "address": "0x665e514050",
+        "address": "0x29e5514050",
         "size": 164,
         "section": 1,
         "type": 2,
@@ -165,7 +165,7 @@
         "name": "_ZN2nn3web14ShowWebPageArgC2Ev",
         "description": "nn::web::ShowWebPageArg::(constructor) [args: Ev]",
         "offset": 5136924,
-        "address": "0x665e51321c",
+        "address": "0x29e551321c",
         "size": 72,
         "section": 1,
         "type": 2
@@ -174,7 +174,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg6SetUidERKNS_7account3UidE",
         "description": "nn::web::ShowWebPageArg::SetUid [args: RKNS_7account3UidE]",
         "offset": 5137988,
-        "address": "0x665e513644",
+        "address": "0x29e5513644",
         "size": 272,
         "section": 1,
         "type": 2
@@ -183,7 +183,7 @@
         "name": "_ZN2nn3web10WebSession5StartEPPNS_2os15SystemEventTypeERKNS0_14ShowWebPageArgE",
         "description": "nn::web::WebSession::Start [args: PPNS_2os15SystemEventTypeERKNS0_14ShowWebPageArgE]",
         "offset": 5142364,
-        "address": "0x665e51475c",
+        "address": "0x29e551475c",
         "size": 416,
         "section": 1,
         "type": 2
@@ -192,7 +192,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg17SetPointerEnabledEb",
         "description": "nn::web::ShowWebPageArg::SetPointerEnabled [args: b]",
         "offset": 5137744,
-        "address": "0x665e513550",
+        "address": "0x29e5513550",
         "size": 124,
         "section": 1,
         "type": 2,
@@ -202,7 +202,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg18SetWebAudioEnabledEb",
         "description": "nn::web::ShowWebPageArg::SetWebAudioEnabled [args: b]",
         "offset": 5139592,
-        "address": "0x665e513c88",
+        "address": "0x29e5513c88",
         "size": 124,
         "section": 1,
         "type": 2,
@@ -212,7 +212,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg18SetFooterFixedKindENS0_18WebFooterFixedKindE",
         "description": "nn::web::ShowWebPageArg::SetFooterFixedKind [args: NS0_18WebFooterFixedKindE]",
         "offset": 5138260,
-        "address": "0x665e513754",
+        "address": "0x29e5513754",
         "size": 120,
         "section": 1,
         "type": 2,
@@ -222,7 +222,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg30SetMediaPlayerAutoCloseEnabledEb",
         "description": "nn::web::ShowWebPageArg::SetMediaPlayerAutoCloseEnabled [args: b]",
         "offset": 5139220,
-        "address": "0x665e513b14",
+        "address": "0x29e5513b14",
         "size": 124,
         "section": 1,
         "type": 2,
@@ -232,7 +232,7 @@
         "name": "_ZN2nn3web24SetTransferMemoryEnabledEPNS0_14ShowWebPageArgE",
         "description": "nn::web::SetTransferMemoryEnabled [args: PNS0_14ShowWebPageArgE]",
         "offset": 5141056,
-        "address": "0x665e514240",
+        "address": "0x29e5514240",
         "size": 200,
         "section": 1,
         "type": 2,
@@ -242,7 +242,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg19RequestUrlMaxLengthE",
         "description": "nn::web::ShowWebPageArg::RequestUrlMaxLength",
         "offset": 11866928,
-        "address": "0x665eb7e330",
+        "address": "0x29e5b7e330",
         "size": 8,
         "section": 10,
         "type": 1
@@ -251,7 +251,7 @@
         "name": "_ZN2nn3web18SetShopJumpEnabledEPNS0_14ShowWebPageArgE",
         "description": "nn::web::SetShopJumpEnabled [args: PNS0_14ShowWebPageArgE]",
         "offset": 5140896,
-        "address": "0x665e5141a0",
+        "address": "0x29e55141a0",
         "size": 152,
         "section": 1,
         "type": 2,
@@ -261,7 +261,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg23SetMediaAutoPlayEnabledEb",
         "description": "nn::web::ShowWebPageArg::SetMediaAutoPlayEnabled [args: b]",
         "offset": 5139964,
-        "address": "0x665e513dfc",
+        "address": "0x29e5513dfc",
         "size": 128,
         "section": 1,
         "type": 2,
@@ -271,7 +271,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg17SetDisplayUrlKindENS0_17WebDisplayUrlKindE",
         "description": "nn::web::ShowWebPageArg::SetDisplayUrlKind [args: NS0_17WebDisplayUrlKindE]",
         "offset": 5138744,
-        "address": "0x665e513938",
+        "address": "0x29e5513938",
         "size": 128,
         "section": 1,
         "type": 2,
@@ -281,7 +281,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg21SetJsExtensionEnabledEb",
         "description": "nn::web::ShowWebPageArg::SetJsExtensionEnabled [args: b]",
         "offset": 5138620,
-        "address": "0x665e5138bc",
+        "address": "0x29e55138bc",
         "size": 124,
         "section": 1,
         "type": 2,
@@ -291,7 +291,7 @@
         "name": "_ZN2nn3web14ShowWebPageArgC2EPKc",
         "description": "nn::web::ShowWebPageArg::(constructor) [args: EPKc]",
         "offset": 5136996,
-        "address": "0x665e513264",
+        "address": "0x29e5513264",
         "size": 152,
         "section": 1,
         "type": 2
@@ -300,7 +300,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg19SetPageCacheEnabledEb",
         "description": "nn::web::ShowWebPageArg::SetPageCacheEnabled [args: b]",
         "offset": 5139344,
-        "address": "0x665e513b90",
+        "address": "0x29e5513b90",
         "size": 124,
         "section": 1,
         "type": 2,
@@ -310,7 +310,7 @@
         "name": "_ZN2nn3web14ShowWebPageArgC1EPKc",
         "description": "nn::web::ShowWebPageArg::(constructor) [args: EPKc]",
         "offset": 5136996,
-        "address": "0x665e513264",
+        "address": "0x29e5513264",
         "size": 152,
         "section": 1,
         "type": 2
@@ -319,7 +319,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg16SetLeftStickModeENS0_16WebLeftStickModeE",
         "description": "nn::web::ShowWebPageArg::SetLeftStickMode [args: NS0_16WebLeftStickModeE]",
         "offset": 5137868,
-        "address": "0x665e5135cc",
+        "address": "0x29e55135cc",
         "size": 120,
         "section": 1,
         "type": 2,
@@ -329,7 +329,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg18SetBootDisplayKindENS0_18WebBootDisplayKindE",
         "description": "nn::web::ShowWebPageArg::SetBootDisplayKind [args: NS0_18WebBootDisplayKindE]",
         "offset": 5138500,
-        "address": "0x665e513844",
+        "address": "0x29e5513844",
         "size": 120,
         "section": 1,
         "type": 2,
@@ -339,7 +339,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg24CallbackableUrlMaxLengthE",
         "description": "nn::web::ShowWebPageArg::CallbackableUrlMaxLength",
         "offset": 11866944,
-        "address": "0x665eb7e340",
+        "address": "0x29e5b7e340",
         "size": 8,
         "section": 10,
         "type": 1
@@ -348,7 +348,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg34UserAgentAdditionalStringMaxLengthE",
         "description": "nn::web::ShowWebPageArg::UserAgentAdditionalStringMaxLength",
         "offset": 11866952,
-        "address": "0x665eb7e348",
+        "address": "0x29e5b7e348",
         "size": 8,
         "section": 10,
         "type": 1
@@ -357,7 +357,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg8DataSizeE",
         "description": "nn::web::ShowWebPageArg::DataSize",
         "offset": 11866960,
-        "address": "0x665eb7e350",
+        "address": "0x29e5b7e350",
         "size": 8,
         "section": 10,
         "type": 1
@@ -366,7 +366,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg17SetBackgroundKindENS0_17WebBackgroundKindE",
         "description": "nn::web::ShowWebPageArg::SetBackgroundKind [args: NS0_17WebBackgroundKindE]",
         "offset": 5138380,
-        "address": "0x665e5137cc",
+        "address": "0x29e55137cc",
         "size": 120,
         "section": 1,
         "type": 2,
@@ -376,7 +376,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg18SetPageFadeEnabledEb",
         "description": "nn::web::ShowWebPageArg::SetPageFadeEnabled [args: b]",
         "offset": 5139468,
-        "address": "0x665e513c0c",
+        "address": "0x29e5513c0c",
         "size": 124,
         "section": 1,
         "type": 2,
@@ -386,7 +386,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg20CallbackUrlMaxLengthE",
         "description": "nn::web::ShowWebPageArg::CallbackUrlMaxLength",
         "offset": 11866936,
-        "address": "0x665eb7e338",
+        "address": "0x29e5b7e338",
         "size": 8,
         "section": 10,
         "type": 1
@@ -395,7 +395,7 @@
         "name": "_ZNK2nn3web6detail20ShowWebPageArgWriter15PushToInChannelENS_6applet19LibraryAppletHandleE",
         "description": "_ZNK2nn3web6detail20ShowWebPageArgWriter15PushToInChannelENS_6applet19LibraryAppletHandleE",
         "offset": 5143100,
-        "address": "0x665e514a3c",
+        "address": "0x29e5514a3c",
         "size": 108,
         "section": 1,
         "type": 2
@@ -404,7 +404,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg29SetPageScrollIndicatorEnabledEb",
         "description": "nn::web::ShowWebPageArg::SetPageScrollIndicatorEnabled [args: b]",
         "offset": 5139716,
-        "address": "0x665e513d04",
+        "address": "0x29e5513d04",
         "size": 124,
         "section": 1,
         "type": 2,
@@ -414,7 +414,7 @@
         "name": "_ZN2nn3web14ShowWebPageArg28SetUserAgentAdditionalStringEPKc",
         "description": "nn::web::ShowWebPageArg::SetUserAgentAdditionalString [args: PKc]",
         "offset": 5138996,
-        "address": "0x665e513a34",
+        "address": "0x29e5513a34",
         "size": 224,
         "section": 1,
         "type": 2,
@@ -426,7 +426,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg4DataEv",
         "description": "nn::web::ShowOfflineHtmlPageArg::Data [args: v]",
         "offset": 5130784,
-        "address": "0x665e511a20",
+        "address": "0x29e5511a20",
         "size": 4,
         "section": 1,
         "type": 2
@@ -435,7 +435,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg30SetMediaPlayerAutoCloseEnabledEb",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetMediaPlayerAutoCloseEnabled [args: b]",
         "offset": 5129424,
-        "address": "0x665e5114d0",
+        "address": "0x29e55114d0",
         "size": 124,
         "section": 1,
         "type": 2
@@ -444,7 +444,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArgC2Ev",
         "description": "nn::web::ShowOfflineHtmlPageArg::(constructor) [args: Ev]",
         "offset": 5127524,
-        "address": "0x665e510d64",
+        "address": "0x29e5510d64",
         "size": 592,
         "section": 1,
         "type": 2
@@ -453,7 +453,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg19SetPageCacheEnabledEb",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetPageCacheEnabled [args: b]",
         "offset": 5129548,
-        "address": "0x665e51154c",
+        "address": "0x29e551154c",
         "size": 124,
         "section": 1,
         "type": 2
@@ -462,7 +462,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArgC2ERKNS_13ApplicationIdEPKc",
         "description": "nn::web::ShowOfflineHtmlPageArg::(constructor) [args: ERKNS_13ApplicationIdEPKc]",
         "offset": 5128212,
-        "address": "0x665e511014",
+        "address": "0x29e5511014",
         "size": 96,
         "section": 1,
         "type": 2
@@ -471,7 +471,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg18SetWebAudioEnabledEb",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetWebAudioEnabled [args: b]",
         "offset": 5129796,
-        "address": "0x665e511644",
+        "address": "0x29e5511644",
         "size": 124,
         "section": 1,
         "type": 2
@@ -480,7 +480,7 @@
         "name": "_ZN2nn3web36ShowOfflineHtmlPageArgWithPlayReportC2EPKc",
         "description": "nn::web::ShowOfflineHtmlPageArgWithPlayReport::(constructor) [args: EPKc]",
         "offset": 5130848,
-        "address": "0x665e511a60",
+        "address": "0x29e5511a60",
         "size": 172,
         "section": 1,
         "type": 2
@@ -489,7 +489,7 @@
         "name": "_ZN2nn3web11SetBootModeEPNS0_22ShowOfflineHtmlPageArgENS0_18WebSessionBootModeE",
         "description": "nn::web::SetBootMode [args: PNS0_22ShowOfflineHtmlPageArgENS0_18WebSessionBootModeE]",
         "offset": 5135856,
-        "address": "0x665e512df0",
+        "address": "0x29e5512df0",
         "size": 164,
         "section": 1,
         "type": 2
@@ -498,7 +498,7 @@
         "name": "_ZN2nn3web36ShowOfflineHtmlPageArgWithPlayReportC1EPKc",
         "description": "nn::web::ShowOfflineHtmlPageArgWithPlayReport::(constructor) [args: EPKc]",
         "offset": 5130848,
-        "address": "0x665e511a60",
+        "address": "0x29e5511a60",
         "size": 172,
         "section": 1,
         "type": 2
@@ -507,7 +507,7 @@
         "name": "_ZN2nn3web36ShowOfflineHtmlPageArgWithPlayReportC1ERKNS_13ApplicationIdEPKc",
         "description": "nn::web::ShowOfflineHtmlPageArgWithPlayReport::(constructor) [args: ERKNS_13ApplicationIdEPKc]",
         "offset": 5131144,
-        "address": "0x665e511b88",
+        "address": "0x29e5511b88",
         "size": 172,
         "section": 1,
         "type": 2
@@ -516,7 +516,7 @@
         "name": "_ZN2nn3web19ShowOfflineHtmlPageEPNS0_26OfflineHtmlPageReturnValueERKNS0_22ShowOfflineHtmlPageArgE",
         "description": "nn::web::ShowOfflineHtmlPage [args: PNS0_26OfflineHtmlPageReturnValueERKNS0_22ShowOfflineHtmlPageArgE]",
         "offset": 5126464,
-        "address": "0x665e510940",
+        "address": "0x29e5510940",
         "size": 348,
         "section": 1,
         "type": 2
@@ -525,7 +525,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg21SetJsExtensionEnabledEb",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetJsExtensionEnabled [args: b]",
         "offset": 5129176,
-        "address": "0x665e5113d8",
+        "address": "0x29e55113d8",
         "size": 124,
         "section": 1,
         "type": 2
@@ -534,7 +534,7 @@
         "name": "_ZN2nn3web17OfflineWebSession5StartEPPNS_2os15SystemEventTypeERKNS0_22ShowOfflineHtmlPageArgE",
         "description": "nn::web::OfflineWebSession::Start [args: PPNS_2os15SystemEventTypeERKNS0_22ShowOfflineHtmlPageArgE]",
         "offset": 5136084,
-        "address": "0x665e512ed4",
+        "address": "0x29e5512ed4",
         "size": 416,
         "section": 1,
         "type": 2
@@ -543,7 +543,7 @@
         "name": "_ZNK2nn3web6detail28ShowOfflineHtmlPageArgWriter15PushToInChannelENS_6applet19LibraryAppletHandleE",
         "description": "_ZNK2nn3web6detail28ShowOfflineHtmlPageArgWriter15PushToInChannelENS_6applet19LibraryAppletHandleE",
         "offset": 5143340,
-        "address": "0x665e514b2c",
+        "address": "0x29e5514b2c",
         "size": 108,
         "section": 1,
         "type": 2
@@ -552,7 +552,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg20SetBootAsMediaPlayerEb",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetBootAsMediaPlayer [args: b]",
         "offset": 5128308,
-        "address": "0x665e511074",
+        "address": "0x29e5511074",
         "size": 124,
         "section": 1,
         "type": 2
@@ -561,7 +561,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArgC2EPKc",
         "description": "nn::web::ShowOfflineHtmlPageArg::(constructor) [args: EPKc]",
         "offset": 5128116,
-        "address": "0x665e510fb4",
+        "address": "0x29e5510fb4",
         "size": 96,
         "section": 1,
         "type": 2
@@ -570,7 +570,7 @@
         "name": "_ZN2nn3web36ShowOfflineHtmlPageArgWithPlayReport20SetPlayReportEnabledEb",
         "description": "nn::web::ShowOfflineHtmlPageArgWithPlayReport::SetPlayReportEnabled [args: b]",
         "offset": 5131020,
-        "address": "0x665e511b0c",
+        "address": "0x29e5511b0c",
         "size": 124,
         "section": 1,
         "type": 2
@@ -579,7 +579,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArgC1EPKc",
         "description": "nn::web::ShowOfflineHtmlPageArg::(constructor) [args: EPKc]",
         "offset": 5128116,
-        "address": "0x665e510fb4",
+        "address": "0x29e5510fb4",
         "size": 96,
         "section": 1,
         "type": 2
@@ -588,7 +588,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg33SetMediaPlayerSpeedControlEnabledEb",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetMediaPlayerSpeedControlEnabled [args: b]",
         "offset": 5130168,
-        "address": "0x665e5117b8",
+        "address": "0x29e55117b8",
         "size": 124,
         "section": 1,
         "type": 2
@@ -597,7 +597,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg25SetBootLoadingIconEnabledEb",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetBootLoadingIconEnabled [args: b]",
         "offset": 5129920,
-        "address": "0x665e5116c0",
+        "address": "0x29e55116c0",
         "size": 124,
         "section": 1,
         "type": 2
@@ -606,7 +606,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg25SetTouchEnabledOnContentsEb",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetTouchEnabledOnContents [args: b]",
         "offset": 5129300,
-        "address": "0x665e511454",
+        "address": "0x29e5511454",
         "size": 124,
         "section": 1,
         "type": 2
@@ -615,7 +615,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg18SetFooterFixedKindENS0_22OfflineFooterFixedKindE",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetFooterFixedKind [args: NS0_22OfflineFooterFixedKindE]",
         "offset": 5128568,
-        "address": "0x665e511178",
+        "address": "0x29e5511178",
         "size": 120,
         "section": 1,
         "type": 2
@@ -624,7 +624,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg29SetPageScrollIndicatorEnabledEb",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetPageScrollIndicatorEnabled [args: b]",
         "offset": 5130044,
-        "address": "0x665e51173c",
+        "address": "0x29e551173c",
         "size": 124,
         "section": 1,
         "type": 2
@@ -633,7 +633,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg23SetMediaPlayerUiEnabledEb",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetMediaPlayerUiEnabled [args: b]",
         "offset": 5130420,
-        "address": "0x665e5118b4",
+        "address": "0x29e55118b4",
         "size": 124,
         "section": 1,
         "type": 2
@@ -642,7 +642,7 @@
         "name": "_ZN2nn3web36ShowOfflineHtmlPageArgWithPlayReportC2ERKNS_13ApplicationIdEPKc",
         "description": "nn::web::ShowOfflineHtmlPageArgWithPlayReport::(constructor) [args: ERKNS_13ApplicationIdEPKc]",
         "offset": 5131144,
-        "address": "0x665e511b88",
+        "address": "0x29e5511b88",
         "size": 172,
         "section": 1,
         "type": 2
@@ -651,7 +651,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg17SetKeyRepeatFrameEii",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetKeyRepeatFrame [args: ii]",
         "offset": 5128932,
-        "address": "0x665e5112e4",
+        "address": "0x29e55112e4",
         "size": 244,
         "section": 1,
         "type": 2
@@ -660,7 +660,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg18SetPageFadeEnabledEb",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetPageFadeEnabled [args: b]",
         "offset": 5129672,
-        "address": "0x665e5115c8",
+        "address": "0x29e55115c8",
         "size": 124,
         "section": 1,
         "type": 2
@@ -669,7 +669,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg16SetFooterEnabledEb",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetFooterEnabled [args: b]",
         "offset": 5128444,
-        "address": "0x665e5110fc",
+        "address": "0x29e55110fc",
         "size": 124,
         "section": 1,
         "type": 2
@@ -678,7 +678,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg17SetPointerEnabledEb",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetPointerEnabled [args: b]",
         "offset": 5128432,
-        "address": "0x665e5110f0",
+        "address": "0x29e55110f0",
         "size": 8,
         "section": 1,
         "type": 2
@@ -687,7 +687,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg18SetBootDisplayKindENS0_22OfflineBootDisplayKindE",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetBootDisplayKind [args: NS0_22OfflineBootDisplayKindE]",
         "offset": 5128812,
-        "address": "0x665e51126c",
+        "address": "0x29e551126c",
         "size": 120,
         "section": 1,
         "type": 2
@@ -696,7 +696,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg23SetMediaAutoPlayEnabledEb",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetMediaAutoPlayEnabled [args: b]",
         "offset": 5130292,
-        "address": "0x665e511834",
+        "address": "0x29e5511834",
         "size": 128,
         "section": 1,
         "type": 2
@@ -705,7 +705,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg22OverrideWebAudioVolumeEf",
         "description": "nn::web::ShowOfflineHtmlPageArg::OverrideWebAudioVolume [args: f]",
         "offset": 5130544,
-        "address": "0x665e511930",
+        "address": "0x29e5511930",
         "size": 120,
         "section": 1,
         "type": 2
@@ -714,7 +714,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArgC1ERKNS_13ApplicationIdEPKc",
         "description": "nn::web::ShowOfflineHtmlPageArg::(constructor) [args: ERKNS_13ApplicationIdEPKc]",
         "offset": 5128212,
-        "address": "0x665e511014",
+        "address": "0x29e5511014",
         "size": 96,
         "section": 1,
         "type": 2
@@ -723,7 +723,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg16SetLeftStickModeERKNS0_20OfflineLeftStickModeE",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetLeftStickMode [args: RKNS0_20OfflineLeftStickModeE]",
         "offset": 5128440,
-        "address": "0x665e5110f8",
+        "address": "0x29e55110f8",
         "size": 4,
         "section": 1,
         "type": 2
@@ -732,7 +732,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArgC1Ev",
         "description": "nn::web::ShowOfflineHtmlPageArg::(constructor) [args: Ev]",
         "offset": 5127524,
-        "address": "0x665e510d64",
+        "address": "0x29e5510d64",
         "size": 592,
         "section": 1,
         "type": 2
@@ -741,7 +741,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg8DataSizeE",
         "description": "nn::web::ShowOfflineHtmlPageArg::DataSize",
         "offset": 11866880,
-        "address": "0x665eb7e300",
+        "address": "0x29e5b7e300",
         "size": 8,
         "section": 10,
         "type": 1
@@ -750,7 +750,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg17SetBackgroundKindERKNS0_21OfflineBackgroundKindE",
         "description": "nn::web::ShowOfflineHtmlPageArg::SetBackgroundKind [args: RKNS0_21OfflineBackgroundKindE]",
         "offset": 5128688,
-        "address": "0x665e5111f0",
+        "address": "0x29e55111f0",
         "size": 124,
         "section": 1,
         "type": 2
@@ -759,7 +759,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg21DocumentPathMaxLengthE",
         "description": "nn::web::ShowOfflineHtmlPageArg::DocumentPathMaxLength",
         "offset": 11866872,
-        "address": "0x665eb7e2f8",
+        "address": "0x29e5b7e2f8",
         "size": 8,
         "section": 10,
         "type": 1
@@ -768,7 +768,7 @@
         "name": "_ZN2nn3web22ShowOfflineHtmlPageArg24OverrideMediaAudioVolumeEf",
         "description": "nn::web::ShowOfflineHtmlPageArg::OverrideMediaAudioVolume [args: f]",
         "offset": 5130664,
-        "address": "0x665e5119a8",
+        "address": "0x29e55119a8",
         "size": 120,
         "section": 1,
         "type": 2
@@ -779,7 +779,7 @@
         "name": "_ZN2nn3web6detail21WebPageReturnValue6_0C2Ev",
         "description": "nn::web::detail::WebPageReturnValue6_0::(constructor) [args: Ev]",
         "offset": 5143208,
-        "address": "0x665e514aa8",
+        "address": "0x29e5514aa8",
         "size": 28,
         "section": 1,
         "type": 2
@@ -788,7 +788,7 @@
         "name": "_ZN2nn3web6detail21WebPageReturnValue6_0C2Ev",
         "description": "nn::web::detail::WebPageReturnValue6_0::(constructor) [args: Ev]",
         "offset": 5143208,
-        "address": "0x665e514aa8",
+        "address": "0x29e5514aa8",
         "size": 28,
         "section": 1,
         "type": 2
@@ -797,7 +797,7 @@
         "name": "_ZN2nn3web35IsMediaPlayerAutoClosedByCompletionERKNS0_18WebPageReturnValueE",
         "description": "nn::web::IsMediaPlayerAutoClosedByCompletion [args: RKNS0_18WebPageReturnValueE]",
         "offset": 5136832,
-        "address": "0x665e5131c0",
+        "address": "0x29e55131c0",
         "size": 92,
         "section": 1,
         "type": 2
@@ -806,7 +806,7 @@
         "name": "_ZN2nn3web35IsMediaPlayerAutoClosedByCompletionERKNS0_18WebPageReturnValueE",
         "description": "nn::web::IsMediaPlayerAutoClosedByCompletion [args: RKNS0_18WebPageReturnValueE]",
         "offset": 5136832,
-        "address": "0x665e5131c0",
+        "address": "0x29e55131c0",
         "size": 92,
         "section": 1,
         "type": 2
@@ -815,7 +815,7 @@
         "name": "_ZN2nn3web6detail21WebPageReturnValue6_016LastUrlMaxLengthE",
         "description": "nn::web::detail::WebPageReturnValue6_0::LastUrlMaxLength",
         "offset": 11867000,
-        "address": "0x665eb7e378",
+        "address": "0x29e5b7e378",
         "size": 8,
         "section": 10,
         "type": 1
@@ -824,7 +824,7 @@
         "name": "_ZN2nn3web6detail21WebPageReturnValue6_016LastUrlMaxLengthE",
         "description": "nn::web::detail::WebPageReturnValue6_0::LastUrlMaxLength",
         "offset": 11867000,
-        "address": "0x665eb7e378",
+        "address": "0x29e5b7e378",
         "size": 8,
         "section": 10,
         "type": 1
@@ -833,7 +833,7 @@
         "name": "_ZNK2nn3web18WebPageReturnValue10GetLastUrlEv",
         "description": "_ZNK2nn3web18WebPageReturnValue10GetLastUrlEv",
         "offset": 5140424,
-        "address": "0x665e513fc8",
+        "address": "0x29e5513fc8",
         "size": 64,
         "section": 1,
         "type": 2
@@ -842,7 +842,7 @@
         "name": "_ZNK2nn3web18WebPageReturnValue10GetLastUrlEv",
         "description": "_ZNK2nn3web18WebPageReturnValue10GetLastUrlEv",
         "offset": 5140424,
-        "address": "0x665e513fc8",
+        "address": "0x29e5513fc8",
         "size": 64,
         "section": 1,
         "type": 2
@@ -851,7 +851,7 @@
         "name": "_ZN2nn3web6detail21WebPageReturnValue6_010SetLastUrlEPKc",
         "description": "nn::web::detail::WebPageReturnValue6_0::SetLastUrl [args: PKc]",
         "offset": 5143248,
-        "address": "0x665e514ad0",
+        "address": "0x29e5514ad0",
         "size": 92,
         "section": 1,
         "type": 2
@@ -860,7 +860,7 @@
         "name": "_ZN2nn3web6detail21WebPageReturnValue6_010SetLastUrlEPKc",
         "description": "nn::web::detail::WebPageReturnValue6_0::SetLastUrl [args: PKc]",
         "offset": 5143248,
-        "address": "0x665e514ad0",
+        "address": "0x29e5514ad0",
         "size": 92,
         "section": 1,
         "type": 2
@@ -869,7 +869,7 @@
         "name": "_ZN2nn3web18WebPageReturnValue8DataSizeE",
         "description": "nn::web::WebPageReturnValue::DataSize",
         "offset": 11866976,
-        "address": "0x665eb7e360",
+        "address": "0x29e5b7e360",
         "size": 8,
         "section": 10,
         "type": 1
@@ -878,7 +878,7 @@
         "name": "_ZN2nn3web18WebPageReturnValue8DataSizeE",
         "description": "nn::web::WebPageReturnValue::DataSize",
         "offset": 11866976,
-        "address": "0x665eb7e360",
+        "address": "0x29e5b7e360",
         "size": 8,
         "section": 10,
         "type": 1
@@ -887,7 +887,7 @@
         "name": "_ZNK2nn3web18WebPageReturnValue4DataEv",
         "description": "_ZNK2nn3web18WebPageReturnValue4DataEv",
         "offset": 5140552,
-        "address": "0x665e514048",
+        "address": "0x29e5514048",
         "size": 4,
         "section": 1,
         "type": 2
@@ -896,7 +896,7 @@
         "name": "_ZNK2nn3web18WebPageReturnValue4DataEv",
         "description": "_ZNK2nn3web18WebPageReturnValue4DataEv",
         "offset": 5140552,
-        "address": "0x665e514048",
+        "address": "0x29e5514048",
         "size": 4,
         "section": 1,
         "type": 2
@@ -905,7 +905,7 @@
         "name": "_ZN2nn3web18WebPageReturnValueC1Ev",
         "description": "nn::web::WebPageReturnValue::(constructor) [args: Ev]",
         "offset": 5140336,
-        "address": "0x665e513f70",
+        "address": "0x29e5513f70",
         "size": 12,
         "section": 1,
         "type": 2
@@ -914,7 +914,7 @@
         "name": "_ZN2nn3web18WebPageReturnValueC1Ev",
         "description": "nn::web::WebPageReturnValue::(constructor) [args: Ev]",
         "offset": 5140336,
-        "address": "0x665e513f70",
+        "address": "0x29e5513f70",
         "size": 12,
         "section": 1,
         "type": 2
@@ -923,7 +923,7 @@
         "name": "_ZN2nn3web6detail21WebPageReturnValue6_016SetWebExitReasonENS0_13WebExitReasonE",
         "description": "nn::web::detail::WebPageReturnValue6_0::SetWebExitReason [args: NS0_13WebExitReasonE]",
         "offset": 5143236,
-        "address": "0x665e514ac4",
+        "address": "0x29e5514ac4",
         "size": 12,
         "section": 1,
         "type": 2
@@ -932,7 +932,7 @@
         "name": "_ZN2nn3web6detail21WebPageReturnValue6_016SetWebExitReasonENS0_13WebExitReasonE",
         "description": "nn::web::detail::WebPageReturnValue6_0::SetWebExitReason [args: NS0_13WebExitReasonE]",
         "offset": 5143236,
-        "address": "0x665e514ac4",
+        "address": "0x29e5514ac4",
         "size": 12,
         "section": 1,
         "type": 2
@@ -941,7 +941,7 @@
         "name": "_ZN2nn3web16ShowYouTubeVideoEPNS0_18WebPageReturnValueERKNS0_19ShowYouTubeVideoArgE",
         "description": "nn::web::ShowYouTubeVideo [args: PNS0_18WebPageReturnValueERKNS0_19ShowYouTubeVideoArgE]",
         "offset": 5126112,
-        "address": "0x665e5107e0",
+        "address": "0x29e55107e0",
         "size": 348,
         "section": 1,
         "type": 2
@@ -950,7 +950,7 @@
         "name": "_ZN2nn3web16ShowYouTubeVideoEPNS0_18WebPageReturnValueERKNS0_19ShowYouTubeVideoArgE",
         "description": "nn::web::ShowYouTubeVideo [args: PNS0_18WebPageReturnValueERKNS0_19ShowYouTubeVideoArgE]",
         "offset": 5126112,
-        "address": "0x665e5107e0",
+        "address": "0x29e55107e0",
         "size": 348,
         "section": 1,
         "type": 2
@@ -959,7 +959,7 @@
         "name": "_ZN2nn3web18WebPageReturnValueC2Ev",
         "description": "nn::web::WebPageReturnValue::(constructor) [args: Ev]",
         "offset": 5140336,
-        "address": "0x665e513f70",
+        "address": "0x29e5513f70",
         "size": 12,
         "section": 1,
         "type": 2
@@ -968,7 +968,7 @@
         "name": "_ZN2nn3web18WebPageReturnValueC2Ev",
         "description": "nn::web::WebPageReturnValue::(constructor) [args: Ev]",
         "offset": 5140336,
-        "address": "0x665e513f70",
+        "address": "0x29e5513f70",
         "size": 12,
         "section": 1,
         "type": 2
@@ -977,7 +977,7 @@
         "name": "_ZNK2nn3web18WebPageReturnValue16GetWebExitReasonEv",
         "description": "_ZNK2nn3web18WebPageReturnValue16GetWebExitReasonEv",
         "offset": 5140348,
-        "address": "0x665e513f7c",
+        "address": "0x29e5513f7c",
         "size": 76,
         "section": 1,
         "type": 2
@@ -986,7 +986,7 @@
         "name": "_ZNK2nn3web18WebPageReturnValue16GetWebExitReasonEv",
         "description": "_ZNK2nn3web18WebPageReturnValue16GetWebExitReasonEv",
         "offset": 5140348,
-        "address": "0x665e513f7c",
+        "address": "0x29e5513f7c",
         "size": 76,
         "section": 1,
         "type": 2
@@ -995,7 +995,7 @@
         "name": "_ZN2nn3web18WebPageReturnValue16LastUrlMaxLengthE",
         "description": "nn::web::WebPageReturnValue::LastUrlMaxLength",
         "offset": 11866968,
-        "address": "0x665eb7e358",
+        "address": "0x29e5b7e358",
         "size": 8,
         "section": 10,
         "type": 1
@@ -1004,7 +1004,7 @@
         "name": "_ZN2nn3web18WebPageReturnValue16LastUrlMaxLengthE",
         "description": "nn::web::WebPageReturnValue::LastUrlMaxLength",
         "offset": 11866968,
-        "address": "0x665eb7e358",
+        "address": "0x29e5b7e358",
         "size": 8,
         "section": 10,
         "type": 1
@@ -1013,7 +1013,7 @@
         "name": "_ZN2nn3web10WebSession11WaitForExitEPNS0_18WebPageReturnValueE",
         "description": "nn::web::WebSession::WaitForExit [args: PNS0_18WebPageReturnValueE]",
         "offset": 5142780,
-        "address": "0x665e5148fc",
+        "address": "0x29e55148fc",
         "size": 216,
         "section": 1,
         "type": 2
@@ -1022,7 +1022,7 @@
         "name": "_ZN2nn3web10WebSession11WaitForExitEPNS0_18WebPageReturnValueE",
         "description": "nn::web::WebSession::WaitForExit [args: PNS0_18WebPageReturnValueE]",
         "offset": 5142780,
-        "address": "0x665e5148fc",
+        "address": "0x29e55148fc",
         "size": 216,
         "section": 1,
         "type": 2
@@ -1031,7 +1031,7 @@
         "name": "_ZN2nn3web6detail21WebPageReturnValue6_0C1Ev",
         "description": "nn::web::detail::WebPageReturnValue6_0::(constructor) [args: Ev]",
         "offset": 5143208,
-        "address": "0x665e514aa8",
+        "address": "0x29e5514aa8",
         "size": 28,
         "section": 1,
         "type": 2
@@ -1040,7 +1040,7 @@
         "name": "_ZN2nn3web6detail21WebPageReturnValue6_0C1Ev",
         "description": "nn::web::detail::WebPageReturnValue6_0::(constructor) [args: Ev]",
         "offset": 5143208,
-        "address": "0x665e514aa8",
+        "address": "0x29e5514aa8",
         "size": 28,
         "section": 1,
         "type": 2
@@ -1049,7 +1049,7 @@
         "name": "_ZNK2nn3web18WebPageReturnValue14GetLastUrlSizeEv",
         "description": "_ZNK2nn3web18WebPageReturnValue14GetLastUrlSizeEv",
         "offset": 5140488,
-        "address": "0x665e514008",
+        "address": "0x29e5514008",
         "size": 64,
         "section": 1,
         "type": 2
@@ -1058,7 +1058,7 @@
         "name": "_ZNK2nn3web18WebPageReturnValue14GetLastUrlSizeEv",
         "description": "_ZNK2nn3web18WebPageReturnValue14GetLastUrlSizeEv",
         "offset": 5140488,
-        "address": "0x665e514008",
+        "address": "0x29e5514008",
         "size": 64,
         "section": 1,
         "type": 2
@@ -1069,7 +1069,7 @@
         "name": "_ZNK2nn3web6detail22ShowLobbyPageArgWriter15PushToInChannelENS_6applet19LibraryAppletHandleE",
         "description": "_ZNK2nn3web6detail22ShowLobbyPageArgWriter15PushToInChannelENS_6applet19LibraryAppletHandleE",
         "offset": 5114980,
-        "address": "0x665e50dc64",
+        "address": "0x29e550dc64",
         "size": 108,
         "section": 1,
         "type": 2
@@ -1078,7 +1078,7 @@
         "name": "_ZN2nn3web16ShowSharePageArg35SetMediaCreatorApplicationRatingAgeERA32_Ka",
         "description": "nn::web::ShowSharePageArg::SetMediaCreatorApplicationRatingAge [args: RA32_Ka]",
         "offset": 5124496,
-        "address": "0x665e510190",
+        "address": "0x29e5510190",
         "size": 152,
         "section": 1,
         "type": 2
@@ -1087,7 +1087,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl22setLibraryAppletHandleERKNS_6applet19LibraryAppletHandleE",
         "description": "nn::web::detail::WebSessionImpl::setLibraryAppletHandle [args: RKNS_6applet19LibraryAppletHandleE]",
         "offset": 5145836,
-        "address": "0x665e5154ec",
+        "address": "0x29e55154ec",
         "size": 48,
         "section": 1,
         "type": 2
@@ -1096,7 +1096,7 @@
         "name": "_ZNK2nn3web16ShowSharePageArg15PushToInChannelENS_6applet19LibraryAppletHandleE",
         "description": "_ZNK2nn3web16ShowSharePageArg15PushToInChannelENS_6applet19LibraryAppletHandleE",
         "offset": 5124648,
-        "address": "0x665e510228",
+        "address": "0x29e5510228",
         "size": 108,
         "section": 1,
         "type": 2
@@ -1105,7 +1105,7 @@
         "name": "_ZN2nn3web40GetOfflineHtmlPageReturnValueFromStorageEPNS0_26OfflineHtmlPageReturnValueERKNS_6applet13StorageHandleE",
         "description": "nn::web::GetOfflineHtmlPageReturnValueFromStorage [args: PNS0_26OfflineHtmlPageReturnValueERKNS_6applet13StorageHandleE]",
         "offset": 5127424,
-        "address": "0x665e510d00",
+        "address": "0x29e5510d00",
         "size": 100,
         "section": 1,
         "type": 2
@@ -1114,7 +1114,7 @@
         "name": "_ZNK2nn3web21ShowSystemDataPageArg15PushToInChannelENS_6applet19LibraryAppletHandleE",
         "description": "_ZNK2nn3web21ShowSystemDataPageArg15PushToInChannelENS_6applet19LibraryAppletHandleE",
         "offset": 5135728,
-        "address": "0x665e512d70",
+        "address": "0x29e5512d70",
         "size": 108,
         "section": 1,
         "type": 2
@@ -1123,7 +1123,7 @@
         "name": "_ZNK2nn3web38ShowApplicationLegalInformationPageArg15PushToInChannelENS_6applet19LibraryAppletHandleE",
         "description": "_ZNK2nn3web38ShowApplicationLegalInformationPageArg15PushToInChannelENS_6applet19LibraryAppletHandleE",
         "offset": 5132468,
-        "address": "0x665e5120b4",
+        "address": "0x29e55120b4",
         "size": 108,
         "section": 1,
         "type": 2
@@ -1132,7 +1132,7 @@
         "name": "_ZNK2nn2la32NifmToWifiWebAuthArgumentsWriter15PushToInChannelENS_6applet19LibraryAppletHandleE",
         "description": "_ZNK2nn2la32NifmToWifiWebAuthArgumentsWriter15PushToInChannelENS_6applet19LibraryAppletHandleE",
         "offset": 3493876,
-        "address": "0x665e381ff4",
+        "address": "0x29e5381ff4",
         "size": 140,
         "section": 1,
         "type": 2
@@ -1141,7 +1141,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl18StorageHandleQueue7enqueueERKNS_6applet13StorageHandleE",
         "description": "nn::web::detail::WebSessionImpl::StorageHandleQueue::enqueue [args: RKNS_6applet13StorageHandleE]",
         "offset": 5146892,
-        "address": "0x665e51590c",
+        "address": "0x29e551590c",
         "size": 92,
         "section": 1,
         "type": 2
@@ -1150,7 +1150,7 @@
         "name": "_ZN2nn3web6common9CommonApi25StartLibraryAppletAndWaitEPvmRNS_6applet19LibraryAppletHandleE",
         "description": "nn::web::common::CommonApi::StartLibraryAppletAndWait [args: PvmRNS_6applet19LibraryAppletHandleE]",
         "offset": 5127052,
-        "address": "0x665e510b8c",
+        "address": "0x29e5510b8c",
         "size": 212,
         "section": 1,
         "type": 2
@@ -1159,7 +1159,7 @@
         "name": "_ZN2nn3web34GetSharePageReturnValueFromStorageEPNS0_20SharePageReturnValueERKNS_6applet13StorageHandleE",
         "description": "nn::web::GetSharePageReturnValueFromStorage [args: PNS0_20SharePageReturnValueERKNS_6applet13StorageHandleE]",
         "offset": 5121744,
-        "address": "0x665e50f6d0",
+        "address": "0x29e550f6d0",
         "size": 96,
         "section": 1,
         "type": 2
@@ -1170,7 +1170,7 @@
         "name": "_ZN2nn8settings5fwdbg19SetWebInspectorFlagEb",
         "description": "_ZN2nn8settings5fwdbg19SetWebInspectorFlagEb",
         "offset": 3884080,
-        "address": "0x665e3e1430",
+        "address": "0x29e53e1430",
         "size": 48,
         "section": 1,
         "type": 2
@@ -1179,7 +1179,7 @@
         "name": "_ZNK2nn3web20LobbyPageReturnValue18GetLobbyExitReasonEv",
         "description": "_ZNK2nn3web20LobbyPageReturnValue18GetLobbyExitReasonEv",
         "offset": 5114956,
-        "address": "0x665e50dc4c",
+        "address": "0x29e550dc4c",
         "size": 8,
         "section": 1,
         "type": 2
@@ -1188,7 +1188,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl18StorageHandleQueue2atEi",
         "description": "nn::web::detail::WebSessionImpl::StorageHandleQueue::at [args: i]",
         "offset": 5147280,
-        "address": "0x665e515a90",
+        "address": "0x29e5515a90",
         "size": 32,
         "section": 1,
         "type": 2
@@ -1197,7 +1197,7 @@
         "name": "_ZNK2nn3web20SharePageReturnValue18GetShareExitReasonEv",
         "description": "_ZNK2nn3web20SharePageReturnValue18GetShareExitReasonEv",
         "offset": 5124768,
-        "address": "0x665e5102a0",
+        "address": "0x29e55102a0",
         "size": 76,
         "section": 1,
         "type": 2
@@ -1206,7 +1206,7 @@
         "name": "_ZN2nn3web16ShowLobbyPageArg8DataSizeE",
         "description": "nn::web::ShowLobbyPageArg::DataSize",
         "offset": 11863208,
-        "address": "0x665eb7d4a8",
+        "address": "0x29e5b7d4a8",
         "size": 8,
         "section": 10,
         "type": 1
@@ -1215,7 +1215,7 @@
         "name": "_ZN2nn3web20SharePageReturnValueC2Ev",
         "description": "nn::web::SharePageReturnValue::(constructor) [args: Ev]",
         "offset": 5124756,
-        "address": "0x665e510294",
+        "address": "0x29e5510294",
         "size": 12,
         "section": 1,
         "type": 2
@@ -1224,7 +1224,7 @@
         "name": "_ZN2nn3web6common9CommonApi26SetBootFooterButtonVisibleEPhNS1_14FooterButtonIdEb",
         "description": "nn::web::common::CommonApi::SetBootFooterButtonVisible [args: PhNS1_14FooterButtonIdEb]",
         "offset": 5132584,
-        "address": "0x665e512128",
+        "address": "0x29e5512128",
         "size": 1872,
         "section": 1,
         "type": 2
@@ -1233,7 +1233,7 @@
         "name": "_ZN2nn3web21ShowSystemDataPageArg26SetBootFooterButtonVisibleENS0_21OfflineFooterButtonIdEb",
         "description": "nn::web::ShowSystemDataPageArg::SetBootFooterButtonVisible [args: NS0_21OfflineFooterButtonIdEb]",
         "offset": 5135836,
-        "address": "0x665e512ddc",
+        "address": "0x29e5512ddc",
         "size": 8,
         "section": 1,
         "type": 2
@@ -1242,7 +1242,7 @@
         "name": "_ZN2nn3web26OfflineHtmlPageReturnValueC1Ev",
         "description": "nn::web::OfflineHtmlPageReturnValue::(constructor) [args: Ev]",
         "offset": 5130788,
-        "address": "0x665e511a24",
+        "address": "0x29e5511a24",
         "size": 36,
         "section": 1,
         "type": 2
@@ -1251,7 +1251,7 @@
         "name": "_ZN2nn3web6detail24ShowOfflinePageArgDetail15SetDocumentPathEPhmPKc",
         "description": "nn::web::detail::ShowOfflinePageArgDetail::SetDocumentPath [args: PhmPKc]",
         "offset": 5143580,
-        "address": "0x665e514c1c",
+        "address": "0x29e5514c1c",
         "size": 260,
         "section": 1,
         "type": 2
@@ -1260,7 +1260,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl18StorageHandleQueueC2Ev",
         "description": "nn::web::detail::WebSessionImpl::StorageHandleQueue::(constructor) [args: Ev]",
         "offset": 5147080,
-        "address": "0x665e5159c8",
+        "address": "0x29e55159c8",
         "size": 52,
         "section": 1,
         "type": 2
@@ -1269,7 +1269,7 @@
         "name": "_ZN2nn3web16ShowSharePageArg8DataSizeE",
         "description": "nn::web::ShowSharePageArg::DataSize",
         "offset": 11866784,
-        "address": "0x665eb7e2a0",
+        "address": "0x29e5b7e2a0",
         "size": 8,
         "section": 10,
         "type": 1
@@ -1278,7 +1278,7 @@
         "name": "_ZNK2nn3web20SharePageReturnValue18GetSharePostResultEv",
         "description": "_ZNK2nn3web20SharePageReturnValue18GetSharePostResultEv",
         "offset": 5124972,
-        "address": "0x665e51036c",
+        "address": "0x29e551036c",
         "size": 64,
         "section": 1,
         "type": 2
@@ -1287,7 +1287,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl18StorageHandleQueueD1Ev",
         "description": "nn::web::detail::WebSessionImpl::StorageHandleQueue::(destructor) [args: Ev]",
         "offset": 5147132,
-        "address": "0x665e5159fc",
+        "address": "0x29e55159fc",
         "size": 148,
         "section": 1,
         "type": 2
@@ -1296,7 +1296,7 @@
         "name": "_ZN2nn3web17OfflineWebSessionC2Ev",
         "description": "nn::web::OfflineWebSession::(constructor) [args: Ev]",
         "offset": 5136020,
-        "address": "0x665e512e94",
+        "address": "0x29e5512e94",
         "size": 8,
         "section": 1,
         "type": 2
@@ -1305,7 +1305,7 @@
         "name": "_ZNK2nn3web20SharePageReturnValue22GetPostServiceNameSizeEv",
         "description": "_ZNK2nn3web20SharePageReturnValue22GetPostServiceNameSizeEv",
         "offset": 5125100,
-        "address": "0x665e5103ec",
+        "address": "0x29e55103ec",
         "size": 64,
         "section": 1,
         "type": 2
@@ -1314,7 +1314,7 @@
         "name": "_ZN2nn3web21ShowSystemDataPageArg8DataSizeE",
         "description": "nn::web::ShowSystemDataPageArg::DataSize",
         "offset": 11866920,
-        "address": "0x665eb7e328",
+        "address": "0x29e5b7e328",
         "size": 8,
         "section": 10,
         "type": 1
@@ -1323,7 +1323,7 @@
         "name": "_ZN2nn3web16ShowLobbyPageArgC1Ev",
         "description": "nn::web::ShowLobbyPageArg::(constructor) [args: Ev]",
         "offset": 5113708,
-        "address": "0x665e50d76c",
+        "address": "0x29e550d76c",
         "size": 824,
         "section": 1,
         "type": 2
@@ -1332,7 +1332,7 @@
         "name": "_ZN2nn3web17OfflineWebSessionD1Ev",
         "description": "nn::web::OfflineWebSession::(destructor) [args: Ev]",
         "offset": 5136028,
-        "address": "0x665e512e9c",
+        "address": "0x29e5512e9c",
         "size": 4,
         "section": 1,
         "type": 2
@@ -1341,7 +1341,7 @@
         "name": "_ZN2nn3web35ShowApplicationLegalInformationPageEPNS0_26OfflineHtmlPageReturnValueERKNS0_38ShowApplicationLegalInformationPageArgE",
         "description": "nn::web::ShowApplicationLegalInformationPage [args: PNS0_26OfflineHtmlPageReturnValueERKNS0_38ShowApplicationLegalInformationPageArgE]",
         "offset": 5126896,
-        "address": "0x665e510af0",
+        "address": "0x29e5510af0",
         "size": 156,
         "section": 1,
         "type": 2
@@ -1350,7 +1350,7 @@
         "name": "_ZN2nn3web16ShowSharePageArg13SetAlbumEntryERKNS_6capsrv10AlbumEntryE",
         "description": "nn::web::ShowSharePageArg::SetAlbumEntry [args: RKNS_6capsrv10AlbumEntryE]",
         "offset": 5122736,
-        "address": "0x665e50fab0",
+        "address": "0x29e550fab0",
         "size": 152,
         "section": 1,
         "type": 2
@@ -1359,7 +1359,7 @@
         "name": "_ZNK2nn3web6detail14WebSessionImpl18StorageHandleQueue8getCountEv",
         "description": "_ZNK2nn3web6detail14WebSessionImpl18StorageHandleQueue8getCountEv",
         "offset": 5146984,
-        "address": "0x665e515968",
+        "address": "0x29e5515968",
         "size": 44,
         "section": 1,
         "type": 2
@@ -1368,7 +1368,7 @@
         "name": "_ZN2nn3web17OfflineWebSession6AppearEv",
         "description": "nn::web::OfflineWebSession::Appear [args: v]",
         "offset": 5136792,
-        "address": "0x665e513198",
+        "address": "0x29e5513198",
         "size": 8,
         "section": 1,
         "type": 2
@@ -1377,7 +1377,7 @@
         "name": "_ZN2nn3web10WebSession24TryReceiveContentMessageEPmPcm",
         "description": "nn::web::WebSession::TryReceiveContentMessage [args: PmPcm]",
         "offset": 5143092,
-        "address": "0x665e514a34",
+        "address": "0x29e5514a34",
         "size": 8,
         "section": 1,
         "type": 2
@@ -1386,7 +1386,7 @@
         "name": "_ZN2nn2la32NifmToWifiWebAuthArgumentsWriterD1Ev",
         "description": "_ZN2nn2la32NifmToWifiWebAuthArgumentsWriterD1Ev",
         "offset": 3493872,
-        "address": "0x665e381ff0",
+        "address": "0x29e5381ff0",
         "size": 4,
         "section": 1,
         "type": 2
@@ -1395,7 +1395,7 @@
         "name": "_ZN2nn3web17OfflineWebSession17GetWorkBufferSizeEv",
         "description": "nn::web::OfflineWebSession::GetWorkBufferSize [args: v]",
         "offset": 5136032,
-        "address": "0x665e512ea0",
+        "address": "0x29e5512ea0",
         "size": 8,
         "section": 1,
         "type": 2
@@ -1404,7 +1404,7 @@
         "name": "_ZNK2nn2la32NifmToWifiWebAuthArgumentsWriter6ExportEPcm",
         "description": "_ZNK2nn2la32NifmToWifiWebAuthArgumentsWriter6ExportEPcm",
         "offset": 3494024,
-        "address": "0x665e382088",
+        "address": "0x29e5382088",
         "size": 48,
         "section": 1,
         "type": 2
@@ -1413,7 +1413,7 @@
         "name": "_ZN2nn3web19ShowYouTubeVideoArg8DataSizeE",
         "description": "nn::web::ShowYouTubeVideoArg::DataSize",
         "offset": 11866992,
-        "address": "0x665eb7e370",
+        "address": "0x29e5b7e370",
         "size": 8,
         "section": 10,
         "type": 1
@@ -1422,7 +1422,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImplC1Ev",
         "description": "nn::web::detail::WebSessionImpl::(constructor) [args: Ev]",
         "offset": 5144412,
-        "address": "0x665e514f5c",
+        "address": "0x29e5514f5c",
         "size": 96,
         "section": 1,
         "type": 2
@@ -1431,7 +1431,7 @@
         "name": "_ZN2nn3web16ShowLobbyPageArg6SetUidERKNS_7account3UidE",
         "description": "nn::web::ShowLobbyPageArg::SetUid [args: RKNS_7account3UidE]",
         "offset": 5114532,
-        "address": "0x665e50daa4",
+        "address": "0x29e550daa4",
         "size": 132,
         "section": 1,
         "type": 2
@@ -1440,7 +1440,7 @@
         "name": "_ZN2nn3web19ShowYouTubeVideoArgC2EPKc",
         "description": "nn::web::ShowYouTubeVideoArg::(constructor) [args: EPKc]",
         "offset": 5141468,
-        "address": "0x665e5143dc",
+        "address": "0x29e55143dc",
         "size": 332,
         "section": 1,
         "type": 2
@@ -1449,7 +1449,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl41TotalSendSystemMessageGroupStorageSizeMaxE",
         "description": "nn::web::detail::WebSessionImpl::TotalSendSystemMessageGroupStorageSizeMax",
         "offset": 11867020,
-        "address": "0x665eb7e38c",
+        "address": "0x29e5b7e38c",
         "size": 4,
         "section": 10,
         "type": 1
@@ -1458,7 +1458,7 @@
         "name": "_ZN2nn3web26OfflineHtmlPageReturnValueC2Ev",
         "description": "nn::web::OfflineHtmlPageReturnValue::(constructor) [args: Ev]",
         "offset": 5130788,
-        "address": "0x665e511a24",
+        "address": "0x29e5511a24",
         "size": 36,
         "section": 1,
         "type": 2
@@ -1467,7 +1467,7 @@
         "name": "_ZN2nn3web16ShowSharePageArg22SetAdditionalMediaDataEPKhm",
         "description": "nn::web::ShowSharePageArg::SetAdditionalMediaData [args: PKhm]",
         "offset": 5124236,
-        "address": "0x665e51008c",
+        "address": "0x29e551008c",
         "size": 260,
         "section": 1,
         "type": 2
@@ -1476,7 +1476,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl30SendSystemMessageGroupCountMaxE",
         "description": "nn::web::detail::WebSessionImpl::SendSystemMessageGroupCountMax",
         "offset": 11867016,
-        "address": "0x665eb7e388",
+        "address": "0x29e5b7e388",
         "size": 4,
         "section": 10,
         "type": 1
@@ -1485,7 +1485,7 @@
         "name": "_ZN2nn3web19ShowYouTubeVideoArg19RequestUrlMaxLengthE",
         "description": "nn::web::ShowYouTubeVideoArg::RequestUrlMaxLength",
         "offset": 11866984,
-        "address": "0x665eb7e368",
+        "address": "0x29e5b7e368",
         "size": 8,
         "section": 10,
         "type": 1
@@ -1494,7 +1494,7 @@
         "name": "_ZN2nn3web19ShowYouTubeVideoArgC1EPKc",
         "description": "nn::web::ShowYouTubeVideoArg::(constructor) [args: EPKc]",
         "offset": 5141468,
-        "address": "0x665e5143dc",
+        "address": "0x29e55143dc",
         "size": 332,
         "section": 1,
         "type": 2
@@ -1503,7 +1503,7 @@
         "name": "_ZN2nn3web19ShowYouTubeVideoArg16SetBootAsWebPageEb",
         "description": "nn::web::ShowYouTubeVideoArg::SetBootAsWebPage [args: b]",
         "offset": 5142168,
-        "address": "0x665e514698",
+        "address": "0x29e5514698",
         "size": 128,
         "section": 1,
         "type": 2
@@ -1512,7 +1512,7 @@
         "name": "_ZN2nn3web6detail40WebSessionSendSystemMessageGroupIncludesENS1_25WebSessionSendMessageKindE",
         "description": "nn::web::detail::WebSessionSendSystemMessageGroupIncludes [args: NS1_25WebSessionSendMessageKindE]",
         "offset": 5144400,
-        "address": "0x665e514f50",
+        "address": "0x29e5514f50",
         "size": 12,
         "section": 1,
         "type": 2
@@ -1521,7 +1521,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl18StorageHandleQueueD2Ev",
         "description": "nn::web::detail::WebSessionImpl::StorageHandleQueue::(destructor) [args: Ev]",
         "offset": 5147132,
-        "address": "0x665e5159fc",
+        "address": "0x29e55159fc",
         "size": 148,
         "section": 1,
         "type": 2
@@ -1530,7 +1530,7 @@
         "name": "_ZN2nn3web13ShowLobbyPageEPNS0_20LobbyPageReturnValueERKNS0_16ShowLobbyPageArgE",
         "description": "nn::web::ShowLobbyPage [args: PNS0_20LobbyPageReturnValueERKNS0_16ShowLobbyPageArgE]",
         "offset": 5113424,
-        "address": "0x665e50d650",
+        "address": "0x29e550d650",
         "size": 284,
         "section": 1,
         "type": 2
@@ -1539,7 +1539,7 @@
         "name": "_ZN2nn3web16ShowSharePageArg18AlbumEntryMaxCountE",
         "description": "nn::web::ShowSharePageArg::AlbumEntryMaxCount",
         "offset": 11866776,
-        "address": "0x665eb7e298",
+        "address": "0x29e5b7e298",
         "size": 8,
         "section": 10,
         "type": 1
@@ -1548,7 +1548,7 @@
         "name": "_ZN2nn3web38ShowApplicationLegalInformationPageArgC2ERKNS_13ApplicationIdEPKc",
         "description": "nn::web::ShowApplicationLegalInformationPageArg::(constructor) [args: ERKNS_13ApplicationIdEPKc]",
         "offset": 5132372,
-        "address": "0x665e512054",
+        "address": "0x29e5512054",
         "size": 96,
         "section": 1,
         "type": 2
@@ -1557,7 +1557,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl10tryReceiveEPNS1_23WebSessionMessageHeaderEPvmNS1_28WebSessionReceiveMessageKindE",
         "description": "nn::web::detail::WebSessionImpl::tryReceive [args: PNS1_23WebSessionMessageHeaderEPvmNS1_28WebSessionReceiveMessageKindE]",
         "offset": 5145080,
-        "address": "0x665e5151f8",
+        "address": "0x29e55151f8",
         "size": 552,
         "section": 1,
         "type": 2
@@ -1566,7 +1566,7 @@
         "name": "_ZN2nn3web19ShowYouTubeVideoArg33SetMediaPlayerSpeedControlEnabledEb",
         "description": "nn::web::ShowYouTubeVideoArg::SetMediaPlayerSpeedControlEnabled [args: b]",
         "offset": 5142044,
-        "address": "0x665e51461c",
+        "address": "0x29e551461c",
         "size": 124,
         "section": 1,
         "type": 2
@@ -1575,7 +1575,7 @@
         "name": "_ZN2nn3web16ShowLobbyPageArgC2Ev",
         "description": "nn::web::ShowLobbyPageArg::(constructor) [args: Ev]",
         "offset": 5113708,
-        "address": "0x665e50d76c",
+        "address": "0x29e550d76c",
         "size": 824,
         "section": 1,
         "type": 2
@@ -1584,7 +1584,7 @@
         "name": "_ZN2nn3web17OfflineWebSessionD2Ev",
         "description": "nn::web::OfflineWebSession::(destructor) [args: Ev]",
         "offset": 5136028,
-        "address": "0x665e512e9c",
+        "address": "0x29e5512e9c",
         "size": 4,
         "section": 1,
         "type": 2
@@ -1593,7 +1593,7 @@
         "name": "_ZN2nn3web10WebSession8FinalizeEv",
         "description": "nn::web::WebSession::Finalize [args: v]",
         "offset": 5143016,
-        "address": "0x665e5149e8",
+        "address": "0x29e55149e8",
         "size": 52,
         "section": 1,
         "type": 2
@@ -1602,7 +1602,7 @@
         "name": "_ZN2nn3web13ShowSharePageEPNS0_20SharePageReturnValueERKNS0_16ShowSharePageArgE",
         "description": "nn::web::ShowSharePage [args: PNS0_20SharePageReturnValueERKNS0_16ShowSharePageArgE]",
         "offset": 5121456,
-        "address": "0x665e50f5b0",
+        "address": "0x29e550f5b0",
         "size": 280,
         "section": 1,
         "type": 2
@@ -1611,7 +1611,7 @@
         "name": "_ZN2nn3web20LobbyPageReturnValueC1Ev",
         "description": "nn::web::LobbyPageReturnValue::(constructor) [args: Ev]",
         "offset": 5114920,
-        "address": "0x665e50dc28",
+        "address": "0x29e550dc28",
         "size": 36,
         "section": 1,
         "type": 2
@@ -1620,7 +1620,7 @@
         "name": "_ZNK2nn3web20LobbyPageReturnValue14GetLastUrlSizeEv",
         "description": "_ZNK2nn3web20LobbyPageReturnValue14GetLastUrlSizeEv",
         "offset": 5114972,
-        "address": "0x665e50dc5c",
+        "address": "0x29e550dc5c",
         "size": 8,
         "section": 1,
         "type": 2
@@ -1629,7 +1629,7 @@
         "name": "_ZN2nn3web6detail23SharePageReturnValue2_016LastUrlMaxLengthE",
         "description": "nn::web::detail::SharePageReturnValue2_0::LastUrlMaxLength",
         "offset": 11866864,
-        "address": "0x665eb7e2f0",
+        "address": "0x29e5b7e2f0",
         "size": 8,
         "section": 10,
         "type": 1
@@ -1638,7 +1638,7 @@
         "name": "_ZN2nn3web18RequestExitWebPageEv",
         "description": "nn::web::RequestExitWebPage [args: v]",
         "offset": 5126032,
-        "address": "0x665e510790",
+        "address": "0x29e5510790",
         "size": 76,
         "section": 1,
         "type": 2
@@ -1647,7 +1647,7 @@
         "name": "_ZN2nn2la32NifmToWifiWebAuthArgumentsWriterD2Ev",
         "description": "_ZN2nn2la32NifmToWifiWebAuthArgumentsWriterD2Ev",
         "offset": 3493872,
-        "address": "0x665e381ff0",
+        "address": "0x29e5381ff0",
         "size": 4,
         "section": 1,
         "type": 2
@@ -1656,7 +1656,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl18StorageHandleQueue7dequeueEv",
         "description": "nn::web::detail::WebSessionImpl::StorageHandleQueue::dequeue [args: v]",
         "offset": 5147028,
-        "address": "0x665e515994",
+        "address": "0x29e5515994",
         "size": 52,
         "section": 1,
         "type": 2
@@ -1665,7 +1665,7 @@
         "name": "_ZN2nn8settings6detail19SetWebInspectorFlagEb",
         "description": "_ZN2nn8settings6detail19SetWebInspectorFlagEb",
         "offset": 3917216,
-        "address": "0x665e3e95a0",
+        "address": "0x29e53e95a0",
         "size": 116,
         "section": 1,
         "type": 2
@@ -1674,7 +1674,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImplC2Ev",
         "description": "nn::web::detail::WebSessionImpl::(constructor) [args: Ev]",
         "offset": 5144412,
-        "address": "0x665e514f5c",
+        "address": "0x29e5514f5c",
         "size": 96,
         "section": 1,
         "type": 2
@@ -1683,7 +1683,7 @@
         "name": "_ZN2nn3web20SharePageReturnValue24PostServiceNameMaxLengthE",
         "description": "nn::web::SharePageReturnValue::PostServiceNameMaxLength",
         "offset": 11866800,
-        "address": "0x665eb7e2b0",
+        "address": "0x29e5b7e2b0",
         "size": 8,
         "section": 10,
         "type": 1
@@ -1692,7 +1692,7 @@
         "name": "_ZN2nn3web16ShowSharePageArgC2ENS0_14ShareStartPageE",
         "description": "nn::web::ShowSharePageArg::(constructor) [args: ENS0_14ShareStartPageE]",
         "offset": 5122568,
-        "address": "0x665e50fa08",
+        "address": "0x29e550fa08",
         "size": 168,
         "section": 1,
         "type": 2
@@ -1701,7 +1701,7 @@
         "name": "_ZNK2nn3web17OfflineWebSession16NeedsWaitForExitEv",
         "description": "_ZNK2nn3web17OfflineWebSession16NeedsWaitForExitEv",
         "offset": 5136720,
-        "address": "0x665e513150",
+        "address": "0x29e5513150",
         "size": 20,
         "section": 1,
         "type": 2
@@ -1710,7 +1710,7 @@
         "name": "_ZN2nn3web21ShowSystemDataPageArg18SetFooterFixedKindENS0_22OfflineFooterFixedKindE",
         "description": "nn::web::ShowSystemDataPageArg::SetFooterFixedKind [args: NS0_22OfflineFooterFixedKindE]",
         "offset": 5135608,
-        "address": "0x665e512cf8",
+        "address": "0x29e5512cf8",
         "size": 120,
         "section": 1,
         "type": 2
@@ -1719,7 +1719,7 @@
         "name": "_ZN2nn3web38ShowApplicationLegalInformationPageArg8DataSizeE",
         "description": "nn::web::ShowApplicationLegalInformationPageArg::DataSize",
         "offset": 11866904,
-        "address": "0x665eb7e318",
+        "address": "0x29e5b7e318",
         "size": 8,
         "section": 10,
         "type": 1
@@ -1728,7 +1728,7 @@
         "name": "_ZN2nn2sf4cmif6client6detail13CmifProxyImplINS_7friends6detail3ipc14IFriendServiceENS2_19CmifDomainProxyKindINS0_4hipc6client38Hipc2ClientSessionManagedProxyKindBaseINSB_18Hipc2ProxyKindBaseILNSA_6detail11MessageTypeE6EEEEEEENS0_30MemoryResourceAllocationPolicyES8_NS3_19ProcessModifierImplINS2_21DefaultProxyFilterTagEEEE36_nn_sf_sync_GetSnsAccountLinkPageUrlENS0_3OutINS5_10WebPageUrlEvEERKNS_7account3UidEi",
         "description": "_ZN2nn2sf4cmif6client6detail13CmifProxyImplINS_7friends6detail3ipc14IFriendServiceENS2_19CmifDomainProxyKindINS0_4hipc6client38Hipc2ClientSessionManagedProxyKindBaseINSB_18Hipc2ProxyKindBaseILNSA_6detail11MessageTypeE6EEEEEEENS0_30MemoryResourceAllocationPolicyES8_NS3_19ProcessModifierImplINS2_21DefaultProxyFilterTagEEEE36_nn_sf_sync_GetSnsAccountLinkPageUrlENS0_3OutINS5_10WebPageUrlEvEERKNS_7account3UidEi",
         "offset": 3393124,
-        "address": "0x665e369664",
+        "address": "0x29e5369664",
         "size": 28,
         "section": 1,
         "type": 2
@@ -1737,7 +1737,7 @@
         "name": "_ZN2nn3web10WebSessionC1Ev",
         "description": "nn::web::WebSession::(constructor) [args: Ev]",
         "offset": 5142300,
-        "address": "0x665e51471c",
+        "address": "0x29e551471c",
         "size": 8,
         "section": 1,
         "type": 2
@@ -1746,7 +1746,7 @@
         "name": "_ZN2nn3web10WebSession11RequestExitEv",
         "description": "nn::web::WebSession::RequestExit [args: v]",
         "offset": 5143076,
-        "address": "0x665e514a24",
+        "address": "0x29e5514a24",
         "size": 8,
         "section": 1,
         "type": 2
@@ -1755,7 +1755,7 @@
         "name": "_ZN2nn3web10WebSession10InitializeEPvm",
         "description": "nn::web::WebSession::Initialize [args: Pvm]",
         "offset": 5142320,
-        "address": "0x665e514730",
+        "address": "0x29e5514730",
         "size": 44,
         "section": 1,
         "type": 2
@@ -1764,7 +1764,7 @@
         "name": "_ZN2nn3web16ShowSharePageArgC1Ev",
         "description": "nn::web::ShowSharePageArg::(constructor) [args: Ev]",
         "offset": 5121840,
-        "address": "0x665e50f730",
+        "address": "0x29e550f730",
         "size": 596,
         "section": 1,
         "type": 2
@@ -1773,7 +1773,7 @@
         "name": "_ZN2nn3web6detail23SharePageReturnValue2_0C1Ev",
         "description": "nn::web::detail::SharePageReturnValue2_0::(constructor) [args: Ev]",
         "offset": 5125528,
-        "address": "0x665e510598",
+        "address": "0x29e5510598",
         "size": 36,
         "section": 1,
         "type": 2
@@ -1782,7 +1782,7 @@
         "name": "_ZN2nn3web6detail22ShowSharePageArgDetail14SetCallbackUrlEPhPKc",
         "description": "nn::web::detail::ShowSharePageArgDetail::SetCallbackUrl [args: PhPKc]",
         "offset": 5125292,
-        "address": "0x665e5104ac",
+        "address": "0x29e55104ac",
         "size": 236,
         "section": 1,
         "type": 2
@@ -1791,7 +1791,7 @@
         "name": "_ZN2nn3web16ShowSharePageArg30AdditionalCommentTextMaxLengthE",
         "description": "nn::web::ShowSharePageArg::AdditionalCommentTextMaxLength",
         "offset": 11866760,
-        "address": "0x665eb7e288",
+        "address": "0x29e5b7e288",
         "size": 8,
         "section": 10,
         "type": 1
@@ -1800,7 +1800,7 @@
         "name": "_ZN2nn3web16ShowSharePageArg6SetUidERKNS_7account3UidE",
         "description": "nn::web::ShowSharePageArg::SetUid [args: RKNS_7account3UidE]",
         "offset": 5122436,
-        "address": "0x665e50f984",
+        "address": "0x29e550f984",
         "size": 132,
         "section": 1,
         "type": 2
@@ -1809,7 +1809,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl7canSendERKNS1_23WebSessionMessageHeaderEm",
         "description": "nn::web::detail::WebSessionImpl::canSend [args: RKNS1_23WebSessionMessageHeaderEm]",
         "offset": 5146192,
-        "address": "0x665e515650",
+        "address": "0x29e5515650",
         "size": 88,
         "section": 1,
         "type": 2
@@ -1818,7 +1818,7 @@
         "name": "_ZN2nn3web38ShowApplicationLegalInformationPageArg21DocumentPathMaxLengthE",
         "description": "nn::web::ShowApplicationLegalInformationPageArg::DocumentPathMaxLength",
         "offset": 11866896,
-        "address": "0x665eb7e310",
+        "address": "0x29e5b7e310",
         "size": 8,
         "section": 10,
         "type": 1
@@ -1827,7 +1827,7 @@
         "name": "_ZN2nn3web17OfflineWebSession11RequestExitEv",
         "description": "nn::web::OfflineWebSession::RequestExit [args: v]",
         "offset": 5136800,
-        "address": "0x665e5131a0",
+        "address": "0x29e55131a0",
         "size": 8,
         "section": 1,
         "type": 2
@@ -1836,7 +1836,7 @@
         "name": "_ZN2nn3web20LobbyPageReturnValueC2Ev",
         "description": "nn::web::LobbyPageReturnValue::(constructor) [args: Ev]",
         "offset": 5114920,
-        "address": "0x665e50dc28",
+        "address": "0x29e550dc28",
         "size": 36,
         "section": 1,
         "type": 2
@@ -1845,7 +1845,7 @@
         "name": "_ZN2nn3web21ShowSystemDataPageArg21DocumentPathMaxLengthE",
         "description": "nn::web::ShowSystemDataPageArg::DocumentPathMaxLength",
         "offset": 11866912,
-        "address": "0x665eb7e320",
+        "address": "0x29e5b7e320",
         "size": 8,
         "section": 10,
         "type": 1
@@ -1854,7 +1854,7 @@
         "name": "_ZN2nn3web17OfflineWebSession10InitializeEPvm",
         "description": "nn::web::OfflineWebSession::Initialize [args: Pvm]",
         "offset": 5136040,
-        "address": "0x665e512ea8",
+        "address": "0x29e5512ea8",
         "size": 44,
         "section": 1,
         "type": 2
@@ -1863,7 +1863,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl7trySendERKNS1_23WebSessionMessageHeaderEPKv",
         "description": "nn::web::detail::WebSessionImpl::trySend [args: RKNS1_23WebSessionMessageHeaderEPKv]",
         "offset": 5144556,
-        "address": "0x665e514fec",
+        "address": "0x29e5514fec",
         "size": 352,
         "section": 1,
         "type": 2
@@ -1872,7 +1872,7 @@
         "name": "_ZN2nn3web16ShowSharePageArg24SetAdditionalCommentTextEPKc",
         "description": "nn::web::ShowSharePageArg::SetAdditionalCommentText [args: PKc]",
         "offset": 5124000,
-        "address": "0x665e50ffa0",
+        "address": "0x29e550ffa0",
         "size": 236,
         "section": 1,
         "type": 2
@@ -1881,7 +1881,7 @@
         "name": "_ZNK2nn3web19ShowYouTubeVideoArg4DataEv",
         "description": "_ZNK2nn3web19ShowYouTubeVideoArg4DataEv",
         "offset": 5142296,
-        "address": "0x665e514718",
+        "address": "0x29e5514718",
         "size": 4,
         "section": 1,
         "type": 2
@@ -1890,7 +1890,7 @@
         "name": "_ZN2nn2sf4cmif6client6detail13CmifProxyImplINS_8settings28IFirmwareDebugSettingsServerENS0_4hipc6client18Hipc2ProxyKindBaseILNS7_6detail11MessageTypeE6EEENS0_30MemoryResourceAllocationPolicyES6_NS3_19ProcessModifierImplINS2_21DefaultProxyFilterTagEEEE31_nn_sf_sync_SetWebInspectorFlagEb",
         "description": "_ZN2nn2sf4cmif6client6detail13CmifProxyImplINS_8settings28IFirmwareDebugSettingsServerENS0_4hipc6client18Hipc2ProxyKindBaseILNS7_6detail11MessageTypeE6EEENS0_30MemoryResourceAllocationPolicyES6_NS3_19ProcessModifierImplINS2_21DefaultProxyFilterTagEEEE31_nn_sf_sync_SetWebInspectorFlagEb",
         "offset": 3927720,
-        "address": "0x665e3ebea8",
+        "address": "0x29e53ebea8",
         "size": 16,
         "section": 1,
         "type": 2
@@ -1899,7 +1899,7 @@
         "name": "_ZN2nn3web26RequestExitOfflineHtmlPageEv",
         "description": "nn::web::RequestExitOfflineHtmlPage [args: v]",
         "offset": 5126816,
-        "address": "0x665e510aa0",
+        "address": "0x29e5510aa0",
         "size": 76,
         "section": 1,
         "type": 2
@@ -1908,7 +1908,7 @@
         "name": "_ZN2nn3web38ShowApplicationLegalInformationPageArg26SetBootFooterButtonVisibleENS0_21OfflineFooterButtonIdEb",
         "description": "nn::web::ShowApplicationLegalInformationPageArg::SetBootFooterButtonVisible [args: NS0_21OfflineFooterButtonIdEb]",
         "offset": 5132576,
-        "address": "0x665e512120",
+        "address": "0x29e5512120",
         "size": 8,
         "section": 1,
         "type": 2
@@ -1917,7 +1917,7 @@
         "name": "_ZN2nn2la32NifmToWifiWebAuthArgumentsWriterC2EPKcS3_RKNS_4util4UuidEj",
         "description": "_ZN2nn2la32NifmToWifiWebAuthArgumentsWriterC2EPKcS3_RKNS_4util4UuidEj",
         "offset": 3493672,
-        "address": "0x665e381f28",
+        "address": "0x29e5381f28",
         "size": 200,
         "section": 1,
         "type": 2
@@ -1926,7 +1926,7 @@
         "name": "_ZN2nn3web20SharePageReturnValue15PostIdMaxLengthE",
         "description": "nn::web::SharePageReturnValue::PostIdMaxLength",
         "offset": 11866808,
-        "address": "0x665eb7e2b8",
+        "address": "0x29e5b7e2b8",
         "size": 8,
         "section": 10,
         "type": 1
@@ -1935,7 +1935,7 @@
         "name": "_ZN2nn3web19ShowYouTubeVideoArg30SetMediaPlayerAutoCloseEnabledEb",
         "description": "nn::web::ShowYouTubeVideoArg::SetMediaPlayerAutoCloseEnabled [args: b]",
         "offset": 5141920,
-        "address": "0x665e5145a0",
+        "address": "0x29e55145a0",
         "size": 124,
         "section": 1,
         "type": 2
@@ -1944,7 +1944,7 @@
         "name": "_ZN2nn3web6detail24ShowOfflinePageArgDetail16SetApplicationIdEPhRKNS_13ApplicationIdE",
         "description": "nn::web::detail::ShowOfflinePageArgDetail::SetApplicationId [args: PhRKNS_13ApplicationIdE]",
         "offset": 5143448,
-        "address": "0x665e514b98",
+        "address": "0x29e5514b98",
         "size": 132,
         "section": 1,
         "type": 2
@@ -1953,7 +1953,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl7sendAckEj",
         "description": "nn::web::detail::WebSessionImpl::sendAck [args: j]",
         "offset": 5146280,
-        "address": "0x665e5156a8",
+        "address": "0x29e55156a8",
         "size": 124,
         "section": 1,
         "type": 2
@@ -1962,7 +1962,7 @@
         "name": "_ZNK2nn3web20SharePageReturnValue14GetLastUrlSizeEv",
         "description": "_ZNK2nn3web20SharePageReturnValue14GetLastUrlSizeEv",
         "offset": 5124908,
-        "address": "0x665e51032c",
+        "address": "0x29e551032c",
         "size": 64,
         "section": 1,
         "type": 2
@@ -1971,7 +1971,7 @@
         "name": "_ZNK2nn2la32NifmToWifiWebAuthArgumentsWriter13GetExportSizeEv",
         "description": "_ZNK2nn2la32NifmToWifiWebAuthArgumentsWriter13GetExportSizeEv",
         "offset": 3494016,
-        "address": "0x665e382080",
+        "address": "0x29e5382080",
         "size": 8,
         "section": 1,
         "type": 2
@@ -1980,7 +1980,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl17hasReceiveMessageEv",
         "description": "nn::web::detail::WebSessionImpl::hasReceiveMessage [args: v]",
         "offset": 5146824,
-        "address": "0x665e5158c8",
+        "address": "0x29e55158c8",
         "size": 68,
         "section": 1,
         "type": 2
@@ -1989,7 +1989,7 @@
         "name": "_ZN2nn3web10WebSessionC2Ev",
         "description": "nn::web::WebSession::(constructor) [args: Ev]",
         "offset": 5142300,
-        "address": "0x665e51471c",
+        "address": "0x29e551471c",
         "size": 8,
         "section": 1,
         "type": 2
@@ -1998,7 +1998,7 @@
         "name": "_ZNK2nn3web10WebSession16NeedsWaitForExitEv",
         "description": "_ZNK2nn3web10WebSession16NeedsWaitForExitEv",
         "offset": 5142996,
-        "address": "0x665e5149d4",
+        "address": "0x29e55149d4",
         "size": 20,
         "section": 1,
         "type": 2
@@ -2007,7 +2007,7 @@
         "name": "_ZN2nn3web16ShowSharePageArgC2Ev",
         "description": "nn::web::ShowSharePageArg::(constructor) [args: Ev]",
         "offset": 5121840,
-        "address": "0x665e50f730",
+        "address": "0x29e550f730",
         "size": 596,
         "section": 1,
         "type": 2
@@ -2016,7 +2016,7 @@
         "name": "_ZN2nn3web18ShowSystemDataPageEPNS0_26OfflineHtmlPageReturnValueERKNS0_21ShowSystemDataPageArgE",
         "description": "nn::web::ShowSystemDataPage [args: PNS0_26OfflineHtmlPageReturnValueERKNS0_21ShowSystemDataPageArgE]",
         "offset": 5127264,
-        "address": "0x665e510c60",
+        "address": "0x29e5510c60",
         "size": 156,
         "section": 1,
         "type": 2
@@ -2025,7 +2025,7 @@
         "name": "_ZN2nn3web21ShowSystemDataPageArgC2ERKNS_3ncm12SystemDataIdEPKc",
         "description": "nn::web::ShowSystemDataPageArg::(constructor) [args: ERKNS_3ncm12SystemDataIdEPKc]",
         "offset": 5135512,
-        "address": "0x665e512c98",
+        "address": "0x29e5512c98",
         "size": 96,
         "section": 1,
         "type": 2
@@ -2034,7 +2034,7 @@
         "name": "_ZN2nn3web19ShowYouTubeVideoArgC1Ev",
         "description": "nn::web::ShowYouTubeVideoArg::(constructor) [args: Ev]",
         "offset": 5141256,
-        "address": "0x665e514308",
+        "address": "0x29e5514308",
         "size": 212,
         "section": 1,
         "type": 2
@@ -2043,7 +2043,7 @@
         "name": "_ZN2nn3web10WebSessionD1Ev",
         "description": "nn::web::WebSession::(destructor) [args: Ev]",
         "offset": 5142308,
-        "address": "0x665e514724",
+        "address": "0x29e5514724",
         "size": 4,
         "section": 1,
         "type": 2
@@ -2052,7 +2052,7 @@
         "name": "_ZN2nn3web6detail23SharePageReturnValue2_0C2Ev",
         "description": "nn::web::detail::SharePageReturnValue2_0::(constructor) [args: Ev]",
         "offset": 5125528,
-        "address": "0x665e510598",
+        "address": "0x29e5510598",
         "size": 36,
         "section": 1,
         "type": 2
@@ -2061,7 +2061,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl15ReceiveCountMaxE",
         "description": "nn::web::detail::WebSessionImpl::ReceiveCountMax",
         "offset": 11867024,
-        "address": "0x665eb7e390",
+        "address": "0x29e5b7e390",
         "size": 4,
         "section": 10,
         "type": 1
@@ -2070,7 +2070,7 @@
         "name": "_ZN2nn3web19ShowYouTubeVideoArg18SetBootDisplayKindENS0_18WebBootDisplayKindE",
         "description": "nn::web::ShowYouTubeVideoArg::SetBootDisplayKind [args: NS0_18WebBootDisplayKindE]",
         "offset": 5141800,
-        "address": "0x665e514528",
+        "address": "0x29e5514528",
         "size": 120,
         "section": 1,
         "type": 2
@@ -2079,7 +2079,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl24tryReceiveContentMessageEPmPcm",
         "description": "nn::web::detail::WebSessionImpl::tryReceiveContentMessage [args: PmPcm]",
         "offset": 5144908,
-        "address": "0x665e51514c",
+        "address": "0x29e551514c",
         "size": 172,
         "section": 1,
         "type": 2
@@ -2088,7 +2088,7 @@
         "name": "_ZN2nn3web38ShowApplicationLegalInformationPageArgC1Ev",
         "description": "nn::web::ShowApplicationLegalInformationPageArg::(constructor) [args: Ev]",
         "offset": 5131316,
-        "address": "0x665e511c34",
+        "address": "0x29e5511c34",
         "size": 1056,
         "section": 1,
         "type": 2
@@ -2097,7 +2097,7 @@
         "name": "_ZN2nn3web16ShowSharePageArg25AddAlbumEntryAndMediaDataERKNS_6capsrv10AlbumEntryEPKhm",
         "description": "nn::web::ShowSharePageArg::AddAlbumEntryAndMediaData [args: RKNS_6capsrv10AlbumEntryEPKhm]",
         "offset": 5122888,
-        "address": "0x665e50fb48",
+        "address": "0x29e550fb48",
         "size": 960,
         "section": 1,
         "type": 2
@@ -2106,7 +2106,7 @@
         "name": "_ZNK2nn3web20SharePageReturnValue10GetLastUrlEv",
         "description": "_ZNK2nn3web20SharePageReturnValue10GetLastUrlEv",
         "offset": 5124844,
-        "address": "0x665e5102ec",
+        "address": "0x29e55102ec",
         "size": 64,
         "section": 1,
         "type": 2
@@ -2115,7 +2115,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl18StorageHandleQueue5clearEv",
         "description": "nn::web::detail::WebSessionImpl::StorageHandleQueue::clear [args: v]",
         "offset": 5146044,
-        "address": "0x665e5155bc",
+        "address": "0x29e55155bc",
         "size": 148,
         "section": 1,
         "type": 2
@@ -2124,7 +2124,7 @@
         "name": "_ZN2nn3web6detail23SharePageReturnValue2_018SetShareExitReasonENS0_15ShareExitReasonE",
         "description": "nn::web::detail::SharePageReturnValue2_0::SetShareExitReason [args: NS0_15ShareExitReasonE]",
         "offset": 5125564,
-        "address": "0x665e5105bc",
+        "address": "0x29e55105bc",
         "size": 12,
         "section": 1,
         "type": 2
@@ -2133,7 +2133,7 @@
         "name": "_ZN2nn3web16ShowSharePageArg28AdditionalMediaDataMaxLengthE",
         "description": "nn::web::ShowSharePageArg::AdditionalMediaDataMaxLength",
         "offset": 11866768,
-        "address": "0x665eb7e290",
+        "address": "0x29e5b7e290",
         "size": 8,
         "section": 10,
         "type": 1
@@ -2142,7 +2142,7 @@
         "name": "_ZN2nn3web17OfflineWebSession11WaitForExitEPNS0_26OfflineHtmlPageReturnValueE",
         "description": "nn::web::OfflineWebSession::WaitForExit [args: PNS0_26OfflineHtmlPageReturnValueE]",
         "offset": 5136500,
-        "address": "0x665e513074",
+        "address": "0x29e5513074",
         "size": 220,
         "section": 1,
         "type": 2
@@ -2151,7 +2151,7 @@
         "name": "_ZN2nn3web20SharePageReturnValue16LastUrlMaxLengthE",
         "description": "nn::web::SharePageReturnValue::LastUrlMaxLength",
         "offset": 11866792,
-        "address": "0x665eb7e2a8",
+        "address": "0x29e5b7e2a8",
         "size": 8,
         "section": 10,
         "type": 1
@@ -2160,7 +2160,7 @@
         "name": "_ZN2nn2sf4cmif6client6detail13CmifProxyImplINS_8settings21ISystemSettingsServerENS0_4hipc6client18Hipc2ProxyKindBaseILNS7_6detail11MessageTypeE6EEENS0_30MemoryResourceAllocationPolicyES6_NS3_19ProcessModifierImplINS2_21DefaultProxyFilterTagEEEE31_nn_sf_sync_GetWebInspectorFlagENS0_3OutIbvEE",
         "description": "_ZN2nn2sf4cmif6client6detail13CmifProxyImplINS_8settings21ISystemSettingsServerENS0_4hipc6client18Hipc2ProxyKindBaseILNS7_6detail11MessageTypeE6EEENS0_30MemoryResourceAllocationPolicyES6_NS3_19ProcessModifierImplINS2_21DefaultProxyFilterTagEEEE31_nn_sf_sync_GetWebInspectorFlagENS0_3OutIbvEE",
         "offset": 3936912,
-        "address": "0x665e3ee290",
+        "address": "0x29e53ee290",
         "size": 12,
         "section": 1,
         "type": 2
@@ -2169,7 +2169,7 @@
         "name": "_ZN2nn3web26OfflineHtmlPageReturnValue16LastUrlMaxLengthE",
         "description": "nn::web::OfflineHtmlPageReturnValue::LastUrlMaxLength",
         "offset": 11866888,
-        "address": "0x665eb7e308",
+        "address": "0x29e5b7e308",
         "size": 8,
         "section": 10,
         "type": 1
@@ -2178,7 +2178,7 @@
         "name": "_ZN2nn8settings6detail19GetWebInspectorFlagEPb",
         "description": "_ZN2nn8settings6detail19GetWebInspectorFlagEPb",
         "offset": 3917088,
-        "address": "0x665e3e9520",
+        "address": "0x29e53e9520",
         "size": 116,
         "section": 1,
         "type": 2
@@ -2187,7 +2187,7 @@
         "name": "_ZN2nn3web6detail23SharePageReturnValue2_010SetLastUrlEPKc",
         "description": "nn::web::detail::SharePageReturnValue2_0::SetLastUrl [args: PKc]",
         "offset": 5125576,
-        "address": "0x665e5105c8",
+        "address": "0x29e55105c8",
         "size": 92,
         "section": 1,
         "type": 2
@@ -2196,7 +2196,7 @@
         "name": "_ZN2nn3web6detail47WebSessionSendBrowserEngineMessageGroupIncludesENS1_25WebSessionSendMessageKindE",
         "description": "nn::web::detail::WebSessionSendBrowserEngineMessageGroupIncludes [args: NS1_25WebSessionSendMessageKindE]",
         "offset": 5144384,
-        "address": "0x665e514f40",
+        "address": "0x29e5514f40",
         "size": 12,
         "section": 1,
         "type": 2
@@ -2205,7 +2205,7 @@
         "name": "_ZN2nn3web6detail24ShowOfflinePageArgDetail15SetDocumentKindEPhRKNS1_19OfflineDocumentKindE",
         "description": "nn::web::detail::ShowOfflinePageArgDetail::SetDocumentKind [args: PhRKNS1_19OfflineDocumentKindE]",
         "offset": 5143840,
-        "address": "0x665e514d20",
+        "address": "0x29e5514d20",
         "size": 132,
         "section": 1,
         "type": 2
@@ -2214,7 +2214,7 @@
         "name": "_ZN2nn3web19ShowYouTubeVideoArgC2Ev",
         "description": "nn::web::ShowYouTubeVideoArg::(constructor) [args: Ev]",
         "offset": 5141256,
-        "address": "0x665e514308",
+        "address": "0x29e5514308",
         "size": 212,
         "section": 1,
         "type": 2
@@ -2223,7 +2223,7 @@
         "name": "_ZN2nn3web10WebSessionD2Ev",
         "description": "nn::web::WebSession::(destructor) [args: Ev]",
         "offset": 5142308,
-        "address": "0x665e514724",
+        "address": "0x29e5514724",
         "size": 4,
         "section": 1,
         "type": 2
@@ -2232,7 +2232,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl37SendBrowserEngineMessageGroupCountMaxE",
         "description": "nn::web::detail::WebSessionImpl::SendBrowserEngineMessageGroupCountMax",
         "offset": 11867008,
-        "address": "0x665eb7e380",
+        "address": "0x29e5b7e380",
         "size": 4,
         "section": 10,
         "type": 1
@@ -2241,7 +2241,7 @@
         "name": "_ZN2nn3web6detail24ShowOfflinePageArgDetail17SetPointerEnabledEPhb",
         "description": "nn::web::detail::ShowOfflinePageArgDetail::SetPointerEnabled [args: Phb]",
         "offset": 5144100,
-        "address": "0x665e514e24",
+        "address": "0x29e5514e24",
         "size": 124,
         "section": 1,
         "type": 2
@@ -2250,7 +2250,7 @@
         "name": "_ZNK2nn3web26OfflineHtmlPageReturnValue14GetLastUrlSizeEv",
         "description": "_ZNK2nn3web26OfflineHtmlPageReturnValue14GetLastUrlSizeEv",
         "offset": 5130840,
-        "address": "0x665e511a58",
+        "address": "0x29e5511a58",
         "size": 8,
         "section": 1,
         "type": 2
@@ -2259,7 +2259,7 @@
         "name": "_ZN2nn3web21ShowSystemDataPageArgC1Ev",
         "description": "nn::web::ShowSystemDataPageArg::(constructor) [args: Ev]",
         "offset": 5134456,
-        "address": "0x665e512878",
+        "address": "0x29e5512878",
         "size": 1056,
         "section": 1,
         "type": 2
@@ -2268,7 +2268,7 @@
         "name": "_ZNK2nn3web20SharePageReturnValue13GetPostIdSizeEv",
         "description": "_ZNK2nn3web20SharePageReturnValue13GetPostIdSizeEv",
         "offset": 5125228,
-        "address": "0x665e51046c",
+        "address": "0x29e551046c",
         "size": 64,
         "section": 1,
         "type": 2
@@ -2277,7 +2277,7 @@
         "name": "_ZN2nn3web17OfflineWebSession24TryReceiveContentMessageEPmPcm",
         "description": "nn::web::OfflineWebSession::TryReceiveContentMessage [args: PmPcm]",
         "offset": 5136816,
-        "address": "0x665e5131b0",
+        "address": "0x29e55131b0",
         "size": 8,
         "section": 1,
         "type": 2
@@ -2286,7 +2286,7 @@
         "name": "_ZN2nn3web10WebSession21TrySendContentMessageEPKcm",
         "description": "nn::web::WebSession::TrySendContentMessage [args: PKcm]",
         "offset": 5143084,
-        "address": "0x665e514a2c",
+        "address": "0x29e5514a2c",
         "size": 8,
         "section": 1,
         "type": 2
@@ -2295,7 +2295,7 @@
         "name": "_ZNK2nn3web26OfflineHtmlPageReturnValue10GetLastUrlEv",
         "description": "_ZNK2nn3web26OfflineHtmlPageReturnValue10GetLastUrlEv",
         "offset": 5130832,
-        "address": "0x665e511a50",
+        "address": "0x29e5511a50",
         "size": 8,
         "section": 1,
         "type": 2
@@ -2304,7 +2304,7 @@
         "name": "_ZN2nn3web38ShowApplicationLegalInformationPageArgC2Ev",
         "description": "nn::web::ShowApplicationLegalInformationPageArg::(constructor) [args: Ev]",
         "offset": 5131316,
-        "address": "0x665e511c34",
+        "address": "0x29e5511c34",
         "size": 1056,
         "section": 1,
         "type": 2
@@ -2313,7 +2313,7 @@
         "name": "_ZNK2nn3web26OfflineHtmlPageReturnValue20GetOfflineExitReasonEv",
         "description": "_ZNK2nn3web26OfflineHtmlPageReturnValue20GetOfflineExitReasonEv",
         "offset": 5130824,
-        "address": "0x665e511a48",
+        "address": "0x29e5511a48",
         "size": 8,
         "section": 1,
         "type": 2
@@ -2322,7 +2322,7 @@
         "name": "_ZN2nn3web10WebSession6AppearEv",
         "description": "nn::web::WebSession::Appear [args: v]",
         "offset": 5143068,
-        "address": "0x665e514a1c",
+        "address": "0x29e5514a1c",
         "size": 8,
         "section": 1,
         "type": 2
@@ -2331,7 +2331,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl21receiveStorageHandlesEv",
         "description": "nn::web::detail::WebSessionImpl::receiveStorageHandles [args: v]",
         "offset": 5146404,
-        "address": "0x665e515724",
+        "address": "0x29e5515724",
         "size": 420,
         "section": 1,
         "type": 2
@@ -2340,7 +2340,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl5clearEv",
         "description": "nn::web::detail::WebSessionImpl::clear [args: v]",
         "offset": 5145884,
-        "address": "0x665e51551c",
+        "address": "0x29e551551c",
         "size": 160,
         "section": 1,
         "type": 2
@@ -2349,7 +2349,7 @@
         "name": "_ZNK2nn3web20LobbyPageReturnValue10GetLastUrlEv",
         "description": "_ZNK2nn3web20LobbyPageReturnValue10GetLastUrlEv",
         "offset": 5114964,
-        "address": "0x665e50dc54",
+        "address": "0x29e550dc54",
         "size": 8,
         "section": 1,
         "type": 2
@@ -2358,7 +2358,7 @@
         "name": "_ZN2nn3web17OfflineWebSession21TrySendContentMessageEPKcm",
         "description": "nn::web::OfflineWebSession::TrySendContentMessage [args: PKcm]",
         "offset": 5136808,
-        "address": "0x665e5131a8",
+        "address": "0x29e55131a8",
         "size": 8,
         "section": 1,
         "type": 2
@@ -2367,7 +2367,7 @@
         "name": "_ZN2nn3web16ShowSharePageArg24SetApplicationAlbumEntryERKNS_6capsrv21ApplicationAlbumEntryE",
         "description": "nn::web::ShowSharePageArg::SetApplicationAlbumEntry [args: RKNS_6capsrv21ApplicationAlbumEntryE]",
         "offset": 5123848,
-        "address": "0x665e50ff08",
+        "address": "0x29e550ff08",
         "size": 152,
         "section": 1,
         "type": 2
@@ -2376,7 +2376,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl21trySendContentMessageEPKcj",
         "description": "nn::web::detail::WebSessionImpl::trySendContentMessage [args: PKcj]",
         "offset": 5144508,
-        "address": "0x665e514fbc",
+        "address": "0x29e5514fbc",
         "size": 48,
         "section": 1,
         "type": 2
@@ -2385,7 +2385,7 @@
         "name": "_ZNK2nn3web20SharePageReturnValue18GetPostServiceNameEv",
         "description": "_ZNK2nn3web20SharePageReturnValue18GetPostServiceNameEv",
         "offset": 5125036,
-        "address": "0x665e5103ac",
+        "address": "0x29e55103ac",
         "size": 64,
         "section": 1,
         "type": 2
@@ -2394,7 +2394,7 @@
         "name": "_ZN2nn3web20SharePageReturnValue8DataSizeE",
         "description": "nn::web::SharePageReturnValue::DataSize",
         "offset": 11866816,
-        "address": "0x665eb7e2c0",
+        "address": "0x29e5b7e2c0",
         "size": 8,
         "section": 10,
         "type": 1
@@ -2403,7 +2403,7 @@
         "name": "_ZN2nn3web6detail24ShowOfflinePageArgDetail15SetSystemDataIdEPhRKNS_3ncm12SystemDataIdE",
         "description": "nn::web::detail::ShowOfflinePageArgDetail::SetSystemDataId [args: PhRKNS_3ncm12SystemDataIdE]",
         "offset": 5143972,
-        "address": "0x665e514da4",
+        "address": "0x29e5514da4",
         "size": 128,
         "section": 1,
         "type": 2
@@ -2412,7 +2412,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl11isAvaliableEv",
         "description": "nn::web::detail::WebSessionImpl::isAvaliable [args: v]",
         "offset": 5145780,
-        "address": "0x665e5154b4",
+        "address": "0x29e55154b4",
         "size": 56,
         "section": 1,
         "type": 2
@@ -2421,7 +2421,7 @@
         "name": "_ZN2nn3web20SharePageReturnValueC1Ev",
         "description": "nn::web::SharePageReturnValue::(constructor) [args: Ev]",
         "offset": 5124756,
-        "address": "0x665e510294",
+        "address": "0x29e5510294",
         "size": 12,
         "section": 1,
         "type": 2
@@ -2430,7 +2430,7 @@
         "name": "_ZN2nn3web10WebSession17GetWorkBufferSizeEv",
         "description": "nn::web::WebSession::GetWorkBufferSize [args: v]",
         "offset": 5142312,
-        "address": "0x665e514728",
+        "address": "0x29e5514728",
         "size": 8,
         "section": 1,
         "type": 2
@@ -2439,7 +2439,7 @@
         "name": "_ZNK2nn3web20SharePageReturnValue9GetPostIdEv",
         "description": "_ZNK2nn3web20SharePageReturnValue9GetPostIdEv",
         "offset": 5125164,
-        "address": "0x665e51042c",
+        "address": "0x29e551042c",
         "size": 64,
         "section": 1,
         "type": 2
@@ -2448,7 +2448,7 @@
         "name": "_ZN2nn3web16ShowLobbyPageArg17SetLobbyParameterEPKc",
         "description": "nn::web::ShowLobbyPageArg::SetLobbyParameter [args: PKc]",
         "offset": 5114664,
-        "address": "0x665e50db28",
+        "address": "0x29e550db28",
         "size": 256,
         "section": 1,
         "type": 2
@@ -2457,7 +2457,7 @@
         "name": "_ZN2nn3web6detail33GetWebSessionSendMessageGroupKindENS1_25WebSessionSendMessageKindE",
         "description": "nn::web::detail::GetWebSessionSendMessageGroupKind [args: NS1_25WebSessionSendMessageKindE]",
         "offset": 5144352,
-        "address": "0x665e514f20",
+        "address": "0x29e5514f20",
         "size": 24,
         "section": 1,
         "type": 2
@@ -2466,7 +2466,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl18StorageHandleQueueC1Ev",
         "description": "nn::web::detail::WebSessionImpl::StorageHandleQueue::(constructor) [args: Ev]",
         "offset": 5147080,
-        "address": "0x665e5159c8",
+        "address": "0x29e55159c8",
         "size": 52,
         "section": 1,
         "type": 2
@@ -2475,7 +2475,7 @@
         "name": "_ZN2nn3web17OfflineWebSession8FinalizeEv",
         "description": "nn::web::OfflineWebSession::Finalize [args: v]",
         "offset": 5136740,
-        "address": "0x665e513164",
+        "address": "0x29e5513164",
         "size": 52,
         "section": 1,
         "type": 2
@@ -2484,7 +2484,7 @@
         "name": "_ZN2nn3web6detail24ShowOfflinePageArgDetail16SetLeftStickModeEPhRKNS0_20OfflineLeftStickModeE",
         "description": "nn::web::detail::ShowOfflinePageArgDetail::SetLeftStickMode [args: PhRKNS0_20OfflineLeftStickModeE]",
         "offset": 5144224,
-        "address": "0x665e514ea0",
+        "address": "0x29e5514ea0",
         "size": 124,
         "section": 1,
         "type": 2
@@ -2493,7 +2493,7 @@
         "name": "_ZN2nn8settings6system16UsesWebInspectorEv",
         "description": "_ZN2nn8settings6system16UsesWebInspectorEv",
         "offset": 3884272,
-        "address": "0x665e3e14f0",
+        "address": "0x29e53e14f0",
         "size": 56,
         "section": 1,
         "type": 2
@@ -2502,7 +2502,7 @@
         "name": "_ZN2nn3web16ShowLobbyPageArg23LobbyParameterMaxLengthE",
         "description": "nn::web::ShowLobbyPageArg::LobbyParameterMaxLength",
         "offset": 11863200,
-        "address": "0x665eb7d4a0",
+        "address": "0x29e5b7d4a0",
         "size": 8,
         "section": 10,
         "type": 1
@@ -2511,7 +2511,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl6appearEv",
         "description": "nn::web::detail::WebSessionImpl::appear [args: v]",
         "offset": 5145632,
-        "address": "0x665e515420",
+        "address": "0x29e5515420",
         "size": 84,
         "section": 1,
         "type": 2
@@ -2520,7 +2520,7 @@
         "name": "_ZN2nn3web16ShowSharePageArgC1ENS0_14ShareStartPageE",
         "description": "nn::web::ShowSharePageArg::(constructor) [args: ENS0_14ShareStartPageE]",
         "offset": 5122568,
-        "address": "0x665e50fa08",
+        "address": "0x29e550fa08",
         "size": 168,
         "section": 1,
         "type": 2
@@ -2529,7 +2529,7 @@
         "name": "_ZN2nn3web21ShowSystemDataPageArgC1ERKNS_3ncm12SystemDataIdEPKc",
         "description": "nn::web::ShowSystemDataPageArg::(constructor) [args: ERKNS_3ncm12SystemDataIdEPKc]",
         "offset": 5135512,
-        "address": "0x665e512c98",
+        "address": "0x29e5512c98",
         "size": 96,
         "section": 1,
         "type": 2
@@ -2538,7 +2538,7 @@
         "name": "_ZN2nn3web21ShowSystemDataPageArgC2Ev",
         "description": "nn::web::ShowSystemDataPageArg::(constructor) [args: Ev]",
         "offset": 5134456,
-        "address": "0x665e512878",
+        "address": "0x29e5512878",
         "size": 1056,
         "section": 1,
         "type": 2
@@ -2547,7 +2547,7 @@
         "name": "_ZN2nn3web20LobbyPageReturnValue16LastUrlMaxLengthE",
         "description": "nn::web::LobbyPageReturnValue::LastUrlMaxLength",
         "offset": 11863216,
-        "address": "0x665eb7d4b0",
+        "address": "0x29e5b7d4b0",
         "size": 8,
         "section": 10,
         "type": 1
@@ -2556,7 +2556,7 @@
         "name": "_ZN2nn3web17OfflineWebSessionC1Ev",
         "description": "nn::web::OfflineWebSession::(constructor) [args: Ev]",
         "offset": 5136020,
-        "address": "0x665e512e94",
+        "address": "0x29e5512e94",
         "size": 8,
         "section": 1,
         "type": 2
@@ -2565,7 +2565,7 @@
         "name": "_ZN2nn3web16ShowSharePageArg24CallbackableUrlMaxLengthE",
         "description": "nn::web::ShowSharePageArg::CallbackableUrlMaxLength",
         "offset": 11866752,
-        "address": "0x665eb7e280",
+        "address": "0x29e5b7e280",
         "size": 8,
         "section": 10,
         "type": 1
@@ -2574,7 +2574,7 @@
         "name": "_ZN2nn3web38ShowApplicationLegalInformationPageArgC1ERKNS_13ApplicationIdEPKc",
         "description": "nn::web::ShowApplicationLegalInformationPageArg::(constructor) [args: ERKNS_13ApplicationIdEPKc]",
         "offset": 5132372,
-        "address": "0x665e512054",
+        "address": "0x29e5512054",
         "size": 96,
         "section": 1,
         "type": 2
@@ -2583,7 +2583,7 @@
         "name": "_ZN2nn2la32NifmToWifiWebAuthArgumentsWriterC1EPKcS3_RKNS_4util4UuidEj",
         "description": "_ZN2nn2la32NifmToWifiWebAuthArgumentsWriterC1EPKcS3_RKNS_4util4UuidEj",
         "offset": 3493672,
-        "address": "0x665e381f28",
+        "address": "0x29e5381f28",
         "size": 200,
         "section": 1,
         "type": 2
@@ -2592,7 +2592,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl11requestExitEv",
         "description": "nn::web::detail::WebSessionImpl::requestExit [args: v]",
         "offset": 5145716,
-        "address": "0x665e515474",
+        "address": "0x29e5515474",
         "size": 64,
         "section": 1,
         "type": 2
@@ -2601,7 +2601,7 @@
         "name": "_ZN2nn3web6detail14WebSessionImpl48TotalSendBrowserEngineMessageGroupStorageSizeMaxE",
         "description": "nn::web::detail::WebSessionImpl::TotalSendBrowserEngineMessageGroupStorageSizeMax",
         "offset": 11867012,
-        "address": "0x665eb7e384",
+        "address": "0x29e5b7e384",
         "size": 4,
         "section": 10,
         "type": 1

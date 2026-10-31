@@ -211,8 +211,10 @@ Audio management, output device listing, and audio rendering / playback pipeline
 | `CloseAudioOut` | `_ZN2nn5audio13CloseAudioOutEPNS0_8AudioOutE` | Closes an opened audio output device.<br>**Args:** `AudioOut *audioOut` |
 | `StartAudioOut` | `_ZN2nn5audio13StartAudioOutEPNS0_8AudioOutE` | Starts audio output stream playback.<br>**Args:** `AudioOut *audioOut` |
 | `StopAudioOut` | `_ZN2nn5audio12StopAudioOutEPNS0_8AudioOutE` | Stops audio output stream playback.<br>**Args:** `AudioOut *audioOut` |
+| `SetAudioOutBufferInfo` | `_ZN2nn5audio21SetAudioOutBufferInfoEPNS0_14AudioOutBufferEPvmm` | Binds raw PCM sample data to an audio buffer struct.<br>**Args:** `AudioOutBuffer *buffer`, `void *sampleData`, `size_t capacity`, `size_t size` |
 | `AppendAudioOutBuffer` | `_ZN2nn5audio20AppendAudioOutBufferEPNS0_8AudioOutEPNS0_14AudioOutBufferE` | Enqueues a PCM audio buffer for playback.<br>**Args:** `AudioOut *audioOut`, `AudioOutBuffer *buffer` |
 | `GetReleasedAudioOutBuffer` | `_ZN2nn5audio25GetReleasedAudioOutBufferEPNS0_8AudioOutE` | Retrieves the next finished/released audio playback buffer.<br>**Args:** `AudioOut *audioOut` |
+| `GetAudioOutPlayedSampleCount` | `_ZN2nn5audio28GetAudioOutPlayedSampleCountEPKNS0_8AudioOutE` | Queries cumulative played sample count.<br>**Args:** `const AudioOut *audioOut` |
 | `GetAudioOutState` | `_ZN2nn5audio16GetAudioOutStateEPKNS0_8AudioOutE` | Queries current audio output stream state (Started vs Stopped).<br>**Args:** `const AudioOut *audioOut` |
 | `GetAudioOutVolume` | `_ZN2nn5audio17GetAudioOutVolumeEPKNS0_8AudioOutE` | Queries current audio output volume gain.<br>**Args:** `const AudioOut *audioOut` |
 | `SetAudioOutVolume` | `_ZN2nn5audio17SetAudioOutVolumeEPNS0_8AudioOutEf` | Sets master audio output playback volume (`0.0` - `1.0`).<br>**Args:** `AudioOut *audioOut`, `float volume` |

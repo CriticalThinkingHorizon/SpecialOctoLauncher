@@ -7,14 +7,14 @@ function validateManifest(value){
  return {capabilities:SUPPORTED_CAPABILITIES,endpoints};
 }
 async function create({rpc,mapped,directory,hardware:providedHardware}){
-  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,httpServer,netSockets,timeService,swkbdService,webService,lastSequence=0,lastPoll=0;
+  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,httpServer,netSockets,timeService,swkbdService,webService,audioService,lastSequence=0,lastPoll=0;
   const base=mapped+L.OFFSET;
  return {hardware,async atBoundary(app=null){
   if(!lastPoll||Date.now()-lastPoll>5000){await rpc.write(base,(await hardware.poll()).subarray(0,128));lastPoll=Date.now();}
   const hdr=await rpc.read(base+L.FIELD.request,32),sequence=hdr.readUInt32LE();
   if(!sequence||sequence===lastSequence)return;lastSequence=sequence;
   const request=await rpc.read(base+L.FIELD.request,1056);
-  const op=request.readUInt32LE(4),reply=Buffer.alloc(1056);reply.writeUInt32LE(sequence);
+  const op=request.readUInt32LE(4);
   const config=validateManifest(app?.manifest?.sdk);
   let status=L.STATUS.ok,payload=Buffer.alloc(0);
   try{
@@ -455,13 +455,64 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
     payload.writeUInt32LE(ir.handleResult>>>0,8);
     payload.writeUInt32LE(ir.statusResult>>>0,12);
    }else if(op===L.OP.audio){
-    timeService??=await require('./time.cjs').create(rpc);
-    const maxCount=request.readUInt32LE(8)||8;
-    const au=await timeService.listAudioInputs(maxCount);
-    payload=Buffer.alloc(16+au.names.length*64);
-    payload.writeUInt32LE(au.count>>>0,0);
-    for(let i=0;i<au.names.length;i++){
-     payload.write(au.names[i].substring(0,63),16+i*64,64,'utf8');
+    audioService??=await require('./audio.cjs').create(rpc);
+    const subOp=request.readUInt32LE(8);
+    if(subOp===1){
+     // Query status / ensure initialized
+     await audioService.ensureInitialized();
+     const st=await audioService.getStatus();
+     payload=Buffer.alloc(16+st.preview.length);
+     payload.writeUInt32LE(st.initialized>>>0,0);
+     payload.writeUInt32LE(st.started>>>0,4);
+     payload.writeUInt32LE(st.volume>>>0,8);
+     payload.writeUInt32LE(st.playedCount>>>0,12);
+     st.preview.copy(payload,16);
+    }else if(subOp===2){
+     // Play Sound Effect (sfxId in arg0, volumePercent in arg1)
+     const sfxId=request.readUInt32LE(12);
+     const volPercent=request.readUInt32LE(16)||85;
+     const res=await audioService.playSfx(sfxId,volPercent/100.0);
+     const st=await audioService.getStatus();
+     payload=Buffer.alloc(16+st.preview.length);
+     payload.writeUInt32LE(res>>>0,0);
+     payload.writeUInt32LE(sfxId>>>0,4);
+     payload.writeUInt32LE(st.playedCount>>>0,8);
+     payload.writeUInt32LE(st.volume>>>0,12);
+     st.preview.copy(payload,16);
+    }else if(subOp===3){
+     // Play Tone (waveType in arg0, packed freqHz & durationMs in arg1)
+     const waveType=request.readUInt32LE(12);
+     const packed=request.readUInt32LE(16);
+     const freqHz=packed&0xffff;
+     const durationMs=(packed>>>16)&0xffff;
+     const res=await audioService.playTone(waveType,freqHz||440,durationMs||200);
+     const st=await audioService.getStatus();
+     payload=Buffer.alloc(16+st.preview.length);
+     payload.writeUInt32LE(res>>>0,0);
+     payload.writeUInt32LE(waveType>>>0,4);
+     payload.writeUInt32LE(freqHz>>>0,8);
+     payload.writeUInt32LE(durationMs>>>0,12);
+     st.preview.copy(payload,16);
+    }else if(subOp===4){
+     // Set master volume
+     const volPercent=request.readUInt32LE(12);
+     await audioService.setVolume(volPercent);
+     payload=Buffer.alloc(16);
+     payload.writeUInt32LE(volPercent>>>0,0);
+    }else if(subOp===5){
+     // Stop audio
+     await audioService.stop();
+     payload=Buffer.alloc(16);
+    }else if(subOp===10||subOp===0){
+     // List audio inputs (legacy compat)
+     timeService??=await require('./time.cjs').create(rpc);
+     const maxCount=request.readUInt32LE(12)||8;
+     const au=await timeService.listAudioInputs(maxCount);
+     payload=Buffer.alloc(16+au.names.length*64);
+     payload.writeUInt32LE(au.count>>>0,0);
+     for(let i=0;i<au.names.length;i++){
+      payload.write(au.names[i].substring(0,63),16+i*64,64,'utf8');
+     }
     }
    }else if(op===L.OP.swkbd){
     swkbdService??=await require('./swkbd.cjs').create(rpc);
@@ -488,9 +539,10 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
     const subOp=request.readUInt32LE(8);
     if(subOp===1){
      const urlLen=Math.min(request.readUInt32LE(12)||0,512);
+     const flags=request.readUInt32LE(16);
      const urlStr=urlLen>0?request.subarray(32,32+urlLen).toString('utf8').replace(/\0.*$/, ''):'https://google.com';
-     console.log(`[WEB] Triggering S2 Browser Applet: "${urlStr}"...`);
-     const webRes=await webService.showWebPage({url:urlStr});
+     console.log(`[WEB] Triggering S2 Browser Applet: "${urlStr}" (flags=0x${flags.toString(16)})...`);
+     const webRes=await webService.showWebPage({url:urlStr, flags});
      console.log(`[WEB] S2 Browser Applet Finished. Result: 0x${webRes.result.toString(16)}, ExitReason: ${webRes.exitReason}`);
      payload=Buffer.alloc(16);
      payload.writeUInt32LE(webRes.result>>>0,0);
@@ -502,7 +554,12 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
    status=error.code==='ETIMEDOUT'?L.STATUS.timeout:L.STATUS.native;
    payload=Buffer.from(error.message).subarray(0,1024);
   }
-  reply.writeUInt32LE(status,4);reply.writeUInt32LE(payload.length,8);payload.copy(reply,32);await rpc.write(base+L.FIELD.response,reply);
- },async close(){await netSockets?.closeAll();await httpServer?.close();await hardware.close();}};
+   const reply=Buffer.alloc(Math.max(1056,32+payload.length));
+   reply.writeUInt32LE(sequence,0);
+   reply.writeUInt32LE(status,4);
+   reply.writeUInt32LE(payload.length,8);
+   payload.copy(reply,32);
+   await rpc.write(base+L.FIELD.response,reply);
+ },async close(){await netSockets?.closeAll();await httpServer?.close();await audioService?.close();await hardware.close();}};
 }
 module.exports={create,validateManifest};
