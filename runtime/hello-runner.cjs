@@ -540,16 +540,12 @@ async function main(directory, attempt = 'auto') {
       const atlasSlice = getEffectiveDataSlice(targetApp.files.data.bytes);
       const atlasLen = Math.min(atlasSlice.length, SLOT_STRIDE - 0x800);
 
-      // Write directly to GPU mapped slot memory on S2
-      await rpc.write(slotMapped, cmdBuf);
-      await rpc.write(slotMapped + 0x200, scratchState);
+      // Write directly to GPU mapped slot memory on S2 (pack header into a single write)
+      const slotHeader = Buffer.alloc(0x800);
+      cmdBuf.copy(slotHeader, 0);
+      scratchState.copy(slotHeader, 0x200);
+      await rpc.write(slotMapped, slotHeader);
       await rpc.write(slotMapped + 0x800, atlasSlice.subarray(0, atlasLen));
-
-      // Asynchronously mirror to tmp:/cache/ on console storage for persistence
-      if (fsService) {
-        fsService.writeBytesAt(`tmp:/cache/${name}-state.bin`, 0, targetApp.files.state.bytes).catch(() => {});
-        fsService.writeBytesAt(`tmp:/cache/${name}-data.bin`, 0, atlasSlice.subarray(0, atlasLen)).catch(() => {});
-      }
 
       const slotRecord = {
         slot: slotIndex,
@@ -594,18 +590,18 @@ async function main(directory, attempt = 'auto') {
           await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(3072));
         }
 
-        // 3. Restore target app's font atlas via on-console native memmove (256 KiB copied on-device in 0.05ms!)
-        await nativeMemmove(mapped + 1024, slotInfo.slotMapped + 0x800, slotInfo.atlasLen);
+        // 3. Restore target app's font atlas and scratch state in a single paired native memmove call!
+        await rpc.pair([
+          { offset: 0x5872f0, args: [mapped + 1024, slotInfo.slotMapped + 0x800, slotInfo.atlasLen, 0] },
+          { offset: 0x5872f0, args: [mapped + 784, slotInfo.slotMapped + 0x200, slotInfo.scratchLen, 0] }
+        ]);
         currentAtlasSlice = slotInfo.atlasSlice;
 
-        // 4. Reset app scratch state via on-console native memmove
-        await nativeMemmove(mapped + 784, slotInfo.slotMapped + 0x200, slotInfo.scratchLen);
-
-        // 5. Explicitly clear exit flags c.reserved.z and c.reserved.w on S2
+        // 4. Explicitly clear exit flags c.reserved.z and c.reserved.w on S2
         await rpc.write(mapped + 1016, Buffer.alloc(8));
       } else {
         // First-time load: stage into next available on-console slot
-        console.log(`[ON-DEMAND CACHE] Staging ${name} into GPU slot #${stagedSlots.size} and tmp:/cache/...`);
+        console.log(`[ON-DEMAND CACHE] Staging ${name} into GPU slot #${stagedSlots.size}...`);
         const slotIdx = stagedSlots.size < MAX_CACHED_SLOTS ? stagedSlots.size : (stagedSlots.size % MAX_CACHED_SLOTS);
         slotInfo = await stageAppToSlot(name, slotIdx);
 
@@ -620,37 +616,27 @@ async function main(directory, attempt = 'auto') {
         } else {
           await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(3072));
         }
-        await nativeMemmove(mapped + 1024, slotInfo.slotMapped + 0x800, slotInfo.atlasLen);
+        await rpc.pair([
+          { offset: 0x5872f0, args: [mapped + 1024, slotInfo.slotMapped + 0x800, slotInfo.atlasLen, 0] },
+          { offset: 0x5872f0, args: [mapped + 784, slotInfo.slotMapped + 0x200, slotInfo.scratchLen, 0] }
+        ]);
         currentAtlasSlice = slotInfo.atlasSlice;
-        await nativeMemmove(mapped + 784, slotInfo.slotMapped + 0x200, slotInfo.scratchLen);
         await rpc.write(mapped + 1016, Buffer.alloc(8));
 
         refreshCachedMask();
       }
 
-      // 5. Combine all held buttons across handheld (mapped + 8) and PAD_SOURCES (mapped + 0x7f0000 + 640) into c.state.y (mapped + 84)
-      let heldButtons = (await rpc.read(mapped + 8, 4)).readUInt32LE(0);
-      const padSrcBuf = await rpc.read(mapped + 0x7f0000 + 640, 320);
-      for (let i = 0; i < 5; i++) {
-        if ((padSrcBuf.readUInt32LE(i * 64 + 32) & 1) !== 0) {
-          heldButtons |= padSrcBuf.readUInt32LE(i * 64 + 8);
-        }
-      }
-      const heldBuf = Buffer.alloc(4);
-      heldBuf.writeUInt32LE(heldButtons >>> 0, 0);
-      await rpc.write(mapped + 84, heldBuf);
+      // Reset held buttons transition state cleanly
+      await rpc.write(mapped + 84, Buffer.alloc(4));
       activeAppId = name;
 
       // Update activeSlot and cachedMask in AppTable, and restore cachedMask in c.stats.x when in launcher
       refreshCachedMask();
       const slot = (name === 'launcher') ? 0 : (slotInfo ? slotInfo.slot : 0);
-      const slotBuf = Buffer.alloc(8);
-      slotBuf.writeBigUInt64LE(BigInt(slot), 0);
-      await rpc.write(APP_TABLE_OFFSET + 24, slotBuf);
-
-      const maskTableBuf = Buffer.alloc(8);
-      maskTableBuf.writeBigUInt64LE(BigInt(cachedMask), 0);
-      await rpc.write(APP_TABLE_OFFSET + 32, maskTableBuf);
+      const tableBuf = Buffer.alloc(16);
+      tableBuf.writeBigUInt64LE(BigInt(slot), 0);
+      tableBuf.writeBigUInt64LE(BigInt(cachedMask), 8);
+      await rpc.write(APP_TABLE_OFFSET + 24, tableBuf);
 
       if (name === 'launcher') {
         const maskBuf = Buffer.alloc(4);
@@ -682,11 +668,9 @@ async function main(directory, attempt = 'auto') {
           await rpc.write(mapped + 992, maskBuf);
           console.log('[LIVE UPDATE] Catalog updated:', launchableIds.join(', '));
         } else if (exitFlag !== 0) {
-          // Immediately clear exitFlag and actionCode on S2 to prevent re-triggering loops
-          await rpc.write(mapped + 1016, Buffer.alloc(8));
-
           if (activeAppId === 'launcher') {
             if (actionCode === 98) {
+              await rpc.write(mapped + 1016, Buffer.alloc(8));
               console.log('[EXIT] Closing Vulkan layer and returning to SmileBASIC...');
               closeLayerRequested = true;
               stop = true;
@@ -698,8 +682,12 @@ async function main(directory, attempt = 'auto') {
             console.log(`[LAUNCHER] Launch requested: actionCode=${actionCode}, idx=${idx} -> ${targetId} (catalog: ${launchableIds.length} apps)`);
             if (targetId) {
               console.log(`[LAUNCHER] Switching to app: ${targetId}`);
+              // Keep loading modal visible on screen (c.reserved.z = 1) until the new app is ready
               await ensureAppPrepared(targetId);
               await applyApp(targetId);
+              // applyApp has now swapped the GPU and cleanly zeroed c.reserved.z & c.reserved.w
+            } else {
+              await rpc.write(mapped + 1016, Buffer.alloc(8));
             }
           } else {
             console.log(`[LAUNCHER] Returning from ${activeAppId} to Homebrew Launcher...`);
