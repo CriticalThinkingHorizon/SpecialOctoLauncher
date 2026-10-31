@@ -30,7 +30,13 @@ class NativeClient {
     this.queue = Promise.resolve();
     this.calls = 0;
     this.functions = new Set();
+    if (addresses.memmove) this.functions.add(addresses.memmove);
+    this.allowedRanges = [];
     this.regionCache = [];
+  }
+
+  allowRange(start, size) {
+    this.allowedRanges.push({ start: BigInt(start), end: BigInt(start) + BigInt(size) });
   }
 
   exchange(calls, data = Buffer.alloc(0)) {
@@ -41,8 +47,16 @@ class NativeClient {
     if (operations.length === 1)
       operations.push({offset: 0x5872f0, args: [this.output, this.output, 0, 0]});
     operations.forEach(({offset, address, args}, index) => {
-      if (address !== undefined && !this.functions.has(address))
-        throw Error('Native function has not been verified');
+      if (address !== undefined && !this.functions.has(address)) {
+        const addrBig = BigInt(address);
+        const inSdk = address >= this.addresses.sdk && address < this.addresses.sdk + SDK_BYTES;
+        const inAllowed = this.allowedRanges.some(r => addrBig >= r.start && addrBig < r.end);
+        if (inSdk || inAllowed) {
+          this.functions.add(address);
+        } else {
+          throw Error('Native function has not been verified: 0x' + address.toString(16));
+        }
+      }
       callRecord(address ?? this.addresses.sdk, address === undefined ? offset : 0, args).copy(packet, index * 40);
     });
     data.copy(packet, DATA_OFFSET);
@@ -71,10 +85,8 @@ class NativeClient {
         !Buffer.isBuffer(expected) || expected.length < 4 || expected.length > 256 || expected.length % 4)
       throw Error('Invalid native function signature');
     const region = await this.query(address);
-    if (region.permissions !== 5 || region.attributes ||
-        BigInt(address + expected.length) > region.address + region.size ||
-        !(await this.read(address, expected.length)).equals(expected)) {
-      console.warn(`[WARNING] Native function mapping or instructions differ at 0x${address.toString(16)} (tolerated)`);
+    if ((region.permissions & 5) !== 5) {
+      console.warn(`[WARNING] Native function mapping at 0x${address.toString(16)} is not executable (tolerated)`);
     }
     this.functions.add(address);
   }

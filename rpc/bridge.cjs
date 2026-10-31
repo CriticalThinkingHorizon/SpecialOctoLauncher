@@ -24,6 +24,10 @@ async function serve(native) {
       await native.verifyFunction(request.address, Buffer.from(request.hex, 'hex'));
       return {verified: true};
     }
+    if (command === 'allow-range') {
+      native.allowRange(request.address, request.size);
+      return {allowed: true};
+    }
     if (command === 'call-address') {
       const reply = await native.callAddress(request.address, ...request.args);
       return {result: reply.result.toString(), output: reply.output.toString('base64')};

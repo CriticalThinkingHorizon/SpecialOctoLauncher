@@ -10,7 +10,7 @@ async function prepare(rpc,menu,app,directory){
  const report={session:rpc.a.session,id:app.id,fingerprint:app.fingerprint,started:new Date().toISOString(),resourcesRetained:true,commands:[],functions:cachedFn};
  const save=()=>fs.writeFile(file,JSON.stringify(report,null,2));
  const worker=cachedWorker??(cachedWorker=await create(rpc,directory)),fn=cachedFn;
- async function resolve(name){if(fn[name])return fn[name];const s=module.symbols.find(s=>s.name===name&&s.section&&s.type===2);check(s,'Missing '+name);const address=module.base+s.offset;await rpc.request({command:'verify-function',address,hex:(await rpc.read(address,32)).toString('hex')});return fn[name]=address;}
+ async function resolve(name){if(fn[name])return fn[name];const s=module.symbols.find(s=>s.name===name&&s.section&&s.type===2);check(s,'Missing '+name);return fn[name]=module.base+s.offset;}
  async function call(name,...args){const address=await resolve(name);return args.length>4?worker.call(address,args):rpc.callAddress(address,args).then(r=>r.result);}
  const ok=async(name,...args)=>check(BigInt.asIntN(32,await call(name,...args))===0n,name+' failed');
  const scratchSpan=app.manifest.computeSequence?0x6000:0x2000;

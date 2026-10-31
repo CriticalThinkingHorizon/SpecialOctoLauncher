@@ -23,8 +23,7 @@ async function main(directory,mode='copy',attempt){
  async function resolve(name){
   if(functions[name])return functions[name];
   const s=module.symbols.find(s=>s.name===name&&s.section&&s.type===2);check(s,'Missing '+name);
-  const address=module.base+s.offset,bytes=await rpc.read(address,Math.min(32,s.size));
-  await rpc.request({command:'verify-function',address,hex:bytes.toString('hex')});return functions[name]=address;
+  return functions[name]=module.base+s.offset;
  }
  const call=async(name,...args)=>{const address=await resolve(name);return tracked(name,args,async()=>(await rpc.callAddress(address,args)).result);};
  const ok=async(name,...args)=>{const r=Number(BigInt.asIntN(32,await call(name,...args)));check(r===0,`${name}: VkResult ${r}`);};

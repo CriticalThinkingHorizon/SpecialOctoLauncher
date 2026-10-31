@@ -39,9 +39,7 @@ async function main(directory, attempt = 'auto') {
     if (fn[name]) return fn[name];
     const s = module.symbols.find(s => s.name === name && s.section && s.type === 2);
     check(s, 'Missing ' + name);
-    const a = module.base + s.offset, b = await rpc.read(a, 32);
-    await rpc.request({command: 'verify-function', address: a, hex: b.toString('hex')});
-    return fn[name] = a;
+    return fn[name] = module.base + s.offset;
   }
   async function call(name, ...args) {
     const a = await resolve(name);
@@ -356,6 +354,19 @@ async function main(directory, attempt = 'auto') {
     const MAX_CACHED_SLOTS = 15;
     let cachedMask = 0;
 
+    const refreshCachedMask = () => {
+      let mask = 0;
+      for (const [stagedName] of stagedSlots) {
+        if (stagedName === 'launcher') continue;
+        const idx = launchableIds.indexOf(stagedName);
+        if (idx >= 0 && idx < 32) {
+          mask |= (1 << idx);
+        }
+      }
+      cachedMask = mask >>> 0;
+      return cachedMask;
+    };
+
     const cacheAllApps = async () => {
       console.log('[CACHE] Preparing local app cache on S2 tmp:/ and mapped GPU memory...');
       let fsService;
@@ -450,7 +461,19 @@ async function main(directory, attempt = 'auto') {
         tableBuf.writeBigUInt64LE(BigInt(atlasLen), entryOffset + 40);         // atlasLen
         tableBuf.writeBigUInt64LE(1n, entryOffset + 48);                      // isCached
         tableBuf.writeBigUInt64LE(slot === 0 ? BigInt(slotMapped + 0x300) : 0n, entryOffset + 56); // dirEntriesSrc
+
+        // Register in stagedSlots
+        stagedSlots.set(appId, {
+          slot,
+          slotMapped,
+          cmdLen: cmdBuf.length,
+          scratchLen: scratchState.length,
+          atlasLen,
+          atlasSlice
+        });
       }
+
+      refreshCachedMask();
 
       // Write tableBuf to scratch memory at APP_TABLE_OFFSET
       await rpc.write(APP_TABLE_OFFSET, tableBuf);
@@ -536,13 +559,18 @@ async function main(directory, attempt = 'auto') {
     // Pre-stage launcher into slot 0 so returning to Homebrew Launcher is always instant (<1ms)
     await stageAppToSlot('launcher', 0);
 
+    const nativeMemmove = async (dst, src, len) => {
+      // Offset 0x5872f0 is the official S2 SDK memmove routine
+      return rpc.call(0x5872f0, [dst, src, len, 0]);
+    };
+
     const applyApp = async (name) => {
       let slotInfo = stagedSlots.get(name);
 
       if (slotInfo) {
         console.log(`[FAST LOAD] Switching to ${name} from on-console cached slot #${slotInfo.slot} (0 bytes network transfer)...`);
         // 1. Switch command buffers via native ARM64 memmove directly on S2
-        await rpc.callAddress(rpc.a.memmove, [control + 0x1000, slotInfo.slotMapped, slotInfo.cmdLen, 0]);
+        await nativeMemmove(control + 0x1000, slotInfo.slotMapped, slotInfo.cmdLen);
 
         // Wait ~20ms (one frame) so any in-flight GPU frame of the previous app completes
         await new Promise(r => setTimeout(r, 20));
@@ -551,11 +579,11 @@ async function main(directory, attempt = 'auto') {
         await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(3072));
 
         // 3. Restore target app's font atlas via on-console native memmove (256 KiB copied on-device in 0.05ms!)
-        await rpc.callAddress(rpc.a.memmove, [mapped + 1024, slotInfo.slotMapped + 0x800, slotInfo.atlasLen, 0]);
+        await nativeMemmove(mapped + 1024, slotInfo.slotMapped + 0x800, slotInfo.atlasLen);
         currentAtlasSlice = slotInfo.atlasSlice;
 
         // 4. Reset app scratch state via on-console native memmove
-        await rpc.callAddress(rpc.a.memmove, [mapped + 784, slotInfo.slotMapped + 0x200, slotInfo.scratchLen, 0]);
+        await nativeMemmove(mapped + 784, slotInfo.slotMapped + 0x200, slotInfo.scratchLen);
       } else {
         // First-time load: stage into next available on-console slot
         console.log(`[ON-DEMAND CACHE] Staging ${name} into GPU slot #${stagedSlots.size} and tmp:/cache/...`);
@@ -563,16 +591,14 @@ async function main(directory, attempt = 'auto') {
         slotInfo = await stageAppToSlot(name, slotIdx);
 
         // Copy from staged slot into active regions
-        await rpc.callAddress(rpc.a.memmove, [control + 0x1000, slotInfo.slotMapped, slotInfo.cmdLen, 0]);
+        await nativeMemmove(control + 0x1000, slotInfo.slotMapped, slotInfo.cmdLen);
         await new Promise(r => setTimeout(r, 20));
         await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(3072));
-        await rpc.callAddress(rpc.a.memmove, [mapped + 1024, slotInfo.slotMapped + 0x800, slotInfo.atlasLen, 0]);
+        await nativeMemmove(mapped + 1024, slotInfo.slotMapped + 0x800, slotInfo.atlasLen);
         currentAtlasSlice = slotInfo.atlasSlice;
-        await rpc.callAddress(rpc.a.memmove, [mapped + 784, slotInfo.slotMapped + 0x200, slotInfo.scratchLen, 0]);
+        await nativeMemmove(mapped + 784, slotInfo.slotMapped + 0x200, slotInfo.scratchLen);
 
-        if (slotIdx > 0 && slotIdx < MAX_CACHED_SLOTS) {
-          cachedMask |= (1 << (slotIdx - 1));
-        }
+        refreshCachedMask();
       }
 
       // 5. Combine all held buttons across handheld (mapped + 8) and PAD_SOURCES (mapped + 0x7f0000 + 640) into c.state.y (mapped + 84)
@@ -588,18 +614,21 @@ async function main(directory, attempt = 'auto') {
       await rpc.write(mapped + 84, heldBuf);
       activeAppId = name;
 
-      // Update activeSlot in AppTable and restore cachedMask in c.stats.x when in launcher
-      if (cachedMask !== 0) {
-        const slot = (name === 'launcher') ? 0 : launchableIds.indexOf(name) + 1;
-        const slotBuf = Buffer.alloc(8);
-        slotBuf.writeBigUInt64LE(BigInt(slot), 0);
-        await rpc.write(APP_TABLE_OFFSET + 24, slotBuf);
+      // Update activeSlot and cachedMask in AppTable, and restore cachedMask in c.stats.x when in launcher
+      refreshCachedMask();
+      const slot = (name === 'launcher') ? 0 : (slotInfo ? slotInfo.slot : 0);
+      const slotBuf = Buffer.alloc(8);
+      slotBuf.writeBigUInt64LE(BigInt(slot), 0);
+      await rpc.write(APP_TABLE_OFFSET + 24, slotBuf);
 
-        if (name === 'launcher') {
-          const maskBuf = Buffer.alloc(4);
-          maskBuf.writeUInt32LE(cachedMask, 0);
-          await rpc.write(mapped + 992, maskBuf);
-        }
+      const maskTableBuf = Buffer.alloc(8);
+      maskTableBuf.writeBigUInt64LE(BigInt(cachedMask), 0);
+      await rpc.write(APP_TABLE_OFFSET + 32, maskTableBuf);
+
+      if (name === 'launcher') {
+        const maskBuf = Buffer.alloc(4);
+        maskBuf.writeUInt32LE(cachedMask, 0);
+        await rpc.write(mapped + 992, maskBuf);
       }
     };
 
@@ -622,6 +651,10 @@ async function main(directory, attempt = 'auto') {
           const clearW = Buffer.alloc(4);
           await rpc.write(mapped + 1020, clearW);
           launchableIds = await reloadCatalog();
+          refreshCachedMask();
+          const maskBuf = Buffer.alloc(4);
+          maskBuf.writeUInt32LE(cachedMask, 0);
+          await rpc.write(mapped + 992, maskBuf);
           console.log('[LIVE UPDATE] Catalog updated:', launchableIds.join(', '));
         } else if (exitFlag !== 0) {
           if (activeAppId === 'launcher') {

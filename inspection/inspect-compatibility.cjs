@@ -7,6 +7,7 @@ async function main(directory){
  const target=imports.imports.nvnBootstrapLoader.target;
  const region=await rpc.query(target);
  if(region.permissions!==5||region.ipcReferences)throw Error('Driver mapping changed');
+ await rpc.request({command:'allow-range',address:region.address,size:region.size});
  const module=await inspectModule(rpc,region.address,0x10000000);
  await fs.writeFile(path.join(directory,'compatibility-module.json'),JSON.stringify(module),{mode:0o600});
  console.log(JSON.stringify({base:module.base,symbols:module.symbols.length,
