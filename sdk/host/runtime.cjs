@@ -232,23 +232,9 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
        await rpc.write(gbBaseAddr+31*4,clearFlag);
       }else{
        const tmpPath=`tmp:/${target.name}`;
-       if(!target.inTmp&&target.serverPath){
-        const srvBuf=nodeFs.readFileSync(target.serverPath);
-        console.log(`[GB ROM] Downloading "${target.name}" (${srvBuf.length} B) from server roms/ -> S2 ${tmpPath}...`);
-        await fsService.deletePath(tmpPath).catch(()=>{});
-        for(let off=0;off<srvBuf.length;off+=16384){
-         const chunk=srvBuf.subarray(off,Math.min(off+16384,srvBuf.length));
-         await fsService.writeBytesAt(tmpPath,off,chunk);
-        }
-        console.log(`[GB ROM] Download to ${tmpPath} complete!`);
-       }
-       console.log(`[GB ROM] Reading "${tmpPath}" from S2 tmp:/ into DMG-01 GPU memory...`);
-       let romBuf=(await fsService.readRawFile(tmpPath,262144)).buffer;
-       if((!romBuf||romBuf.length<0x150)&&target.serverPath){
-        romBuf=nodeFs.readFileSync(target.serverPath);
-       }
-       if(romBuf&&romBuf.length>=0x150){
-        const stateWords=12072; // 64 CPU + 2048 VRAM + 2048 WRAM + 2048 ERAM + 40 OAM + 32 HRAM + 32 IO + 5760 LCD
+       const stateWords=12072; // 64 CPU + 2048 VRAM + 2048 WRAM + 2048 ERAM + 40 OAM + 32 HRAM + 32 IO + 5760 LCD
+       const romGpuAddr=gbBaseAddr+stateWords*4;
+       const buildStateBuf=(mbcType)=>{
         const stateBuf=Buffer.alloc(stateWords*4);
         stateBuf.writeUInt32LE(0x01B0,0*4);  // AF
         stateBuf.writeUInt32LE(0x0013,1*4);  // BC
@@ -277,20 +263,51 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
         stateBuf.writeUInt32LE(0xF8,24*4);   // TAC
         stateBuf.writeUInt32LE(1,25*4);      // ROM_BANK
         stateBuf.writeUInt32LE(0,26*4);      // RAM_BANK
-        stateBuf.writeUInt32LE(romBuf[0x0147]||0,27*4); // MBC_TYPE
+        stateBuf.writeUInt32LE(mbcType||0,27*4); // MBC_TYPE
         stateBuf.writeUInt32LE(0,28*4);      // MBC_MODE
         stateBuf.writeUInt32LE(0x30,29*4);   // JOYP_SEL
         stateBuf.writeUInt32LE(0,30*4);      // FRAME_COUNT
         stateBuf.writeUInt32LE(1,31*4);      // ROM_LOADED = 1
         stateBuf.write(target.name.slice(0,31),32*4,32,'utf8');
+        return stateBuf;
+       };
 
-        const paddedRomLen=Math.min(262144,Math.ceil(romBuf.length/4)*4);
-        const alignedRom=Buffer.alloc(paddedRomLen);
-        romBuf.copy(alignedRom,0,0,Math.min(romBuf.length,paddedRomLen));
+       if(target.inTmp){
+        console.log(`[GB ROM] Fast-loading "${tmpPath}" directly from S2 tmp:/ into DMG-01 GPU memory...`);
+        const rd=await fsService.readIntoAddress(tmpPath,romGpuAddr,262144);
+        if(rd.result===0&&rd.bytesRead>=0x150){
+         let mbcType=0;
+         if(target.serverPath&&nodeFs.existsSync(target.serverPath)){
+          const hdr=Buffer.alloc(0x150);
+          const fd=nodeFs.openSync(target.serverPath,'r');
+          nodeFs.readSync(fd,hdr,0,0x150,0);
+          nodeFs.closeSync(fd);
+          mbcType=hdr[0x0147]||0;
+         }else{
+          mbcType=(await rpc.read(romGpuAddr+0x0147,1))[0]||0;
+         }
+         await rpc.write(gbBaseAddr,buildStateBuf(mbcType));
+         console.log(`[GB ROM] Booted "${target.name}" (${rd.bytesRead} B, MBC=0x${mbcType.toString(16)}) from tmp:/ at PC=0x0100!`);
+        }else if(target.serverPath){
+         target.inTmp=false;
+        }
+       }
 
-        await rpc.write(gbBaseAddr,stateBuf);
-        await rpc.write(gbBaseAddr+stateWords*4,alignedRom);
-        console.log(`[GB ROM] Booted "${target.name}" (${alignedRom.length} bytes) at PC=0x0100!`);
+       if(!target.inTmp&&target.serverPath){
+        const romBuf=nodeFs.readFileSync(target.serverPath);
+        if(romBuf&&romBuf.length>=0x150){
+         const mbcType=romBuf[0x0147]||0;
+         const stateBuf=buildStateBuf(mbcType);
+         const paddedRomLen=Math.min(262144,Math.ceil(romBuf.length/4)*4);
+         const alignedRom=Buffer.alloc(paddedRomLen);
+         romBuf.copy(alignedRom,0,0,Math.min(romBuf.length,paddedRomLen));
+
+         console.log(`[GB ROM] Uploading "${target.name}" (${alignedRom.length} B, MBC=0x${mbcType.toString(16)}) -> GPU & S2 ${tmpPath}...`);
+         await rpc.write(gbBaseAddr,Buffer.concat([stateBuf,alignedRom]));
+         await fsService.deletePath(tmpPath).catch(()=>{});
+         await fsService.writeFromAddress(tmpPath,romGpuAddr,alignedRom.length);
+         console.log(`[GB ROM] Saved to ${tmpPath} and booted "${target.name}" at PC=0x0100!`);
+        }
        }
       }
      }

@@ -1,18 +1,26 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
-layout(local_size_x=1) in;
+layout(local_size_x=144) in;
 #include "abi.glsl"
 #include "hb.glsl"
 #include "dmg.glsl"
 
 // -----------------------------------------------------------------------------
-// Sharp LR35902 Local CPU & I/O Registers (loaded/saved to GB_CPU_BASE)
+// Workgroup Shared State for 144-Thread Parallel Scanline PPU Rendering
 // -----------------------------------------------------------------------------
-uint rA, rF, rB, rC, rD, rE, rH, rL;
+shared uint sDoRender;
+shared uvec2 sLineRegs[144]; // .x = LCDC|(BGP<<8)|(OBP0<<16)|(OBP1<<24), .y = SCX|(SCY<<8)|(WX<<16)|(WY<<24)
+shared uint sOAM[40];        // Cached 160-byte OAM table in fast on-chip shared memory
+
+// -----------------------------------------------------------------------------
+// Sharp LR35902 Local CPU & I/O Registers (Thread 0, loaded/saved to GB_CPU_BASE)
+// -----------------------------------------------------------------------------
+uint rA, rF, rBCDE, rHL;
 uint rSP, rPC, rIME, rHalted;
 uint rLCDC, rSTAT, rSCY, rSCX, rLY, rLYC, rBGP, rOBP0, rOBP1, rWY, rWX;
 uint rIF, rIE, rDIV, rTIMA, rTMA, rTAC;
 uint rRomBank, rRamBank, rMbcType, rMbcMode, rJoypSel, rFrames;
+uint rDmaSrc;  // Non-zero (0x10000 | srcAddr) when $FF46 OAM DMA transfer is triggered
 uint gButtons; // Current S2 controller button bitmask
 
 const uint FLAG_Z = 0x80u;
@@ -27,14 +35,14 @@ void gbWriteByteAt(uint baseWord, uint byteOffset, uint val) {
 }
 
 uint getAF() { return ((rA & 0xFFu) << 8u) | (rF & 0xF0u); }
-uint getBC() { return ((rB & 0xFFu) << 8u) | (rC & 0xFFu); }
-uint getDE() { return ((rD & 0xFFu) << 8u) | (rE & 0xFFu); }
-uint getHL() { return ((rH & 0xFFu) << 8u) | (rL & 0xFFu); }
+uint getBC() { return (((rBCDE >> 0u) & 0xFFu) << 8u) | ((rBCDE >> 8u) & 0xFFu); }
+uint getDE() { return (((rBCDE >> 16u) & 0xFFu) << 8u) | ((rBCDE >> 24u) & 0xFFu); }
+uint getHL() { return rHL & 0xFFFFu; }
 
 void setAF(uint v) { rA = (v >> 8u) & 0xFFu; rF = v & 0xF0u; }
-void setBC(uint v) { rB = (v >> 8u) & 0xFFu; rC = v & 0xFFu; }
-void setDE(uint v) { rD = (v >> 8u) & 0xFFu; rE = v & 0xFFu; }
-void setHL(uint v) { rH = (v >> 8u) & 0xFFu; rL = v & 0xFFu; }
+void setBC(uint v) { rBCDE = (rBCDE & 0xFFFF0000u) | (((v >> 8u) & 0xFFu) << 0u) | ((v & 0xFFu) << 8u); }
+void setDE(uint v) { rBCDE = (rBCDE & 0x0000FFFFu) | (((v >> 8u) & 0xFFu) << 16u) | ((v & 0xFFu) << 24u); }
+void setHL(uint v) { rHL = v & 0xFFFFu; }
 
 void loadCPUState() {
     setAF(c.atlas[GB_CPU_BASE + 0u]);
@@ -68,6 +76,7 @@ void loadCPUState() {
     rMbcMode = c.atlas[GB_CPU_BASE + 28u];
     rJoypSel = c.atlas[GB_CPU_BASE + 29u] & 0x30u;
     rFrames  = c.atlas[GB_CPU_BASE + 30u];
+    rDmaSrc  = 0u;
 }
 
 void saveCPUState() {
@@ -105,53 +114,41 @@ void saveCPUState() {
 }
 
 // -----------------------------------------------------------------------------
-// DMG-01 Memory Bus (ROM + MBC1, VRAM, ERAM, WRAM, OAM, I/O, HRAM, IE)
+// DMG-01 Memory Bus (ROM + MBC1/MBC2/MBC3/MBC5, VRAM, ERAM, WRAM, OAM, I/O, HRAM)
 // -----------------------------------------------------------------------------
 uint readJOYP() {
     uint low = 0x0Fu;
     vec2 stick = hbStick(false);
-    // Bit 4 = 0 -> Direction keys selected
     if ((rJoypSel & 0x10u) == 0u) {
         if ((gButtons & HB_RIGHT) != 0u || stick.x >  0.35) low &= ~0x01u;
         if ((gButtons & HB_LEFT)  != 0u || stick.x < -0.35) low &= ~0x02u;
         if ((gButtons & HB_UP)    != 0u || stick.y < -0.35) low &= ~0x04u;
         if ((gButtons & HB_DOWN)  != 0u || stick.y >  0.35) low &= ~0x08u;
     }
-    // Bit 5 = 0 -> Action buttons selected
     if ((rJoypSel & 0x20u) == 0u) {
-        if ((gButtons & HB_A) != 0u)                    low &= ~0x01u; // A
-        if ((gButtons & HB_B) != 0u)                    low &= ~0x02u; // B
-        if ((gButtons & (HB_L | HB_R)) != 0u)           low &= ~0x04u; // Select
-        if ((gButtons & HB_PLUS) != 0u)                 low &= ~0x08u; // Start
+        if ((gButtons & HB_A) != 0u)          low &= ~0x01u;
+        if ((gButtons & HB_B) != 0u)          low &= ~0x02u;
+        if ((gButtons & (HB_L | HB_R)) != 0u) low &= ~0x04u;
+        if ((gButtons & HB_PLUS) != 0u)       low &= ~0x08u;
     }
     return 0xC0u | (rJoypSel & 0x30u) | low;
 }
 
 uint memRead(uint addr) {
     addr &= 0xFFFFu;
-    if (addr < 0x4000u) {
-        return gbReadByteAt(GB_ROM_BASE, addr);
-    }
+    if (addr < 0x4000u) return gbReadByteAt(GB_ROM_BASE, addr);
     if (addr < 0x8000u) {
         uint bank = max(rRomBank, 1u) & 15u;
-        uint romOff = (bank * 0x4000u) + (addr - 0x4000u);
-        return gbReadByteAt(GB_ROM_BASE, romOff & 0x3FFFFu);
+        return gbReadByteAt(GB_ROM_BASE, ((bank * 0x4000u) + (addr - 0x4000u)) & 0x3FFFFu);
     }
-    if (addr < 0xA000u) {
-        return gbReadByteAt(GB_VRAM_BASE, addr - 0x8000u);
-    }
+    if (addr < 0xA000u) return gbReadByteAt(GB_VRAM_BASE, addr - 0x8000u);
     if (addr < 0xC000u) {
-        return gbReadByteAt(GB_ERAM_BASE, addr - 0xA000u);
+        uint ramOff = (rMbcType == 5u || rMbcType == 6u) ? ((addr - 0xA000u) & 0x01FFu) : ((addr - 0xA000u) & 0x1FFFu);
+        return gbReadByteAt(GB_ERAM_BASE, ramOff);
     }
-    if (addr < 0xFE00u) {
-        return gbReadByteAt(GB_WRAM_BASE, (addr - 0xC000u) & 0x1FFFu);
-    }
-    if (addr < 0xFEA0u) {
-        return gbReadByteAt(GB_OAM_BASE, addr - 0xFE00u);
-    }
-    if (addr < 0xFF00u) {
-        return 0xFFu;
-    }
+    if (addr < 0xFE00u) return gbReadByteAt(GB_WRAM_BASE, (addr - 0xC000u) & 0x1FFFu);
+    if (addr < 0xFEA0u) return gbReadByteAt(GB_OAM_BASE, addr - 0xFE00u);
+    if (addr < 0xFF00u) return 0xFFu;
     if (addr < 0xFF80u) {
         if (addr == 0xFF00u) return readJOYP();
         if (addr == 0xFF04u) return (rDIV >> 8u) & 0xFFu;
@@ -172,57 +169,52 @@ uint memRead(uint addr) {
         if (addr == 0xFF4Bu) return rWX;
         return gbReadByteAt(GB_IO_BASE, addr - 0xFF00u);
     }
-    if (addr < 0xFFFFu) {
-        return gbReadByteAt(GB_HRAM_BASE, addr - 0xFF80u);
-    }
+    if (addr < 0xFFFFu) return gbReadByteAt(GB_HRAM_BASE, addr - 0xFF80u);
     return rIE;
 }
 
 void memWrite(uint addr, uint val) {
     addr &= 0xFFFFu;
     val &= 0xFFu;
-    if (addr < 0x2000u) {
-        return; // RAM Enable
-    }
     if (addr < 0x4000u) {
-        // MBC1 / MBC3 / MBC5 ROM Bank Number
-        uint b = val & 0x1Fu;
-        if (b == 0u) b = 1u;
-        rRomBank = (rRomBank & 0x60u) | b;
+        if (rMbcType == 5u || rMbcType == 6u) {
+            if ((addr & 0x0100u) != 0u) {
+                uint b = val & 0x0Fu;
+                rRomBank = (b == 0u) ? 1u : b;
+            }
+            return;
+        }
+        if (addr >= 0x2000u) {
+            uint b = val & 0x1Fu;
+            if (b == 0u) b = 1u;
+            rRomBank = (rRomBank & 0x60u) | b;
+        }
         return;
     }
     if (addr < 0x6000u) {
-        if (rMbcMode == 0u) {
-            rRomBank = (rRomBank & 0x1Fu) | ((val & 3u) << 5u);
-            if (rRomBank == 0u) rRomBank = 1u;
-        } else {
-            rRamBank = val & 3u;
+        if (rMbcType != 5u && rMbcType != 6u) {
+            if (rMbcMode == 0u) {
+                rRomBank = (rRomBank & 0x1Fu) | ((val & 3u) << 5u);
+                if (rRomBank == 0u) rRomBank = 1u;
+            } else {
+                rRamBank = val & 3u;
+            }
         }
         return;
     }
     if (addr < 0x8000u) {
-        rMbcMode = val & 1u;
+        if (rMbcType != 5u && rMbcType != 6u) rMbcMode = val & 1u;
         return;
     }
-    if (addr < 0xA000u) {
-        gbWriteByteAt(GB_VRAM_BASE, addr - 0x8000u, val);
-        return;
-    }
+    if (addr < 0xA000u) { gbWriteByteAt(GB_VRAM_BASE, addr - 0x8000u, val); return; }
     if (addr < 0xC000u) {
-        gbWriteByteAt(GB_ERAM_BASE, addr - 0xA000u, val);
+        if (rMbcType == 5u || rMbcType == 6u) gbWriteByteAt(GB_ERAM_BASE, (addr - 0xA000u) & 0x01FFu, (val & 0x0Fu) | 0xF0u);
+        else gbWriteByteAt(GB_ERAM_BASE, (addr - 0xA000u) & 0x1FFFu, val);
         return;
     }
-    if (addr < 0xFE00u) {
-        gbWriteByteAt(GB_WRAM_BASE, (addr - 0xC000u) & 0x1FFFu, val);
-        return;
-    }
-    if (addr < 0xFEA0u) {
-        gbWriteByteAt(GB_OAM_BASE, addr - 0xFE00u, val);
-        return;
-    }
-    if (addr < 0xFF00u) {
-        return;
-    }
+    if (addr < 0xFE00u) { gbWriteByteAt(GB_WRAM_BASE, (addr - 0xC000u) & 0x1FFFu, val); return; }
+    if (addr < 0xFEA0u) { gbWriteByteAt(GB_OAM_BASE, addr - 0xFE00u, val); return; }
+    if (addr < 0xFF00u) return;
     if (addr < 0xFF80u) {
         if (addr == 0xFF00u) { rJoypSel = val & 0x30u; return; }
         if (addr == 0xFF04u) { rDIV = 0u; return; }
@@ -236,14 +228,7 @@ void memWrite(uint addr, uint val) {
         if (addr == 0xFF43u) { rSCX = val; return; }
         if (addr == 0xFF44u) { return; }
         if (addr == 0xFF45u) { rLYC = val; return; }
-        if (addr == 0xFF46u) {
-            // OAM DMA Transfer: copy 160 bytes from (val << 8) to OAM (0xFE00..0xFE9F)
-            uint srcBase = val << 8u;
-            for (uint i = 0u; i < 160u; i++) {
-                gbWriteByteAt(GB_OAM_BASE, i, memRead(srcBase + i));
-            }
-            return;
-        }
+        if (addr == 0xFF46u) { rDmaSrc = (val << 8u) | 0x10000u; return; }
         if (addr == 0xFF47u) { rBGP = val; return; }
         if (addr == 0xFF48u) { rOBP0 = val; return; }
         if (addr == 0xFF49u) { rOBP1 = val; return; }
@@ -252,287 +237,246 @@ void memWrite(uint addr, uint val) {
         gbWriteByteAt(GB_IO_BASE, addr - 0xFF00u, val);
         return;
     }
-    if (addr < 0xFFFFu) {
-        gbWriteByteAt(GB_HRAM_BASE, addr - 0xFF80u, val);
-        return;
-    }
+    if (addr < 0xFFFFu) { gbWriteByteAt(GB_HRAM_BASE, addr - 0xFF80u, val); return; }
     rIE = val;
 }
 
-uint fetch8() {
-    uint v = memRead(rPC);
-    rPC = (rPC + 1u) & 0xFFFFu;
-    return v;
-}
-
-uint fetch16() {
-    uint lo = fetch8();
-    uint hi = fetch8();
-    return (hi << 8u) | lo;
-}
-
-void push16(uint v) {
-    rSP = (rSP - 1u) & 0xFFFFu;
-    memWrite(rSP, (v >> 8u) & 0xFFu);
-    rSP = (rSP - 1u) & 0xFFFFu;
-    memWrite(rSP, v & 0xFFu);
-}
-
-uint pop16() {
-    uint lo = memRead(rSP);
-    rSP = (rSP + 1u) & 0xFFFFu;
-    uint hi = memRead(rSP);
-    rSP = (rSP + 1u) & 0xFFFFu;
-    return (hi << 8u) | lo;
-}
-
-uint getReg8(uint idx) {
-    if (idx == 0u) return rB;
-    if (idx == 1u) return rC;
-    if (idx == 2u) return rD;
-    if (idx == 3u) return rE;
-    if (idx == 4u) return rH;
-    if (idx == 5u) return rL;
-    if (idx == 6u) return memRead(getHL());
+// Pure register helpers (NO memRead/memWrite calls inside -> zero inlining bloat!)
+uint getReg8Pure(uint idx, uint hlVal) {
+    if (idx < 4u) return (rBCDE >> (idx * 8u)) & 0xFFu;
+    if (idx == 4u) return (rHL >> 8u) & 0xFFu;
+    if (idx == 5u) return rHL & 0xFFu;
+    if (idx == 6u) return hlVal;
     return rA;
 }
 
-void setReg8(uint idx, uint val) {
+void setReg8Pure(uint idx, uint val, inout int wrAddr, inout uint wrVal) {
     val &= 0xFFu;
-    if (idx == 0u) rB = val;
-    else if (idx == 1u) rC = val;
-    else if (idx == 2u) rD = val;
-    else if (idx == 3u) rE = val;
-    else if (idx == 4u) rH = val;
-    else if (idx == 5u) rL = val;
-    else if (idx == 6u) memWrite(getHL(), val);
-    else rA = val;
-}
-
-void aluAdd(uint v, uint carry) {
-    uint res = rA + v + carry;
-    uint hc = (rA & 0xFu) + (v & 0xFu) + carry;
-    rF = (((res & 0xFFu) == 0u) ? FLAG_Z : 0u)
-       | ((hc > 0xFu) ? FLAG_H : 0u)
-       | ((res > 0xFFu) ? FLAG_C : 0u);
-    rA = res & 0xFFu;
-}
-
-void aluSub(uint v, uint carry, bool store) {
-    int res = int(rA) - int(v) - int(carry);
-    int hc = int(rA & 0xFu) - int(v & 0xFu) - int(carry);
-    uint r8 = uint(res) & 0xFFu;
-    rF = FLAG_N
-       | ((r8 == 0u) ? FLAG_Z : 0u)
-       | ((hc < 0) ? FLAG_H : 0u)
-       | ((res < 0) ? FLAG_C : 0u);
-    if (store) rA = r8;
-}
-
-void aluAnd(uint v) {
-    rA = (rA & v) & 0xFFu;
-    rF = FLAG_H | ((rA == 0u) ? FLAG_Z : 0u);
-}
-
-void aluXor(uint v) {
-    rA = (rA ^ v) & 0xFFu;
-    rF = (rA == 0u) ? FLAG_Z : 0u;
-}
-
-void aluOr(uint v) {
-    rA = (rA | v) & 0xFFu;
-    rF = (rA == 0u) ? FLAG_Z : 0u;
-}
-
-void addHL(uint v) {
-    uint hl = getHL();
-    uint res = hl + v;
-    uint hc = (hl & 0xFFFu) + (v & 0xFFFu);
-    rF = (rF & FLAG_Z)
-       | ((hc > 0xFFFu) ? FLAG_H : 0u)
-       | ((res > 0xFFFFu) ? FLAG_C : 0u);
-    setHL(res & 0xFFFFu);
-}
-
-uint execCB() {
-    uint op = fetch8();
-    uint reg = op & 7u;
-    uint val = getReg8(reg);
-    uint grp = op >> 6u;
-    uint sub = (op >> 3u) & 7u;
-
-    if (grp == 0u) {
-        uint res = 0u;
-        uint cOut = 0u;
-        if (sub == 0u) { // RLC
-            cOut = (val >> 7u) & 1u;
-            res = ((val << 1u) | cOut) & 0xFFu;
-        } else if (sub == 1u) { // RRC
-            cOut = val & 1u;
-            res = ((val >> 1u) | (cOut << 7u)) & 0xFFu;
-        } else if (sub == 2u) { // RL
-            uint cIn = (rF & FLAG_C) != 0u ? 1u : 0u;
-            cOut = (val >> 7u) & 1u;
-            res = ((val << 1u) | cIn) & 0xFFu;
-        } else if (sub == 3u) { // RR
-            uint cIn = (rF & FLAG_C) != 0u ? 1u : 0u;
-            cOut = val & 1u;
-            res = ((val >> 1u) | (cIn << 7u)) & 0xFFu;
-        } else if (sub == 4u) { // SLA
-            cOut = (val >> 7u) & 1u;
-            res = (val << 1u) & 0xFFu;
-        } else if (sub == 5u) { // SRA
-            cOut = val & 1u;
-            res = ((val >> 1u) | (val & 0x80u)) & 0xFFu;
-        } else if (sub == 6u) { // SWAP
-            res = (((val & 0x0Fu) << 4u) | ((val >> 4u) & 0x0Fu)) & 0xFFu;
-            cOut = 0u;
-        } else { // SRL
-            cOut = val & 1u;
-            res = (val >> 1u) & 0xFFu;
-        }
-        rF = ((res == 0u) ? FLAG_Z : 0u) | ((cOut != 0u) ? FLAG_C : 0u);
-        setReg8(reg, res);
-    } else if (grp == 1u) { // BIT b, r
-        bool z = ((val >> sub) & 1u) == 0u;
-        rF = (rF & FLAG_C) | FLAG_H | (z ? FLAG_Z : 0u);
-    } else if (grp == 2u) { // RES b, r
-        setReg8(reg, val & ~(1u << sub));
-    } else { // SET b, r
-        setReg8(reg, val | (1u << sub));
+    if (idx < 4u) {
+        uint sh = idx * 8u;
+        rBCDE = (rBCDE & ~(0xFFu << sh)) | (val << sh);
+    } else if (idx == 4u) {
+        rHL = (rHL & 0x00FFu) | (val << 8u);
+    } else if (idx == 5u) {
+        rHL = (rHL & 0xFF00u) | val;
+    } else if (idx == 6u) {
+        wrAddr = int(rHL);
+        wrVal = val;
+    } else {
+        rA = val;
     }
-    return (reg == 6u) ? 16u : 8u;
 }
 
-uint stepCPU() {
+void aluOp8(uint aluIdx, uint v) {
+    uint cIn = (rF & FLAG_C) != 0u ? 1u : 0u;
+    if (aluIdx == 0u || aluIdx == 1u) {
+        uint c = (aluIdx == 1u) ? cIn : 0u;
+        uint res = rA + v + c;
+        uint hc = (rA & 0xFu) + (v & 0xFu) + c;
+        rF = (((res & 0xFFu) == 0u) ? FLAG_Z : 0u) | ((hc > 0xFu) ? FLAG_H : 0u) | ((res > 0xFFu) ? FLAG_C : 0u);
+        rA = res & 0xFFu;
+    } else if (aluIdx == 2u || aluIdx == 3u || aluIdx == 7u) {
+        uint c = (aluIdx == 3u) ? cIn : 0u;
+        int res = int(rA) - int(v) - int(c);
+        int hc = int(rA & 0xFu) - int(v & 0xFu) - int(c);
+        uint r8 = uint(res) & 0xFFu;
+        rF = FLAG_N | ((r8 == 0u) ? FLAG_Z : 0u) | ((hc < 0) ? FLAG_H : 0u) | ((res < 0) ? FLAG_C : 0u);
+        if (aluIdx != 7u) rA = r8;
+    } else if (aluIdx == 4u) {
+        rA = (rA & v) & 0xFFu;
+        rF = FLAG_H | ((rA == 0u) ? FLAG_Z : 0u);
+    } else if (aluIdx == 5u) {
+        rA = (rA ^ v) & 0xFFu;
+        rF = (rA == 0u) ? FLAG_Z : 0u;
+    } else {
+        rA = (rA | v) & 0xFFu;
+        rF = (rA == 0u) ? FLAG_Z : 0u;
+    }
+}
+
+uint stepCPU(uint one) {
+    int wrAddr0 = -1;
+    uint wrVal0 = 0u;
+    int wrAddr1 = -1;
+    uint wrVal1 = 0u;
+    uint wrCount = 0u;
+    uint cycles = 4u;
+
     uint pending = rIE & rIF & 0x1Fu;
+    bool tookIrq = false;
     if (pending != 0u) {
         rHalted = 0u;
         if (rIME != 0u) {
             rIME = 0u;
             uint vec = 0x40u;
-            uint bit = 0u;
+            uint bit = 0x01u;
             if ((pending & 0x01u) != 0u)      { bit = 0x01u; vec = 0x40u; }
             else if ((pending & 0x02u) != 0u) { bit = 0x02u; vec = 0x48u; }
             else if ((pending & 0x04u) != 0u) { bit = 0x04u; vec = 0x50u; }
             else if ((pending & 0x08u) != 0u) { bit = 0x08u; vec = 0x58u; }
             else                              { bit = 0x10u; vec = 0x60u; }
             rIF &= ~bit;
-            push16(rPC);
+            rSP = (rSP - 2u) & 0xFFFFu;
+            wrAddr0 = int(rSP);
+            wrVal0  = rPC & 0xFFu;
+            wrAddr1 = int((rSP + 1u) & 0xFFFFu);
+            wrVal1  = (rPC >> 8u) & 0xFFu;
+            wrCount = 2u * one;
             rPC = vec;
-            return 20u;
+            cycles = 20u;
+            tookIrq = true;
         }
     }
-    if (rHalted != 0u) return 4u;
 
-    uint op = fetch8();
+    if (!tookIrq && rHalted == 0u) {
+        uint op = 0u, b1 = 0u, b2 = 0u, d16 = 0u;
+        uint memVal = 0u, popHi = 0u;
+        uint hl = getHL();
+        int rdAddr0 = -1;
+        int rdAddr1 = -1;
+
+        // ONE unified memRead call site for instruction fetch + indirect/stack reads!
+        uint rMax = 5u * one;
+        for (uint r = 0u; r < rMax; r++) {
+            uint rAddr = 0u;
+            if (r < 3u) {
+                rAddr = (rPC + r) & 0xFFFFu;
+            } else if (r == 3u) {
+                if (rdAddr0 < 0) break;
+                rAddr = uint(rdAddr0);
+            } else {
+                if (rdAddr1 < 0) break;
+                rAddr = uint(rdAddr1);
+            }
+
+            uint val = memRead(rAddr);
+
+            if (r == 0u) op = val;
+            else if (r == 1u) b1 = val;
+            else if (r == 2u) {
+                b2 = val;
+                d16 = (b2 << 8u) | b1;
+                if (op >= 0x40u && op <= 0xBFu) {
+                    if ((op & 7u) == 6u) rdAddr0 = int(hl);
+                } else if (op == 0x34u || op == 0x35u || op == 0x2Au || op == 0x3Au) {
+                    rdAddr0 = int(hl);
+                } else if (op == 0xCBu && (b1 & 7u) == 6u) {
+                    rdAddr0 = int(hl);
+                } else if (op == 0x0Au) {
+                    rdAddr0 = int(getBC());
+                } else if (op == 0x1Au) {
+                    rdAddr0 = int(getDE());
+                } else if (op == 0xF0u) {
+                    rdAddr0 = int(0xFF00u + b1);
+                } else if (op == 0xF2u) {
+                    rdAddr0 = int(0xFF00u + ((rBCDE >> 8u) & 0xFFu));
+                } else if (op == 0xFAu) {
+                    rdAddr0 = int(d16);
+                } else if ((op & 0xCFu) == 0xC1u || op == 0xC9u || op == 0xD9u || (op & 0xE7u) == 0xC0u) {
+                    rdAddr0 = int(rSP);
+                    rdAddr1 = int((rSP + 1u) & 0xFFFFu);
+                }
+            }
+            else if (r == 3u) memVal = val;
+            else popHi = val;
+        }
+
+        rPC = (rPC + 1u) & 0xFFFFu;
+        uint popVal = (popHi << 8u) | memVal;
+        int wrAddr = -1;
+        uint wrVal = 0u;
+        int wr16Addr = -1;
+        uint wr16Val = 0u;
 
     // 0x40..0x7F: LD r, r' (and HALT at 0x76)
     if (op >= 0x40u && op <= 0x7Fu) {
-        if (op == 0x76u) { rHalted = 1u; return 4u; }
-        uint dst = (op >> 3u) & 7u;
-        uint src = op & 7u;
-        setReg8(dst, getReg8(src));
-        return (dst == 6u || src == 6u) ? 8u : 4u;
+        if (op == 0x76u) {
+            rHalted = 1u;
+        } else {
+            uint dst = (op >> 3u) & 7u;
+            uint src = op & 7u;
+            setReg8Pure(dst, getReg8Pure(src, memVal), wrAddr, wrVal);
+            cycles = (dst == 6u || src == 6u) ? 8u : 4u;
+        }
     }
-
     // 0x80..0xBF: ALU A, r
-    if (op >= 0x80u && op <= 0xBFu) {
-        uint aluOp = (op >> 3u) & 7u;
+    else if (op >= 0x80u && op <= 0xBFu) {
         uint src = op & 7u;
-        uint v = getReg8(src);
-        uint cIn = (rF & FLAG_C) != 0u ? 1u : 0u;
-        if (aluOp == 0u) aluAdd(v, 0u);
-        else if (aluOp == 1u) aluAdd(v, cIn);
-        else if (aluOp == 2u) aluSub(v, 0u, true);
-        else if (aluOp == 3u) aluSub(v, cIn, true);
-        else if (aluOp == 4u) aluAnd(v);
-        else if (aluOp == 5u) aluXor(v);
-        else if (aluOp == 6u) aluOr(v);
-        else aluSub(v, 0u, false);
-        return (src == 6u) ? 8u : 4u;
+        aluOp8((op >> 3u) & 7u, getReg8Pure(src, memVal));
+        cycles = (src == 6u) ? 8u : 4u;
     }
-
-    if (op == 0x00u) return 4u; // NOP
-    if (op == 0x08u) {
-        uint a = fetch16();
-        memWrite(a, rSP & 0xFFu);
-        memWrite(a + 1u, (rSP >> 8u) & 0xFFu);
-        return 20u;
+    // 0x08: LD (a16), SP
+    else if (op == 0x08u) {
+        rPC = (rPC + 2u) & 0xFFFFu;
+        wr16Addr = int(d16);
+        wr16Val = rSP;
+        cycles = 20u;
     }
-
     // 16-bit loads & arith
-    if ((op & 0xCFu) == 0x01u) {
+    else if ((op & 0xCFu) == 0x01u) {
+        rPC = (rPC + 2u) & 0xFFFFu;
         uint rp = (op >> 4u) & 3u;
-        uint v = fetch16();
-        if (rp == 0u) setBC(v);
-        else if (rp == 1u) setDE(v);
-        else if (rp == 2u) setHL(v);
-        else rSP = v;
-        return 12u;
+        if (rp == 0u) setBC(d16);
+        else if (rp == 1u) setDE(d16);
+        else if (rp == 2u) setHL(d16);
+        else rSP = d16;
+        cycles = 12u;
     }
-    if ((op & 0xCFu) == 0x09u) {
+    else if ((op & 0xCFu) == 0x09u) {
         uint rp = (op >> 4u) & 3u;
-        uint v = (rp == 0u) ? getBC() : (rp == 1u) ? getDE() : (rp == 2u) ? getHL() : rSP;
-        addHL(v);
-        return 8u;
+        uint v = (rp == 0u) ? getBC() : (rp == 1u) ? getDE() : (rp == 2u) ? hl : rSP;
+        uint res = hl + v;
+        uint hc = (hl & 0xFFFu) + (v & 0xFFFu);
+        rF = (rF & FLAG_Z) | ((hc > 0xFFFu) ? FLAG_H : 0u) | ((res > 0xFFFFu) ? FLAG_C : 0u);
+        setHL(res & 0xFFFFu);
+        cycles = 8u;
     }
-    if ((op & 0xCFu) == 0x03u) {
+    else if ((op & 0xCFu) == 0x03u || (op & 0xCFu) == 0x0Bu) {
         uint rp = (op >> 4u) & 3u;
-        if (rp == 0u) setBC((getBC() + 1u) & 0xFFFFu);
-        else if (rp == 1u) setDE((getDE() + 1u) & 0xFFFFu);
-        else if (rp == 2u) setHL((getHL() + 1u) & 0xFFFFu);
-        else rSP = (rSP + 1u) & 0xFFFFu;
-        return 8u;
+        uint d = ((op & 0x08u) == 0u) ? 1u : 0xFFFFu;
+        if (rp == 0u) setBC((getBC() + d) & 0xFFFFu);
+        else if (rp == 1u) setDE((getDE() + d) & 0xFFFFu);
+        else if (rp == 2u) setHL((hl + d) & 0xFFFFu);
+        else rSP = (rSP + d) & 0xFFFFu;
+        cycles = 8u;
     }
-    if ((op & 0xCFu) == 0x0Bu) {
-        uint rp = (op >> 4u) & 3u;
-        if (rp == 0u) setBC((getBC() - 1u) & 0xFFFFu);
-        else if (rp == 1u) setDE((getDE() - 1u) & 0xFFFFu);
-        else if (rp == 2u) setHL((getHL() - 1u) & 0xFFFFu);
-        else rSP = (rSP - 1u) & 0xFFFFu;
-        return 8u;
-    }
-
     // 8-bit INC / DEC / LD r, d8
-    if ((op & 0xC7u) == 0x04u) {
+    else if ((op & 0xC7u) == 0x04u) {
         uint reg = (op >> 3u) & 7u;
-        uint v = getReg8(reg);
+        uint v = getReg8Pure(reg, memVal);
         uint res = (v + 1u) & 0xFFu;
         rF = (rF & FLAG_C) | ((res == 0u) ? FLAG_Z : 0u) | (((v & 0xFu) == 0xFu) ? FLAG_H : 0u);
-        setReg8(reg, res);
-        return (reg == 6u) ? 12u : 4u;
+        setReg8Pure(reg, res, wrAddr, wrVal);
+        cycles = (reg == 6u) ? 12u : 4u;
     }
-    if ((op & 0xC7u) == 0x05u) {
+    else if ((op & 0xC7u) == 0x05u) {
         uint reg = (op >> 3u) & 7u;
-        uint v = getReg8(reg);
+        uint v = getReg8Pure(reg, memVal);
         uint res = (v - 1u) & 0xFFu;
         rF = (rF & FLAG_C) | FLAG_N | ((res == 0u) ? FLAG_Z : 0u) | (((v & 0xFu) == 0u) ? FLAG_H : 0u);
-        setReg8(reg, res);
-        return (reg == 6u) ? 12u : 4u;
+        setReg8Pure(reg, res, wrAddr, wrVal);
+        cycles = (reg == 6u) ? 12u : 4u;
     }
-    if ((op & 0xC7u) == 0x06u) {
+    else if ((op & 0xC7u) == 0x06u) {
+        rPC = (rPC + 1u) & 0xFFFFu;
         uint reg = (op >> 3u) & 7u;
-        setReg8(reg, fetch8());
-        return (reg == 6u) ? 12u : 8u;
+        setReg8Pure(reg, b1, wrAddr, wrVal);
+        cycles = (reg == 6u) ? 12u : 8u;
     }
-
     // Indirect loads
-    if (op == 0x02u) { memWrite(getBC(), rA); return 8u; }
-    if (op == 0x12u) { memWrite(getDE(), rA); return 8u; }
-    if (op == 0x22u) { uint hl = getHL(); memWrite(hl, rA); setHL((hl + 1u) & 0xFFFFu); return 8u; }
-    if (op == 0x32u) { uint hl = getHL(); memWrite(hl, rA); setHL((hl - 1u) & 0xFFFFu); return 8u; }
-    if (op == 0x0Au) { rA = memRead(getBC()); return 8u; }
-    if (op == 0x1Au) { rA = memRead(getDE()); return 8u; }
-    if (op == 0x2Au) { uint hl = getHL(); rA = memRead(hl); setHL((hl + 1u) & 0xFFFFu); return 8u; }
-    if (op == 0x3Au) { uint hl = getHL(); rA = memRead(hl); setHL((hl - 1u) & 0xFFFFu); return 8u; }
-
+    else if (op == 0x02u) { wrAddr = int(getBC()); wrVal = rA; cycles = 8u; }
+    else if (op == 0x12u) { wrAddr = int(getDE()); wrVal = rA; cycles = 8u; }
+    else if (op == 0x22u) { wrAddr = int(hl); wrVal = rA; setHL((hl + 1u) & 0xFFFFu); cycles = 8u; }
+    else if (op == 0x32u) { wrAddr = int(hl); wrVal = rA; setHL((hl - 1u) & 0xFFFFu); cycles = 8u; }
+    else if (op == 0x0Au || op == 0x1Au) { rA = memVal; cycles = 8u; }
+    else if (op == 0x2Au) { rA = memVal; setHL((hl + 1u) & 0xFFFFu); cycles = 8u; }
+    else if (op == 0x3Au) { rA = memVal; setHL((hl - 1u) & 0xFFFFu); cycles = 8u; }
     // Accumulator rotates & flags
-    if (op == 0x07u) { uint cOut = (rA >> 7u) & 1u; rA = ((rA << 1u) | cOut) & 0xFFu; rF = (cOut != 0u) ? FLAG_C : 0u; return 4u; }
-    if (op == 0x0Fu) { uint cOut = rA & 1u; rA = ((rA >> 1u) | (cOut << 7u)) & 0xFFu; rF = (cOut != 0u) ? FLAG_C : 0u; return 4u; }
-    if (op == 0x17u) { uint cIn = (rF & FLAG_C) != 0u ? 1u : 0u; uint cOut = (rA >> 7u) & 1u; rA = ((rA << 1u) | cIn) & 0xFFu; rF = (cOut != 0u) ? FLAG_C : 0u; return 4u; }
-    if (op == 0x1Fu) { uint cIn = (rF & FLAG_C) != 0u ? 1u : 0u; uint cOut = rA & 1u; rA = ((rA >> 1u) | (cIn << 7u)) & 0xFFu; rF = (cOut != 0u) ? FLAG_C : 0u; return 4u; }
-    if (op == 0x27u) {
+    else if (op == 0x07u) { uint cOut = (rA >> 7u) & 1u; rA = ((rA << 1u) | cOut) & 0xFFu; rF = (cOut != 0u) ? FLAG_C : 0u; }
+    else if (op == 0x0Fu) { uint cOut = rA & 1u; rA = ((rA >> 1u) | (cOut << 7u)) & 0xFFu; rF = (cOut != 0u) ? FLAG_C : 0u; }
+    else if (op == 0x17u) { uint cIn = (rF & FLAG_C) != 0u ? 1u : 0u; uint cOut = (rA >> 7u) & 1u; rA = ((rA << 1u) | cIn) & 0xFFu; rF = (cOut != 0u) ? FLAG_C : 0u; }
+    else if (op == 0x1Fu) { uint cIn = (rF & FLAG_C) != 0u ? 1u : 0u; uint cOut = rA & 1u; rA = ((rA >> 1u) | (cIn << 7u)) & 0xFFu; rF = (cOut != 0u) ? FLAG_C : 0u; }
+    else if (op == 0x27u) {
         uint a = rA;
         if ((rF & FLAG_N) == 0u) {
             if ((rF & FLAG_C) != 0u || a > 0x99u) { a += 0x60u; rF |= FLAG_C; }
@@ -543,142 +487,178 @@ uint stepCPU() {
         }
         rA = a & 0xFFu;
         rF = (rF & (FLAG_N | FLAG_C)) | ((rA == 0u) ? FLAG_Z : 0u);
-        return 4u;
     }
-    if (op == 0x2Fu) { rA = (~rA) & 0xFFu; rF |= (FLAG_N | FLAG_H); return 4u; }
-    if (op == 0x37u) { rF = (rF & FLAG_Z) | FLAG_C; return 4u; }
-    if (op == 0x3Fu) { rF = (rF & FLAG_Z) | (((rF & FLAG_C) != 0u) ? 0u : FLAG_C); return 4u; }
-
+    else if (op == 0x2Fu) { rA = (~rA) & 0xFFu; rF |= (FLAG_N | FLAG_H); }
+    else if (op == 0x37u) { rF = (rF & FLAG_Z) | FLAG_C; }
+    else if (op == 0x3Fu) { rF = (rF & FLAG_Z) | (((rF & FLAG_C) != 0u) ? 0u : FLAG_C); }
     // Relative Jumps (JR)
-    if (op == 0x18u || (op & 0xE7u) == 0x20u) {
-        uint raw = fetch8();
-        int rel = (raw >= 128u) ? int(raw) - 256 : int(raw);
+    else if (op == 0x18u || (op & 0xE7u) == 0x20u) {
+        rPC = (rPC + 1u) & 0xFFFFu;
+        int rel = (b1 >= 128u) ? int(b1) - 256 : int(b1);
         bool cond = true;
         if (op == 0x20u) cond = (rF & FLAG_Z) == 0u;
         else if (op == 0x28u) cond = (rF & FLAG_Z) != 0u;
         else if (op == 0x30u) cond = (rF & FLAG_C) == 0u;
         else if (op == 0x38u) cond = (rF & FLAG_C) != 0u;
-        if (cond) {
-            rPC = uint(int(rPC) + rel) & 0xFFFFu;
-            return 12u;
-        }
-        return 8u;
+        if (cond) { rPC = uint(int(rPC) + rel) & 0xFFFFu; cycles = 12u; }
+        else cycles = 8u;
     }
-
     // Immediate ALU
-    if (op == 0xC6u) { aluAdd(fetch8(), 0u); return 8u; }
-    if (op == 0xCEu) { aluAdd(fetch8(), (rF & FLAG_C) != 0u ? 1u : 0u); return 8u; }
-    if (op == 0xD6u) { aluSub(fetch8(), 0u, true); return 8u; }
-    if (op == 0xDEu) { aluSub(fetch8(), (rF & FLAG_C) != 0u ? 1u : 0u, true); return 8u; }
-    if (op == 0xE6u) { aluAnd(fetch8()); return 8u; }
-    if (op == 0xEEu) { aluXor(fetch8()); return 8u; }
-    if (op == 0xF6u) { aluOr(fetch8()); return 8u; }
-    if (op == 0xFEu) { aluSub(fetch8(), 0u, false); return 8u; }
-
-    // Stack PUSH / POP
-    if ((op & 0xCFu) == 0xC1u) {
-        uint rp = (op >> 4u) & 3u;
-        uint v = pop16();
-        if (rp == 0u) setBC(v);
-        else if (rp == 1u) setDE(v);
-        else if (rp == 2u) setHL(v);
-        else setAF(v);
-        return 12u;
+    else if ((op & 0xC7u) == 0xC6u) {
+        rPC = (rPC + 1u) & 0xFFFFu;
+        aluOp8((op >> 3u) & 7u, b1);
+        cycles = 8u;
     }
-    if ((op & 0xCFu) == 0xC5u) {
+    // Stack POP / PUSH
+    else if ((op & 0xCFu) == 0xC1u) {
+        rSP = (rSP + 2u) & 0xFFFFu;
         uint rp = (op >> 4u) & 3u;
-        uint v = (rp == 0u) ? getBC() : (rp == 1u) ? getDE() : (rp == 2u) ? getHL() : getAF();
-        push16(v);
-        return 16u;
+        if (rp == 0u) setBC(popVal);
+        else if (rp == 1u) setDE(popVal);
+        else if (rp == 2u) setHL(popVal);
+        else setAF(popVal);
+        cycles = 12u;
     }
-
+    else if ((op & 0xCFu) == 0xC5u) {
+        uint rp = (op >> 4u) & 3u;
+        uint v = (rp == 0u) ? getBC() : (rp == 1u) ? getDE() : (rp == 2u) ? hl : getAF();
+        rSP = (rSP - 2u) & 0xFFFFu;
+        wr16Addr = int(rSP);
+        wr16Val = v;
+        cycles = 16u;
+    }
     // JP / CALL / RET / RST
-    if (op == 0xC3u || (op & 0xE7u) == 0xC2u) {
-        uint target = fetch16();
+    else if (op == 0xC3u || (op & 0xE7u) == 0xC2u) {
+        rPC = (rPC + 2u) & 0xFFFFu;
         bool cond = true;
         if (op == 0xC2u) cond = (rF & FLAG_Z) == 0u;
         else if (op == 0xCAu) cond = (rF & FLAG_Z) != 0u;
         else if (op == 0xD2u) cond = (rF & FLAG_C) == 0u;
         else if (op == 0xDAu) cond = (rF & FLAG_C) != 0u;
-        if (cond) { rPC = target; return 16u; }
-        return 12u;
+        if (cond) { rPC = d16; cycles = 16u; }
+        else cycles = 12u;
     }
-    if (op == 0xE9u) { rPC = getHL(); return 4u; }
-
-    if (op == 0xCDu || (op & 0xE7u) == 0xC4u) {
-        uint target = fetch16();
+    else if (op == 0xE9u) { rPC = hl; cycles = 4u; }
+    else if (op == 0xCDu || (op & 0xE7u) == 0xC4u) {
+        rPC = (rPC + 2u) & 0xFFFFu;
         bool cond = true;
         if (op == 0xC4u) cond = (rF & FLAG_Z) == 0u;
         else if (op == 0xCCu) cond = (rF & FLAG_Z) != 0u;
         else if (op == 0xD4u) cond = (rF & FLAG_C) == 0u;
         else if (op == 0xDCu) cond = (rF & FLAG_C) != 0u;
-        if (cond) { push16(rPC); rPC = target; return 24u; }
-        return 12u;
+        if (cond) {
+            rSP = (rSP - 2u) & 0xFFFFu;
+            wr16Addr = int(rSP);
+            wr16Val = rPC;
+            rPC = d16;
+            cycles = 24u;
+        } else {
+            cycles = 12u;
+        }
     }
-
-    if (op == 0xC9u) { rPC = pop16(); return 16u; }
-    if (op == 0xD9u) { rPC = pop16(); rIME = 1u; return 16u; }
-    if ((op & 0xE7u) == 0xC0u) {
+    else if (op == 0xC9u || op == 0xD9u) {
+        rSP = (rSP + 2u) & 0xFFFFu;
+        rPC = popVal;
+        if (op == 0xD9u) rIME = 1u;
+        cycles = 16u;
+    }
+    else if ((op & 0xE7u) == 0xC0u) {
         bool cond = false;
         if (op == 0xC0u) cond = (rF & FLAG_Z) == 0u;
         else if (op == 0xC8u) cond = (rF & FLAG_Z) != 0u;
         else if (op == 0xD0u) cond = (rF & FLAG_C) == 0u;
         else if (op == 0xD8u) cond = (rF & FLAG_C) != 0u;
-        if (cond) { rPC = pop16(); return 20u; }
-        return 8u;
+        if (cond) { rSP = (rSP + 2u) & 0xFFFFu; rPC = popVal; cycles = 20u; }
+        else cycles = 8u;
     }
-
-    if ((op & 0xC7u) == 0xC7u) {
-        push16(rPC);
+    else if ((op & 0xC7u) == 0xC7u) {
+        rSP = (rSP - 2u) & 0xFFFFu;
+        wr16Addr = int(rSP);
+        wr16Val = rPC;
         rPC = op & 0x38u;
-        return 16u;
+        cycles = 16u;
     }
-
     // High RAM & I/O loads
-    if (op == 0xE0u) { memWrite(0xFF00u + fetch8(), rA); return 12u; }
-    if (op == 0xF0u) { rA = memRead(0xFF00u + fetch8()); return 12u; }
-    if (op == 0xE2u) { memWrite(0xFF00u + rC, rA); return 8u; }
-    if (op == 0xF2u) { rA = memRead(0xFF00u + rC); return 8u; }
-    if (op == 0xEAu) { memWrite(fetch16(), rA); return 16u; }
-    if (op == 0xFAu) { rA = memRead(fetch16()); return 16u; }
-
+    else if (op == 0xE0u) { rPC = (rPC + 1u) & 0xFFFFu; wrAddr = int(0xFF00u + b1); wrVal = rA; cycles = 12u; }
+    else if (op == 0xF0u) { rPC = (rPC + 1u) & 0xFFFFu; rA = memVal; cycles = 12u; }
+    else if (op == 0xE2u) { wrAddr = int(0xFF00u + ((rBCDE >> 8u) & 0xFFu)); wrVal = rA; cycles = 8u; }
+    else if (op == 0xF2u) { rA = memVal; cycles = 8u; }
+    else if (op == 0xEAu) { rPC = (rPC + 2u) & 0xFFFFu; wrAddr = int(d16); wrVal = rA; cycles = 16u; }
+    else if (op == 0xFAu) { rPC = (rPC + 2u) & 0xFFFFu; rA = memVal; cycles = 16u; }
     // SP arithmetic
-    if (op == 0xE8u) {
-        uint raw = fetch8();
-        int rel = (raw >= 128u) ? int(raw) - 256 : int(raw);
+    else if (op == 0xE8u || op == 0xF8u) {
+        rPC = (rPC + 1u) & 0xFFFFu;
+        int rel = (b1 >= 128u) ? int(b1) - 256 : int(b1);
         uint res = uint(int(rSP) + rel) & 0xFFFFu;
-        rF = (((rSP & 0xFu) + (raw & 0xFu)) > 0xFu ? FLAG_H : 0u)
-           | (((rSP & 0xFFu) + raw) > 0xFFu ? FLAG_C : 0u);
-        rSP = res;
-        return 16u;
+        rF = (((rSP & 0xFu) + (b1 & 0xFu)) > 0xFu ? FLAG_H : 0u)
+           | (((rSP & 0xFFu) + b1) > 0xFFu ? FLAG_C : 0u);
+        if (op == 0xE8u) { rSP = res; cycles = 16u; }
+        else { setHL(res); cycles = 12u; }
     }
-    if (op == 0xF8u) {
-        uint raw = fetch8();
-        int rel = (raw >= 128u) ? int(raw) - 256 : int(raw);
-        uint res = uint(int(rSP) + rel) & 0xFFFFu;
-        rF = (((rSP & 0xFu) + (raw & 0xFu)) > 0xFu ? FLAG_H : 0u)
-           | (((rSP & 0xFFu) + raw) > 0xFFu ? FLAG_C : 0u);
-        setHL(res);
-        return 12u;
+    else if (op == 0xF9u) { rSP = hl; cycles = 8u; }
+    else if (op == 0xF3u) { rIME = 0u; }
+    else if (op == 0xFBu) { rIME = 1u; }
+    else if (op == 0xCBu) {
+        rPC = (rPC + 1u) & 0xFFFFu;
+        uint reg = b1 & 7u;
+        uint val = getReg8Pure(reg, memVal);
+        uint grp = b1 >> 6u;
+        uint sub = (b1 >> 3u) & 7u;
+        if (grp == 1u) {
+            bool z = ((val >> sub) & 1u) == 0u;
+            rF = (rF & FLAG_C) | FLAG_H | (z ? FLAG_Z : 0u);
+            cycles = (reg == 6u) ? 12u : 8u;
+        } else {
+            uint res = 0u;
+            if (grp == 0u) {
+                uint cOut = 0u;
+                uint cIn = (rF & FLAG_C) != 0u ? 1u : 0u;
+                if (sub == 0u)      { cOut = (val >> 7u) & 1u; res = ((val << 1u) | cOut) & 0xFFu; }
+                else if (sub == 1u) { cOut = val & 1u; res = ((val >> 1u) | (cOut << 7u)) & 0xFFu; }
+                else if (sub == 2u) { cOut = (val >> 7u) & 1u; res = ((val << 1u) | cIn) & 0xFFu; }
+                else if (sub == 3u) { cOut = val & 1u; res = ((val >> 1u) | (cIn << 7u)) & 0xFFu; }
+                else if (sub == 4u) { cOut = (val >> 7u) & 1u; res = (val << 1u) & 0xFFu; }
+                else if (sub == 5u) { cOut = val & 1u; res = ((val >> 1u) | (val & 0x80u)) & 0xFFu; }
+                else if (sub == 6u) { res = (((val & 0x0Fu) << 4u) | ((val >> 4u) & 0x0Fu)) & 0xFFu; }
+                else                { cOut = val & 1u; res = (val >> 1u) & 0xFFu; }
+                rF = ((res == 0u) ? FLAG_Z : 0u) | ((cOut != 0u) ? FLAG_C : 0u);
+            } else if (grp == 2u) {
+                res = val & ~(1u << sub);
+            } else {
+                res = val | (1u << sub);
+            }
+            setReg8Pure(reg, res, wrAddr, wrVal);
+            cycles = (reg == 6u) ? 16u : 8u;
+        }
     }
-    if (op == 0xF9u) { rSP = getHL(); return 8u; }
 
-    if (op == 0xF3u) { rIME = 0u; return 4u; }
-    if (op == 0xFBu) { rIME = 1u; return 4u; }
-    if (op == 0xCBu) return execCB();
+        // Unified memory write setup
+        if (wrAddr >= 0) {
+            wrAddr0 = wrAddr;
+            wrVal0  = wrVal;
+            wrCount = 1u * one;
+        } else if (wr16Addr >= 0) {
+            wrAddr0 = wr16Addr;
+            wrVal0  = wr16Val & 0xFFu;
+            wrAddr1 = (wr16Addr + 1) & 0xFFFF;
+            wrVal1  = (wr16Val >> 8u) & 0xFFu;
+            wrCount = 2u * one;
+        }
+    }
 
-    return 4u;
+    // All 8-bit, 16-bit, and interrupt writes share this ONE memWrite call!
+    for (uint w = 0u; w < wrCount; w++) {
+        memWrite(uint(w == 0u ? wrAddr0 : wrAddr1), (w == 0u) ? wrVal0 : wrVal1);
+    }
+
+    return cycles;
 }
 
 void stepTimers(uint cycles) {
     rDIV = (rDIV + cycles) & 0xFFFFu;
     if ((rTAC & 4u) != 0u) {
-        uint step = 256u;
         uint sel = rTAC & 3u;
-        if (sel == 1u) step = 16u;
-        else if (sel == 2u) step = 64u;
-        else if (sel == 3u) step = 256u;
-        else step = 1024u;
+        uint step = (sel == 1u) ? 16u : (sel == 2u) ? 64u : (sel == 3u) ? 256u : 1024u;
         if (((rDIV - cycles) / step) != (rDIV / step)) {
             rTIMA++;
             if (rTIMA > 0xFFu) {
@@ -690,88 +670,115 @@ void stepTimers(uint cycles) {
 }
 
 // -----------------------------------------------------------------------------
-// DMG-01 PPU Scanline Renderer (BG + Window + OAM Sprites -> GB_LCD_BASE)
+// 144-Thread Parallel DMG-01 Scanline PPU Renderer (1 GPU Thread per Scanline!)
 // -----------------------------------------------------------------------------
-void renderScanline(uint line) {
-    if (line >= 144u) return;
+void renderScanlineParallel(uint line, uvec2 regs, uint one) {
+    uint lcdc = regs.x & 0xFFu;
+    uint bgp  = (regs.x >> 8u) & 0xFFu;
+    uint obp0 = (regs.x >> 16u) & 0xFFu;
+    uint obp1 = (regs.x >> 24u) & 0xFFu;
+    uint scx  = regs.y & 0xFFu;
+    uint scy  = (regs.y >> 8u) & 0xFFu;
+    uint wx   = (regs.y >> 16u) & 0xFFu;
+    uint wy   = (regs.y >> 24u) & 0xFFu;
 
-    if ((rLCDC & 0x80u) == 0u) {
-        for (uint w = 0u; w < 40u; w++) {
+    uint wordCount = 40u * one;
+    if ((lcdc & 0x80u) == 0u) {
+        for (uint w = 0u; w < wordCount; w++) {
             c.atlas[GB_LCD_BASE + line * 40u + w] = 0u;
         }
         return;
     }
 
-    bool bgEnable    = (rLCDC & 0x01u) != 0u;
-    bool objEnable   = (rLCDC & 0x02u) != 0u;
-    bool objTall     = (rLCDC & 0x04u) != 0u;
-    uint bgMapBase   = ((rLCDC & 0x08u) != 0u) ? 0x1C00u : 0x1800u;
-    bool unsignedData= (rLCDC & 0x10u) != 0u;
-    bool winEnable   = ((rLCDC & 0x20u) != 0u) && (line >= rWY) && (rWX <= 166u);
-    uint winMapBase  = ((rLCDC & 0x40u) != 0u) ? 0x1C00u : 0x1800u;
+    bool bgEnable     = (lcdc & 0x01u) != 0u;
+    bool objEnable    = (lcdc & 0x02u) != 0u;
+    bool objTall      = (lcdc & 0x04u) != 0u;
+    uint bgMapBase    = ((lcdc & 0x08u) != 0u) ? 0x1C00u : 0x1800u;
+    bool unsignedData = (lcdc & 0x10u) != 0u;
+    bool winEnable    = ((lcdc & 0x20u) != 0u) && (line >= wy) && (wx <= 166u);
+    uint winMapBase   = ((lcdc & 0x40u) != 0u) ? 0x1C00u : 0x1800u;
+    uint spriteH      = objTall ? 16u : 8u;
 
-    for (uint wordX = 0u; wordX < 40u; wordX++) {
+    // Pre-filter the 40 OAM sprites ONCE for this scanline into a 2-register 40-bit mask!
+    uvec2 hitMask = uvec2(0u, 0u);
+    uint hitCount = 0u;
+    if (objEnable) {
+        uint maxOam = 40u * one;
+        for (uint s = 0u; s < maxOam; s++) {
+            int sy = int(sOAM[s] & 0xFFu) - 16;
+            if (int(line) >= sy && int(line) < sy + int(spriteH)) {
+                if (s < 32u) hitMask.x |= (1u << s);
+                else         hitMask.y |= (1u << (s - 32u));
+                hitCount++;
+                if (hitCount >= 10u) break;
+            }
+        }
+    }
+
+    uint subMax = 4u * one;
+    for (uint wordX = 0u; wordX < wordCount; wordX++) {
         uint packedWord = 0u;
 
-        for (uint sub = 0u; sub < 4u; sub++) {
+        for (uint sub = 0u; sub < subMax; sub++) {
             uint x = (wordX << 2u) + sub;
             uint bgColorId = 0u;
-            uint shade = rBGP & 3u;
+            uint shade = bgp & 3u;
 
             if (bgEnable) {
-                bool inWin = winEnable && (int(x) >= int(rWX) - 7);
-                uint mapY = inWin ? (line - rWY) : ((line + rSCY) & 0xFFu);
-                uint mapX = inWin ? uint(int(x) - (int(rWX) - 7)) : ((x + rSCX) & 0xFFu);
+                bool inWin = winEnable && (int(x) >= int(wx) - 7);
+                uint mapY = inWin ? (line - wy) : ((line + scy) & 0xFFu);
+                uint mapX = inWin ? uint(int(x) - (int(wx) - 7)) : ((x + scx) & 0xFFu);
                 uint mapAddr = (inWin ? winMapBase : bgMapBase) + ((mapY >> 3u) * 32u) + (mapX >> 3u);
                 uint tileIdx = gbReadByteAt(GB_VRAM_BASE, mapAddr);
 
-                uint tileAddr = 0u;
-                if (unsignedData) {
-                    tileAddr = tileIdx * 16u;
-                } else {
-                    int sIdx = (tileIdx >= 128u) ? (int(tileIdx) - 256) : int(tileIdx);
-                    tileAddr = uint(0x1000 + sIdx * 16);
-                }
+                uint tileAddr = unsignedData
+                    ? (tileIdx * 16u)
+                    : uint(0x1000 + ((tileIdx >= 128u) ? (int(tileIdx) - 256) : int(tileIdx)) * 16);
 
                 uint rowAddr = tileAddr + ((mapY & 7u) * 2u);
                 uint lo = gbReadByteAt(GB_VRAM_BASE, rowAddr);
                 uint hi = gbReadByteAt(GB_VRAM_BASE, rowAddr + 1u);
                 uint bit = 7u - (mapX & 7u);
                 bgColorId = ((lo >> bit) & 1u) | (((hi >> bit) & 1u) << 1u);
-                shade = (rBGP >> (bgColorId * 2u)) & 3u;
+                shade = (bgp >> (bgColorId * 2u)) & 3u;
             }
 
-            if (objEnable) {
-                uint spriteH = objTall ? 16u : 8u;
-                for (uint s = 0u; s < 40u; s++) {
-                    uint w = c.atlas[GB_OAM_BASE + s];
+            uvec2 mask = hitMask;
+            while ((mask.x | mask.y) != 0u) {
+                uint s = 0u;
+                if (mask.x != 0u) {
+                    s = uint(findLSB(mask.x));
+                    mask.x &= mask.x - 1u;
+                } else {
+                    s = 32u + uint(findLSB(mask.y));
+                    mask.y &= mask.y - 1u;
+                }
+                uint w = sOAM[s];
+                int sx = int((w >> 8u) & 0xFFu) - 8;
+                if (int(x) >= sx && int(x) < sx + 8) {
                     int sy = int(w & 0xFFu) - 16;
-                    int sx = int((w >> 8u) & 0xFFu) - 8;
-                    if (int(line) >= sy && int(line) < sy + int(spriteH) &&
-                        int(x) >= sx && int(x) < sx + 8) {
-                        uint tile = (w >> 16u) & 0xFFu;
-                        uint attr = (w >> 24u) & 0xFFu;
-                        if (objTall) tile &= 0xFEu;
+                    uint tile = (w >> 16u) & 0xFFu;
+                    uint attr = (w >> 24u) & 0xFFu;
+                    if (objTall) tile &= 0xFEu;
 
-                        uint py = uint(int(line) - sy);
-                        uint px = uint(int(x) - sx);
-                        if ((attr & 0x40u) != 0u) py = (spriteH - 1u) - py;
-                        if ((attr & 0x20u) != 0u) px = 7u - px;
+                    uint py = uint(int(line) - sy);
+                    uint px = uint(int(x) - sx);
+                    if ((attr & 0x40u) != 0u) py = (spriteH - 1u) - py;
+                    if ((attr & 0x20u) != 0u) px = 7u - px;
 
-                        uint rowAddr = tile * 16u + py * 2u;
-                        uint lo = gbReadByteAt(GB_VRAM_BASE, rowAddr);
-                        uint hi = gbReadByteAt(GB_VRAM_BASE, rowAddr + 1u);
-                        uint bit = 7u - px;
-                        uint objColorId = ((lo >> bit) & 1u) | (((hi >> bit) & 1u) << 1u);
+                    uint rowAddr = tile * 16u + py * 2u;
+                    uint lo = gbReadByteAt(GB_VRAM_BASE, rowAddr);
+                    uint hi = gbReadByteAt(GB_VRAM_BASE, rowAddr + 1u);
+                    uint bit = 7u - px;
+                    uint objColorId = ((lo >> bit) & 1u) | (((hi >> bit) & 1u) << 1u);
 
-                        if (objColorId != 0u) {
-                            bool bgPrio = (attr & 0x80u) != 0u;
-                            if (!bgPrio || bgColorId == 0u) {
-                                uint pal = ((attr & 0x10u) != 0u) ? rOBP1 : rOBP0;
-                                shade = (pal >> (objColorId * 2u)) & 3u;
-                            }
-                            break;
+                    if (objColorId != 0u) {
+                        bool bgPrio = (attr & 0x80u) != 0u;
+                        if (!bgPrio || bgColorId == 0u) {
+                            uint pal = ((attr & 0x10u) != 0u) ? obp1 : obp0;
+                            shade = (pal >> (objColorId * 2u)) & 3u;
                         }
+                        break;
                     }
                 }
             }
@@ -784,232 +791,314 @@ void renderScanline(uint line) {
 }
 
 void main() {
-    uint pressed = hbPressed();
-    uint buttons = hbButtons();
-    gButtons = buttons;
-    c.motion.x += 1.0 / 60.0;
-    c.motion.w += 1.0;
-
-    // Universal Exit: Press MINUS to return to Homebrew Launcher
-    if ((pressed & HB_MINUS) != 0u) {
-        hbExit();
-        hbEndFrame();
-        return;
+    uint tid = gl_LocalInvocationID.x;
+    if (tid == 0u) {
+        sDoRender = 0u;
     }
+    barrier();
 
-    // X Button: Cycle GameBoy Color Palettes (Classic Olive -> Pocket Gray -> SGB Amber)
-    if ((pressed & HB_X) != 0u) {
-        uint palMode = (uint(c.transition.x) + 1u) % 3u;
-        c.transition.x = float(palMode);
-        hbVibrate(2u, 25u, 150u);
-    }
+    if (tid == 0u) {
+        uint pressed = hbPressed();
+        uint buttons = hbButtons();
+        gButtons = buttons;
+        c.motion.x += 1.0 / 60.0;
+        c.motion.w += 1.0;
 
-    // Y Button: Toggle Cartridge ROM Selector Menu (c.reserved.x: 0 = Menu Open, 1 = Playing)
-    if ((pressed & HB_Y) != 0u) {
-        c.reserved.x = (c.reserved.x == 0u) ? 1u : 0u;
-        if (c.reserved.x == 0u && !hbBusy()) {
-            hbFsListRoms();
-        }
-        hbVibrate(2u, 30u, 180u);
-        hbEndFrame();
-        return;
-    }
-
-    // Auto-fetch ROM list on startup if persistent ROM list buffer is empty
-    if (c.reserved.x == 0u && gbRomCount() == 0u && !hbBusy()) {
-        hbFsListRoms();
-    }
-
-    // -------------------------------------------------------------------------
-    // MODE A: CARTRIDGE ROM PICKER MENU OPEN (c.reserved.x == 0u)
-    // -------------------------------------------------------------------------
-    if (c.reserved.x == 0u) {
-        uint rawCount = gbRomCount();
-        if (rawCount == 0u) {
+        // Universal Exit: Press MINUS to return to Homebrew Launcher
+        if ((pressed & HB_MINUS) != 0u) {
+            hbExit();
             hbEndFrame();
-            return;
-        }
-        uint romCount = clamp(rawCount, 1u, 16u);
-        uint sel = c.reserved.y;
-        if (sel >= romCount) sel = 0u;
-
-        if ((pressed & HB_DOWN) != 0u) {
-            sel = (sel + 1u) % romCount;
-        }
-        if ((pressed & HB_UP) != 0u) {
-            sel = (sel + romCount - 1u) % romCount;
-        }
-        c.reserved.y = sel;
-
-        // Press A to download selected ROM to tmp:/ and boot it!
-        if ((pressed & HB_A) != 0u && !hbBusy()) {
-            if (hbFsLoadRom(sel)) {
-                c.reserved.x = 2u; // Waiting for ROM download & GPU load to finish
-            }
-        }
-        hbEndFrame();
-        return;
-    }
-
-    // Waiting for hbFsLoadRom(sel) to complete on host
-    if (c.reserved.x == 2u) {
-        if (!hbBusy()) {
-            c.reserved.x = 1u; // Start playing!
-        }
-        hbEndFrame();
-        return;
-    }
-
-    // -------------------------------------------------------------------------
-    // MODE B: REAL SHARP LR35902 .GB ROM EMULATOR (ROM_LOADED == 1)
-    // -------------------------------------------------------------------------
-    uint romLoaded = c.atlas[GB_CPU_BASE + 31u];
-    if (romLoaded == 1u) {
-        loadCPUState();
-
-        // Execute 154 scanlines (70,224 T-cycles per 60Hz frame)
-        for (uint line = 0u; line < 154u; line++) {
-            rLY = line;
-
-            if (rLY == rLYC) {
-                rSTAT |= 0x04u;
-                if ((rSTAT & 0x40u) != 0u) rIF |= 0x02u;
-            } else {
-                rSTAT &= ~0x04u;
-            }
-
-            if (line < 144u) {
-                rSTAT = (rSTAT & 0xFCu) | 2u;
-            } else if (line == 144u) {
-                rSTAT = (rSTAT & 0xFCu) | 1u;
-                rIF |= 0x01u; // VBlank Interrupt ($40)
-                if ((rSTAT & 0x10u) != 0u) rIF |= 0x02u;
-            }
-
-            uint lineCycles = 0u;
-            for (int step = 0; step < 64; step++) {
-                if (lineCycles >= 456u) break;
-                uint cyc = stepCPU();
-                lineCycles += cyc;
-                stepTimers(cyc);
-            }
-
-            if (line < 144u) {
-                renderScanline(line);
-                rSTAT = (rSTAT & 0xFCu) | 0u;
-            }
-        }
-
-        saveCPUState();
-        hbEndFrame();
-        return;
-    }
-
-    // -------------------------------------------------------------------------
-    // MODE C: BUILT-IN "SUPER S2 LAND" PLATFORMER (when entry #0 selected)
-    // -------------------------------------------------------------------------
-    uint state = c.game.x;
-    uint score = c.game.y;
-    uint coins = c.game.z;
-    uint lives = c.game.w;
-
-    float px = c.flow.x;
-    float py = c.flow.y;
-    float vx = c.flow.z;
-    float vy = c.flow.w;
-
-    int scrollX = c.piece.x;
-    int anim = c.piece.y;
-    int facing = c.piece.z;
-    int onGround = c.piece.w;
-
-    if (lives == 0u && (pressed & HB_A) != 0u) {
-        c.game.w = 3u;
-        c.game.y = 0u;
-        c.game.z = 0u;
-        c.flow = vec4(32.0, 96.0, 0.0, 0.0);
-        c.piece = ivec4(0, 0, 1, 1);
-        c.stats = uvec4(140u, 1u, 260u, 1u);
-        hbEndFrame();
-        return;
-    }
-
-    if (lives > 0u) {
-        vec2 stick = hbStick(false);
-        float moveX = stick.x;
-        if ((buttons & HB_LEFT) != 0u) moveX -= 1.0;
-        if ((buttons & HB_RIGHT) != 0u) moveX += 1.0;
-
-        float speed = ((buttons & HB_B) != 0u) ? 2.4 : 1.5;
-        vx = moveX * speed;
-
-        if (abs(vx) > 0.1) {
-            facing = (vx > 0.0) ? 1 : -1;
-            anim = (anim + 1) % 24;
         } else {
-            anim = 0;
-        }
+            // X Button: Cycle GameBoy Color Palettes (Classic Olive -> Pocket Gray -> SGB Amber)
+            if ((pressed & HB_X) != 0u) {
+                uint palMode = (uint(c.transition.x) + 1u) % 3u;
+                c.transition.x = float(palMode);
+                hbVibrate(2u, 25u, 150u);
+            }
 
-        if ((pressed & HB_A) != 0u && onGround == 1) {
-            vy = -5.8;
-            onGround = 0;
-            hbVibrate(2u, 30u, 160u);
-        }
-
-        vy = min(vy + 0.32, 6.0);
-        px += vx;
-        py += vy;
-
-        if (py >= 112.0) { py = 112.0; vy = 0.0; onGround = 1; }
-        if (px >= 76.0 && px <= 134.0 && py >= 80.0 && py <= 88.0 && vy >= 0.0) { py = 84.0; vy = 0.0; onGround = 1; }
-        if (px >= 166.0 && px <= 234.0 && py >= 60.0 && py <= 68.0 && vy >= 0.0) { py = 64.0; vy = 0.0; onGround = 1; }
-
-        px = max(px, 12.0);
-        if (int(px) - scrollX > 80) scrollX = int(px) - 80;
-        else if (int(px) - scrollX < 35 && scrollX > 0) scrollX = max(int(px) - 35, 0);
-
-        float e1x = float(c.stats.x);
-        float e1dir = (c.stats.y == 1u) ? 1.0 : -1.0;
-        e1x += e1dir * 0.65;
-        if (e1x > 180.0) { e1x = 180.0; c.stats.y = 0u; }
-        if (e1x < 110.0) { e1x = 110.0; c.stats.y = 1u; }
-        c.stats.x = uint(e1x);
-
-        if (abs(px - e1x) < 10.0 && abs(py - 112.0) < 12.0) {
-            if (vy > 0.0 && py < 110.0) {
-                vy = -4.8; score += 200u; c.stats.x = 9999u; hbVibrate(2u, 60u, 300u);
+            // Y Button: Toggle Cartridge ROM Selector Menu (c.reserved.x: 0 = Menu Open, 1 = Playing)
+            if ((pressed & HB_Y) != 0u) {
+                c.reserved.x = (c.reserved.x == 0u) ? 1u : 0u;
+                if (c.reserved.x == 0u && !hbBusy()) {
+                    hbFsListRoms();
+                }
+                hbVibrate(2u, 30u, 180u);
+                hbEndFrame();
             } else {
-                lives--; px -= float(facing) * 20.0; py -= 8.0; vy = -3.0; hbVibrate(2u, 80u, 450u);
+                // Auto-fetch ROM list on app entry (c.stats.w == 0u) or if ROM catalog is empty
+                if (c.reserved.x == 0u && (c.stats.w == 0u || gbRomCount() == 0u) && !hbBusy()) {
+                    if (hbFsListRoms()) {
+                        c.stats.w = 1u;
+                    }
+                }
+
+                // -------------------------------------------------------------
+                // MODE A: CARTRIDGE ROM PICKER MENU OPEN (c.reserved.x == 0u)
+                // -------------------------------------------------------------
+                if (c.reserved.x == 0u) {
+                    uint rawCount = gbRomCount();
+                    if (rawCount > 0u) {
+                        uint romCount = clamp(rawCount, 1u, 16u);
+                        uint sel = c.reserved.y;
+                        if (sel >= romCount) sel = 0u;
+
+                        if ((pressed & HB_DOWN) != 0u) {
+                            sel = (sel + 1u) % romCount;
+                        }
+                        if ((pressed & HB_UP) != 0u) {
+                            sel = (sel + romCount - 1u) % romCount;
+                        }
+                        c.reserved.y = sel;
+
+                        // Press A to download selected ROM to tmp:/ and boot it!
+                        if ((pressed & HB_A) != 0u && !hbBusy()) {
+                            if (hbFsLoadRom(sel)) {
+                                c.reserved.x = 2u; // Waiting for ROM download & GPU load to finish
+                            }
+                        }
+                    }
+                    hbEndFrame();
+                }
+                // Waiting for hbFsLoadRom(sel) to complete on host
+                else if (c.reserved.x == 2u) {
+                    if (!hbBusy()) {
+                        c.reserved.x = 1u; // Start playing!
+                    }
+                    hbEndFrame();
+                }
+                // -------------------------------------------------------------
+                // MODE B: REAL SHARP LR35902 .GB ROM EMULATOR (ROM_LOADED == 1)
+                // -------------------------------------------------------------
+                else if (c.atlas[GB_CPU_BASE + 31u] == 1u) {
+                    uint one = c.atlas[GB_CPU_BASE + 31u]; // Runtime 1u prevents spirv-opt loop unrolling
+                    loadCPUState();
+
+                    uint totalLines = 154u * one;
+                    uint maxSteps   = 114u * one;
+                    uint dmaWords   = 40u * one;
+
+                    // Execute 154 scanlines (70,224 T-cycles per 60Hz frame)
+                    for (uint line = 0u; line < totalLines; line++) {
+                        rLY = line;
+
+                        if (rLY == rLYC) {
+                            rSTAT |= 0x04u;
+                            if ((rSTAT & 0x40u) != 0u) rIF |= 0x02u;
+                        } else {
+                            rSTAT &= ~0x04u;
+                        }
+
+                        if (line < 144u) {
+                            rSTAT = (rSTAT & 0xFCu) | 2u; // Mode 2: OAM Scan (80 cycles)
+                            if ((rSTAT & 0x20u) != 0u) rIF |= 0x02u;
+                        } else if (line == 144u) {
+                            rSTAT = (rSTAT & 0xFCu) | 1u; // Mode 1: VBlank
+                            rIF |= 0x01u;                 // VBlank Interrupt ($40)
+                            if ((rSTAT & 0x10u) != 0u) rIF |= 0x02u;
+                        }
+
+                        bool latchedLine = false;
+                        uint lineCycles = 0u;
+                        for (uint step = 0u; step < maxSteps; step++) {
+                            if (lineCycles >= 456u) break;
+
+                            if (line < 144u) {
+                                if (lineCycles >= 252u && (rSTAT & 3u) != 0u) {
+                                    rSTAT = (rSTAT & 0xFCu) | 0u; // Mode 0: HBlank (204 cycles)
+                                    if ((rSTAT & 0x08u) != 0u) rIF |= 0x02u;
+                                } else if (lineCycles >= 80u && lineCycles < 252u && (rSTAT & 3u) != 3u) {
+                                    rSTAT = (rSTAT & 0xFCu) | 3u; // Mode 3: Drawing (172 cycles)
+                                    sLineRegs[line] = uvec2(
+                                        (rLCDC & 0xFFu) | ((rBGP & 0xFFu) << 8u) | ((rOBP0 & 0xFFu) << 16u) | ((rOBP1 & 0xFFu) << 24u),
+                                        (rSCX & 0xFFu)  | ((rSCY & 0xFFu) << 8u) | ((rWX & 0xFFu) << 16u)   | ((rWY & 0xFFu) << 24u)
+                                    );
+                                    latchedLine = true;
+                                }
+                            }
+
+                            uint cyc = stepCPU(one);
+                            lineCycles += cyc;
+                            stepTimers(cyc);
+
+                            if ((rDmaSrc & 0x10000u) != 0u) {
+                                uint src = rDmaSrc & 0xFF00u;
+                                rDmaSrc = 0u;
+                                uint srcWordBase = GB_WRAM_BASE + ((src & 0x1FFFu) >> 2u);
+                                if (src < 0x4000u) {
+                                    srcWordBase = GB_ROM_BASE + (src >> 2u);
+                                } else if (src < 0x8000u) {
+                                    srcWordBase = GB_ROM_BASE + ((((max(rRomBank, 1u) & 15u) * 0x4000u) + (src - 0x4000u)) >> 2u);
+                                } else if (src < 0xA000u) {
+                                    srcWordBase = GB_VRAM_BASE + ((src - 0x8000u) >> 2u);
+                                } else if (src < 0xC000u) {
+                                    srcWordBase = GB_ERAM_BASE + ((src - 0xA000u) >> 2u);
+                                }
+                                for (uint i = 0u; i < dmaWords; i++) {
+                                    c.atlas[GB_OAM_BASE + i] = c.atlas[srcWordBase + i];
+                                }
+                            }
+                        }
+
+                        if (line < 144u && !latchedLine) {
+                            sLineRegs[line] = uvec2(
+                                (rLCDC & 0xFFu) | ((rBGP & 0xFFu) << 8u) | ((rOBP0 & 0xFFu) << 16u) | ((rOBP1 & 0xFFu) << 24u),
+                                (rSCX & 0xFFu)  | ((rSCY & 0xFFu) << 8u) | ((rWX & 0xFFu) << 16u)   | ((rWY & 0xFFu) << 24u)
+                            );
+                        }
+                    }
+
+                    saveCPUState();
+                    hbEndFrame();
+                    sDoRender = 1u;
+                }
+                // -------------------------------------------------------------
+                // MODE C: BUILT-IN "SUPER S2 LAND" PLATFORMER (entry #0)
+                // -------------------------------------------------------------
+                else {
+                    uint state = c.game.x;
+                    uint score = c.game.y;
+                    uint coins = c.game.z;
+                    uint lives = c.game.w;
+
+                    float px = c.flow.x;
+                    float py = c.flow.y;
+                    float vx = c.flow.z;
+                    float vy = c.flow.w;
+
+                    if (state == 0u) {
+                        state = 1u;
+                        score = 0u;
+                        coins = 0u;
+                        lives = 3u;
+                        px = 28.0;
+                        py = 104.0;
+                        vx = 0.0;
+                        vy = 0.0;
+                        c.piece = ivec4(0, 0, 1, 0);
+                        c.stats = uvec4(120u, 1u, 200u, 1u);
+                    }
+
+                    if (lives == 0u) {
+                        if ((pressed & (HB_A | HB_PLUS)) != 0u) {
+                            c.game.x = 0u;
+                            hbVibrate(0u, 45u, 320u);
+                        }
+                        hbEndFrame();
+                    } else {
+                        vec2 stick = hbStick(false);
+                        float moveX = 0.0;
+                        if ((buttons & HB_LEFT)  != 0u || stick.x < -0.25) moveX -= 1.0;
+                        if ((buttons & HB_RIGHT) != 0u || stick.x >  0.25) moveX += 1.0;
+
+                        float runSpeed = ((buttons & HB_B) != 0u) ? 2.1 : 1.4;
+                        vx = mix(vx, moveX * runSpeed, 0.35);
+
+                        if (abs(moveX) > 0.1) {
+                            c.piece.z = (moveX > 0.0) ? 1 : -1;
+                            c.piece.y += 1;
+                        } else {
+                            c.piece.y = 0;
+                        }
+
+                        if ((pressed & HB_A) != 0u && c.piece.w == 1) {
+                            vy = -4.35;
+                            c.piece.w = 0;
+                            hbVibrate(1u, 18u, 220u);
+                        }
+
+                        vy += 0.22;
+                        px += vx;
+                        py += vy;
+
+                        px = clamp(px, 12.0, 260.0);
+                        c.piece.x = int(clamp(px - 64.0, 0.0, 112.0));
+                        c.piece.w = 0;
+
+                        if (vy > 0.0 && px >= 76.0 && px <= 134.0 && py >= 82.0 && py <= 88.0) {
+                            py = 84.0;
+                            vy = 0.0;
+                            c.piece.w = 1;
+                        }
+                        if (vy > 0.0 && px >= 166.0 && px <= 234.0 && py >= 62.0 && py <= 68.0) {
+                            py = 64.0;
+                            vy = 0.0;
+                            c.piece.w = 1;
+                        }
+                        if (py >= 112.0) {
+                            py = 112.0;
+                            vy = 0.0;
+                            c.piece.w = 1;
+                        }
+
+                        if ((coins & 1u) == 0u && length(vec2(px, py - 6.0) - vec2(105.0, 68.0)) < 10.0) {
+                            coins |= 1u;
+                            score += 100u;
+                            hbVibrate(1u, 30u, 300u);
+                        }
+                        if ((coins & 2u) == 0u && length(vec2(px, py - 6.0) - vec2(200.0, 48.0)) < 10.0) {
+                            coins |= 2u;
+                            score += 200u;
+                            hbVibrate(1u, 30u, 300u);
+                        }
+                        if (coins == 3u && px < 40.0) {
+                            coins = 0u;
+                            c.stats.x = 130u;
+                            c.stats.z = 210u;
+                        }
+
+                        int e1x = int(c.stats.x);
+                        int e1dir = (c.stats.y == 1u) ? 1 : -1;
+                        if (e1x < 500) {
+                            e1x += e1dir;
+                            if (e1x > 165) c.stats.y = 0u;
+                            if (e1x < 75)  c.stats.y = 1u;
+                            c.stats.x = uint(e1x);
+
+                            if (abs(px - float(e1x)) < 10.0 && abs(py - 112.0) < 10.0) {
+                                if (vy > 0.5) {
+                                    vy = -3.4;
+                                    score += 250u;
+                                    c.stats.x = 999u;
+                                    hbVibrate(0u, 40u, 420u);
+                                } else {
+                                    lives = (lives > 0u) ? (lives - 1u) : 0u;
+                                    px = 28.0;
+                                    py = 80.0;
+                                    vy = -2.0;
+                                    hbVibrate(0u, 90u, 700u);
+                                }
+                            }
+                        }
+
+                        int e2x = int(c.stats.z);
+                        int e2dir = (c.stats.w == 1u) ? 1 : -1;
+                        if (e2x < 500) {
+                            e2x += e2dir;
+                            if (e2x > 240) c.stats.w = 0u;
+                            if (e2x < 140) c.stats.w = 1u;
+                            c.stats.z = uint(e2x);
+                        }
+
+                        c.game = uvec4(state, score, coins, lives);
+                        c.flow = vec4(px, py, vx, vy);
+                        hbEndFrame();
+                    }
+                }
             }
         }
-
-        float e2x = float(c.stats.z);
-        float e2dir = (c.stats.w == 1u) ? 1.0 : -1.0;
-        e2x += e2dir * 0.90;
-        if (e2x > 270.0) { e2x = 270.0; c.stats.w = 0u; }
-        if (e2x < 200.0) { e2x = 200.0; c.stats.w = 1u; }
-        c.stats.z = uint(e2x);
-        float e2y = 48.0 + sin(c.motion.x * 4.0) * 14.0;
-
-        if (abs(px - e2x) < 10.0 && abs(py - e2y) < 10.0) {
-            if (vy > 0.0 && py < e2y - 2.0) {
-                vy = -4.8; score += 300u; c.stats.z = 9999u; hbVibrate(2u, 65u, 320u);
-            } else {
-                lives--; px -= float(facing) * 20.0; py -= 8.0; vy = -3.0; hbVibrate(2u, 80u, 450u);
-            }
-        }
-
-        if (abs(px - 105.0) < 10.0 && abs(py - 68.0) < 10.0 && (coins & 1u) == 0u) {
-            coins |= 1u; score += 100u; hbVibrate(2u, 30u, 220u);
-        }
-        if (abs(px - 200.0) < 10.0 && abs(py - 48.0) < 10.0 && (coins & 2u) == 0u) {
-            coins |= 2u; score += 100u; hbVibrate(2u, 30u, 220u);
-        }
-
-        c.flow = vec4(px, py, vx, vy);
-        c.piece = ivec4(scrollX, anim, facing, onGround);
-        c.game = uvec4(state, score, coins, lives);
     }
 
-    hbEndFrame();
+    // Synchronize all 144 GPU threads after Thread 0 finishes CPU frame execution
+    barrier();
+
+    if (sDoRender != 0u) {
+        if (tid < 40u) {
+            sOAM[tid] = c.atlas[GB_OAM_BASE + tid];
+        }
+        barrier();
+
+        // All 144 GPU threads render their own scanline (0..143) simultaneously!
+        uint one = c.atlas[GB_CPU_BASE + 31u];
+        renderScanlineParallel(tid, sLineRegs[tid], one);
+    }
 }

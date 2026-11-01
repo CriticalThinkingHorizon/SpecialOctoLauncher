@@ -573,6 +573,58 @@ async function create(rpc) {
       }
       return { result: writeRes, bytesWritten: writeRes === 0 ? dataBuf.length : 0 };
     },
+    async writeFromAddress(pathStr, srcAddress, byteLength) {
+      const pathOff = 0x1000, typeOff = 0x2000, handleOff = 0x2010, storageOff = 0x2040;
+      await client.write(pathOff, Buffer.from(pathStr + '\0', 'utf8'));
+      await client.write(typeOff, Buffer.alloc(8));
+      if ((await client.result('GetEntryType', [client.base + typeOff, client.base + pathOff])) !== 0) {
+        const cr = await client.result('CreateFile', [client.base + pathOff, byteLength]);
+        if (cr !== 0) return { result: cr, bytesWritten: 0 };
+      }
+      await client.write(handleOff, Buffer.alloc(8));
+      let openRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 3]);
+      if (openRes !== 0) {
+        openRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 2]);
+        if (openRes !== 0) return { result: openRes, bytesWritten: 0 };
+      }
+      const handle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
+      let writeRes = 0;
+      try {
+        await client.result('SetFileSize', [handle, byteLength]);
+        if (byteLength > 0) {
+          await client.write(storageOff, Buffer.alloc(128));
+          await client.call('StorageCtor', [client.base + storageOff, handle, 0]);
+          writeRes = await client.result('StorageWrite', [client.base + storageOff, 0, srcAddress, byteLength]);
+        }
+        await client.result('FlushFile', [handle]);
+      } finally {
+        await client.call('CloseFile', [handle]);
+      }
+      return { result: writeRes, bytesWritten: writeRes === 0 ? byteLength : 0 };
+    },
+    async readIntoAddress(pathStr, dstAddress, maxBytes = 262144) {
+      const pathOff = 0x1000, handleOff = 0x2000, sizeOff = 0x2010;
+      await client.write(pathOff, Buffer.from(pathStr + '\0', 'utf8'));
+      await client.write(handleOff, Buffer.alloc(8));
+      const openRes = await client.result('OpenFile', [client.base + handleOff, client.base + pathOff, 1]);
+      if (openRes !== 0) return { result: openRes, bytesRead: 0 };
+      const handle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
+      let toRead = 0;
+      let readRes = 0;
+      try {
+        await client.write(sizeOff, Buffer.alloc(8));
+        if ((await client.result('GetFileSize', [client.base + sizeOff, handle])) === 0) {
+          const fileSize = Number((await client.read(sizeOff, 8)).readBigInt64LE(0));
+          toRead = Math.max(0, Math.min(fileSize, maxBytes));
+        }
+        if (toRead > 0) {
+          readRes = await client.result('ReadFile', [handle, 0, dstAddress, toRead]);
+        }
+      } finally {
+        await client.call('CloseFile', [handle]);
+      }
+      return { result: readRes, bytesRead: readRes === 0 ? toRead : 0 };
+    },
     async renameDirPath(oldPath, newPath) {
       const oldOff = 0x1000, newOff = 0x1400;
       await client.write(oldOff, Buffer.from(oldPath + '\0', 'utf8'));
