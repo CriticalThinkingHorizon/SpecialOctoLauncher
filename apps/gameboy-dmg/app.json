@@ -14,6 +14,6 @@
     "compute": "app.comp.spv"
   },
   "sdk": {
-    "capabilities": ["vibration"]
+    "capabilities": ["vibration", "fs"]
   }
 }

@@ -323,6 +323,8 @@ bool hbFsTestTmp(uint action){return hbRequest(9u,4u,action,0u);}
 bool hbFsHttpPoll(uint action){return hbRequest(9u,5u,action,0u);}
 bool hbFsTestSave(uint action){return hbRequest(9u,6u,action,0u);}
 bool hbFsUpdateBootstrap(uint action){return hbRequest(9u,7u,action,0u);}
+bool hbFsListRoms(){return hbRequest(9u,8u,0u,0u);}
+bool hbFsLoadRom(uint romIndex){return hbRequest(9u,9u,romIndex,0u);}
 
 // Official-named nn::fs primitives (subOp 10..19)
 bool nnFsGetEntryType(uint pathLen){return hbRequest(9u,10u,0u,pathLen);}

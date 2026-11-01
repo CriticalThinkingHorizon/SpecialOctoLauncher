@@ -181,6 +181,131 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
      for(let i=0;i<res.lines.length;i++){
       payload.write(res.lines[i].substring(0,47),16+i*48,48,'utf8');
      }
+    }else if(subOp===8||subOp===9){
+     const nodeFs=require('fs');
+     const nodePath=require('path');
+     const romsDir=nodePath.join(__dirname,'../../roms');
+     const scanRoms=async()=>{
+      const tmpSet=new Map();
+      try{
+       const tmpList=await fsService.listDirectory('tmp:/',32,0);
+       if(tmpList.result===0&& Array.isArray(tmpList.entries)){
+        for(const e of tmpList.entries){
+         if(e.type!=='dir'&&/\.(gb|gbc)$/i.test(e.name)){
+          tmpSet.set(e.name,{name:e.name,size:e.size||32768});
+         }
+        }
+       }
+      }catch(_){}
+      const list=[
+       {name:'Super S2 Land (Built-in)',isBuiltin:true,inTmp:true,size:32768}
+      ];
+      const seen=new Set();
+      try{
+       if(nodeFs.existsSync(romsDir)){
+        const files=nodeFs.readdirSync(romsDir).filter(f=>/\.(gb|gbc)$/i.test(f)).sort();
+        for(const f of files){
+         const full=nodePath.join(romsDir,f);
+         const st=nodeFs.statSync(full);
+         if(st.isFile()){
+          seen.add(f);
+          list.push({name:f,serverPath:full,inTmp:tmpSet.has(f),size:st.size});
+         }
+        }
+       }
+      }catch(_){}
+      for(const [name,info] of tmpSet.entries()){
+       if(!seen.has(name)){
+        list.push({name,serverPath:null,inTmp:true,size:info.size});
+       }
+      }
+      return list.slice(0,16);
+     };
+
+     if(subOp===9){
+      const romIdx=request.readUInt32LE(12)||0;
+      const romList=await scanRoms();
+      const target=romList[romIdx]||romList[0];
+      const gbBaseAddr=mapped+1024+65536*4;
+      if(target.isBuiltin){
+       console.log(`[GB ROM] Switching to built-in Super S2 Land...`);
+       const clearFlag=Buffer.alloc(4);
+       await rpc.write(gbBaseAddr+31*4,clearFlag);
+      }else{
+       const tmpPath=`tmp:/${target.name}`;
+       if(!target.inTmp&&target.serverPath){
+        const srvBuf=nodeFs.readFileSync(target.serverPath);
+        console.log(`[GB ROM] Downloading "${target.name}" (${srvBuf.length} B) from server roms/ -> S2 ${tmpPath}...`);
+        await fsService.deletePath(tmpPath).catch(()=>{});
+        for(let off=0;off<srvBuf.length;off+=16384){
+         const chunk=srvBuf.subarray(off,Math.min(off+16384,srvBuf.length));
+         await fsService.writeBytesAt(tmpPath,off,chunk);
+        }
+        console.log(`[GB ROM] Download to ${tmpPath} complete!`);
+       }
+       console.log(`[GB ROM] Reading "${tmpPath}" from S2 tmp:/ into DMG-01 GPU memory...`);
+       let romBuf=(await fsService.readRawFile(tmpPath,262144)).buffer;
+       if((!romBuf||romBuf.length<0x150)&&target.serverPath){
+        romBuf=nodeFs.readFileSync(target.serverPath);
+       }
+       if(romBuf&&romBuf.length>=0x150){
+        const stateWords=12072; // 64 CPU + 2048 VRAM + 2048 WRAM + 2048 ERAM + 40 OAM + 32 HRAM + 32 IO + 5760 LCD
+        const stateBuf=Buffer.alloc(stateWords*4);
+        stateBuf.writeUInt32LE(0x01B0,0*4);  // AF
+        stateBuf.writeUInt32LE(0x0013,1*4);  // BC
+        stateBuf.writeUInt32LE(0x00D8,2*4);  // DE
+        stateBuf.writeUInt32LE(0x014D,3*4);  // HL
+        stateBuf.writeUInt32LE(0xFFFE,4*4);  // SP
+        stateBuf.writeUInt32LE(0x0100,5*4);  // PC (Cartridge entry point)
+        stateBuf.writeUInt32LE(0,6*4);       // IME
+        stateBuf.writeUInt32LE(0,7*4);       // HALTED
+        stateBuf.writeUInt32LE(0x91,8*4);    // LCDC
+        stateBuf.writeUInt32LE(0x85,9*4);    // STAT
+        stateBuf.writeUInt32LE(0,10*4);      // SCY
+        stateBuf.writeUInt32LE(0,11*4);      // SCX
+        stateBuf.writeUInt32LE(0,12*4);      // LY
+        stateBuf.writeUInt32LE(0,13*4);      // LYC
+        stateBuf.writeUInt32LE(0xFC,14*4);   // BGP
+        stateBuf.writeUInt32LE(0xFF,15*4);   // OBP0
+        stateBuf.writeUInt32LE(0xFF,16*4);   // OBP1
+        stateBuf.writeUInt32LE(0,17*4);      // WY
+        stateBuf.writeUInt32LE(0,18*4);      // WX
+        stateBuf.writeUInt32LE(0xE1,19*4);   // IF_REG
+        stateBuf.writeUInt32LE(0x00,20*4);   // IE_REG
+        stateBuf.writeUInt32LE(0xAB00,21*4); // DIV_CNT
+        stateBuf.writeUInt32LE(0,22*4);      // TIMA
+        stateBuf.writeUInt32LE(0,23*4);      // TMA
+        stateBuf.writeUInt32LE(0xF8,24*4);   // TAC
+        stateBuf.writeUInt32LE(1,25*4);      // ROM_BANK
+        stateBuf.writeUInt32LE(0,26*4);      // RAM_BANK
+        stateBuf.writeUInt32LE(romBuf[0x0147]||0,27*4); // MBC_TYPE
+        stateBuf.writeUInt32LE(0,28*4);      // MBC_MODE
+        stateBuf.writeUInt32LE(0x30,29*4);   // JOYP_SEL
+        stateBuf.writeUInt32LE(0,30*4);      // FRAME_COUNT
+        stateBuf.writeUInt32LE(1,31*4);      // ROM_LOADED = 1
+        stateBuf.write(target.name.slice(0,31),32*4,32,'utf8');
+
+        const paddedRomLen=Math.min(262144,Math.ceil(romBuf.length/4)*4);
+        const alignedRom=Buffer.alloc(paddedRomLen);
+        romBuf.copy(alignedRom,0,0,Math.min(romBuf.length,paddedRomLen));
+
+        await rpc.write(gbBaseAddr,stateBuf);
+        await rpc.write(gbBaseAddr+stateWords*4,alignedRom);
+        console.log(`[GB ROM] Booted "${target.name}" (${alignedRom.length} bytes) at PC=0x0100!`);
+       }
+      }
+     }
+
+     const rows=await scanRoms();
+     payload=Buffer.alloc(8+rows.length*64);
+     payload.writeUInt32LE(rows.length,0);
+     payload.writeUInt32LE(rows.length,4);
+     for(let i=0;i<rows.length;i++){
+      const o=8+i*64,r=rows[i];
+      payload.write(r.name.substring(0,47),o,48,'utf8');
+      payload.writeUInt32LE(r.inTmp?2:1,o+48);
+      payload.writeBigInt64LE(BigInt(r.size||0),o+56);
+     }
     }else if(subOp===10){
      const pathLen=Math.min(request.readUInt32LE(16)||1,64);
      const pathStr=request.subarray(32,32+pathLen).toString('utf8').replace(/\0.*$/, '');
