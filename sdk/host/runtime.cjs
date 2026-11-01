@@ -9,10 +9,12 @@ function validateManifest(value){
 async function create({rpc,mapped,directory,hardware:providedHardware}){
   const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,httpServer,netSockets,timeService,swkbdService,webService,audioService,lastSequence=0,lastPoll=0;
   const base=mapped+L.OFFSET;
- return {hardware,async atBoundary(app=null){
+ return {hardware,resetSequence(seq=0){lastSequence=seq>>>0;},async atBoundary(app=null){
   if(!lastPoll||Date.now()-lastPoll>5000){await rpc.write(base,(await hardware.poll()).subarray(0,128));lastPoll=Date.now();}
   const hdr=await rpc.read(base+L.FIELD.request,32),sequence=hdr.readUInt32LE();
   if(!sequence||sequence===lastSequence)return;lastSequence=sequence;
+  const op=hdr.readUInt32LE(4);
+  if(!op)return;
   const request=await rpc.read(base+L.FIELD.request,1056);
   const op=request.readUInt32LE(4);
   const config=validateManifest(app?.manifest?.sdk);

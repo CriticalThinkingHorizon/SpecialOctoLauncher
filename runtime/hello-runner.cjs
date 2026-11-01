@@ -568,7 +568,7 @@ async function main(directory, attempt = 'auto') {
       scratchState.writeFloatLE(1, 960 - 784);
       if (name === 'launcher') {
         scratchState.writeUInt32LE(2, 792 - 784); // c.game.z = 2 (ready state)
-        scratchState.writeUInt32LE(launchableIds.length, 796 - 784); // c.game.w = app count
+        scratchState.writeUInt32LE(launchableIds.length + 1, 796 - 784); // c.game.w = app count + [UPDATE] row
         scratchState.writeUInt32LE(cachedMask, 992 - 784); // c.stats.x = cachedMask
       }
       scratchState.writeUInt32LE(0, 1016 - 784); // c.reserved.z = 0
@@ -605,6 +605,8 @@ async function main(directory, attempt = 'auto') {
       return rpc.call(0x5872f0, [dst, src, len, 0]);
     };
 
+    let lastSelectedRow = 0;
+
     const applyApp = async (name) => {
       let slotInfo = stagedSlots.get(name);
 
@@ -613,31 +615,35 @@ async function main(directory, attempt = 'auto') {
         // 1. Switch command buffers via native ARM64 memmove directly on S2
         await nativeMemmove(control + 0x1000, slotInfo.slotMapped, slotInfo.cmdLen);
 
-        // Wait ~20ms (one frame) so any in-flight GPU frame of the previous app completes
-        await new Promise(r => setTimeout(r, 20));
+        // Wait ~25ms (1-2 frames) so any in-flight GPU frame of the previous app completes
+        await new Promise(r => setTimeout(r, 25));
 
-        // 2. Response payload handling
-        if (name === 'launcher') {
-          // If returning to launcher, restore directory entries (titles & types), ensure c.game.z = 2, and sync request/response sequence to ensure hbBusy() is false
-          if (!launcherDirReply) launcherDirReply = await buildLauncherDirReply();
-          await rpc.write(mapped + 0x7f0000 + 2048, Buffer.from([1, 0, 0, 0]));
-          await rpc.write(mapped + 0x7f0000 + 4096, launcherDirReply);
-
-          const readyBuf = Buffer.alloc(8);
-          readyBuf.writeUInt32LE(2, 0); // c.game.z = 2
-          readyBuf.writeUInt32LE(launchableIds.length, 4); // c.game.w = app count
-          await rpc.write(mapped + 792, readyBuf);
-        } else {
-          // Switching to an app: clear previous SDK response payload length (offset 4104)
-          await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(3072));
-        }
-
-        // 3. Restore target app's font atlas and scratch state in a single paired native memmove call!
+        // 2. Restore target app's font atlas and scratch state in a single paired native memmove call!
         await rpc.pair([
           { offset: 0x5872f0, args: [mapped + 1024, slotInfo.slotMapped + 0x800, slotInfo.atlasLen, 0] },
           { offset: 0x5872f0, args: [mapped + 784, slotInfo.slotMapped + 0x200, slotInfo.scratchLen, 0] }
         ]);
         currentAtlasSlice = slotInfo.atlasSlice;
+
+        // 3. Response payload & mailbox sequence handling (AFTER previous app's GPU frames have stopped)
+        if (name === 'launcher') {
+          if (!launcherDirReply) launcherDirReply = await buildLauncherDirReply();
+          const reqClear = Buffer.alloc(32);
+          reqClear.writeUInt32LE(1, 0); // sequence = 1, op = 0
+          sdkRuntime.resetSequence(1);
+          await rpc.write(mapped + 0x7f0000 + 2048, reqClear);
+          await rpc.write(mapped + 0x7f0000 + 4096, launcherDirReply);
+
+          const readyBuf = Buffer.alloc(12);
+          readyBuf.writeUInt32LE(lastSelectedRow, 0);          // c.game.y = preserve selected row
+          readyBuf.writeUInt32LE(2, 4);                        // c.game.z = 2 (ready)
+          readyBuf.writeUInt32LE(launchableIds.length + 1, 8); // c.game.w = row count (apps + [UPDATE])
+          await rpc.write(mapped + 788, readyBuf);
+        } else {
+          sdkRuntime.resetSequence(0);
+          await rpc.write(mapped + 0x7f0000 + 2048, Buffer.alloc(32));
+          await rpc.write(mapped + 0x7f0000 + 4096, Buffer.alloc(3076));
+        }
 
         // 4. Explicitly clear exit flags c.reserved.z and c.reserved.w on S2
         await rpc.write(mapped + 1016, Buffer.alloc(8));
@@ -649,23 +655,32 @@ async function main(directory, attempt = 'auto') {
 
         // Copy from staged slot into active regions
         await nativeMemmove(control + 0x1000, slotInfo.slotMapped, slotInfo.cmdLen);
-        await new Promise(r => setTimeout(r, 20));
-        if (name === 'launcher') {
-          if (!launcherDirReply) launcherDirReply = await buildLauncherDirReply();
-          await rpc.write(mapped + 0x7f0000 + 2048, Buffer.from([1, 0, 0, 0]));
-          await rpc.write(mapped + 0x7f0000 + 4096, launcherDirReply);
-          const readyBuf = Buffer.alloc(8);
-          readyBuf.writeUInt32LE(2, 0);
-          readyBuf.writeUInt32LE(launchableIds.length, 4);
-          await rpc.write(mapped + 792, readyBuf);
-        } else {
-          await rpc.write(mapped + 0x7f0000 + 4100, Buffer.alloc(3072));
-        }
+        await new Promise(r => setTimeout(r, 25));
+
         await rpc.pair([
           { offset: 0x5872f0, args: [mapped + 1024, slotInfo.slotMapped + 0x800, slotInfo.atlasLen, 0] },
           { offset: 0x5872f0, args: [mapped + 784, slotInfo.slotMapped + 0x200, slotInfo.scratchLen, 0] }
         ]);
         currentAtlasSlice = slotInfo.atlasSlice;
+
+        if (name === 'launcher') {
+          if (!launcherDirReply) launcherDirReply = await buildLauncherDirReply();
+          const reqClear = Buffer.alloc(32);
+          reqClear.writeUInt32LE(1, 0);
+          sdkRuntime.resetSequence(1);
+          await rpc.write(mapped + 0x7f0000 + 2048, reqClear);
+          await rpc.write(mapped + 0x7f0000 + 4096, launcherDirReply);
+          const readyBuf = Buffer.alloc(12);
+          readyBuf.writeUInt32LE(lastSelectedRow, 0);
+          readyBuf.writeUInt32LE(2, 4);
+          readyBuf.writeUInt32LE(launchableIds.length + 1, 8);
+          await rpc.write(mapped + 788, readyBuf);
+        } else {
+          sdkRuntime.resetSequence(0);
+          await rpc.write(mapped + 0x7f0000 + 2048, Buffer.alloc(32));
+          await rpc.write(mapped + 0x7f0000 + 4096, Buffer.alloc(3076));
+        }
+
         await rpc.write(mapped + 1016, Buffer.alloc(8));
 
         refreshCachedMask();
@@ -725,6 +740,7 @@ async function main(directory, attempt = 'auto') {
             }
             launchableIds = await reloadCatalog();
             const idx = actionCode > 0 ? actionCode - 1 : 0;
+            lastSelectedRow = idx;
             const targetId = launchableIds[idx] || launchableIds[0];
             console.log(`[LAUNCHER] Launch requested: actionCode=${actionCode}, idx=${idx} -> ${targetId} (catalog: ${launchableIds.length} apps)`);
             if (targetId) {
