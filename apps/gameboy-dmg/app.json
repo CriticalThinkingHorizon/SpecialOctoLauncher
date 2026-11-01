@@ -1,0 +1,19 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "gameboy-dmg",
+  "name": "GameBoy DMG-01",
+  "version": "1.0.0",
+  "description": "Classic 8-bit DMG GameBoy emulator & CPU/PPU dot-matrix hardware visualizer in 1080p Vulkan",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  },
+  "sdk": {
+    "capabilities": ["vibration"]
+  }
+}

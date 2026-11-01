@@ -1,0 +1,189 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+#include "dmg.glsl"
+
+void main(){
+    uint pressed = hbPressed();
+    uint buttons = hbButtons();
+    c.motion.x += 1.0 / 60.0; // time
+    c.motion.w += 1.0;        // frame counter
+
+    // Universal Exit: Press MINUS to return to Launcher
+    if ((pressed & HB_MINUS) != 0u) {
+        hbExit();
+        hbEndFrame();
+        return;
+    }
+
+    uint state = c.game.x;
+    uint score = c.game.y;
+    uint coins = c.game.z;
+    uint lives = c.game.w;
+
+    float px = c.flow.x;
+    float py = c.flow.y;
+    float vx = c.flow.z;
+    float vy = c.flow.w;
+
+    int scrollX = c.piece.x;
+    int anim = c.piece.y;
+    int facing = c.piece.z;
+    int onGround = c.piece.w;
+
+    uint palMode = uint(c.transition.x);
+
+    // X Button: Cycle GameBoy Color Palettes (Classic Olive -> Pocket Gray -> SGB Amber)
+    if ((pressed & HB_X) != 0u) {
+        palMode = (palMode + 1u) % 3u;
+        c.transition.x = float(palMode);
+        hbVibrate(2u, 25u, 150u);
+    }
+
+    // Restart with A if Game Over
+    if (lives == 0u && (pressed & HB_A) != 0u) {
+        c.game.w = 3u; // 3 lives
+        c.game.y = 0u; // score
+        c.game.z = 0u; // coins
+        c.flow = vec4(32.0, 96.0, 0.0, 0.0);
+        c.piece = ivec4(0, 0, 1, 1);
+        c.stats = uvec4(140u, 1u, 260u, 1u); // reset enemies
+        hbEndFrame();
+        return;
+    }
+
+    if (lives > 0u) {
+        // --- 1. Movement Inputs ---
+        vec2 stick = hbStick(false);
+        float moveX = stick.x;
+
+        if ((buttons & HB_LEFT) != 0u) moveX -= 1.0;
+        if ((buttons & HB_RIGHT) != 0u) moveX += 1.0;
+
+        float speed = ((buttons & HB_B) != 0u) ? 2.4 : 1.5; // B button sprint
+        vx = moveX * speed;
+
+        if (abs(vx) > 0.1) {
+            facing = (vx > 0.0) ? 1 : -1;
+            anim = (anim + 1) % 24;
+        } else {
+            anim = 0;
+        }
+
+        // --- 2. Jump (A Button) ---
+        if ((pressed & HB_A) != 0u && onGround == 1) {
+            vy = -5.8; // jump impulse
+            onGround = 0;
+            hbVibrate(2u, 30u, 160u);
+        }
+
+        // Gravity
+        vy += 0.32;
+        vy = min(vy, 6.0);
+
+        px += vx;
+        py += vy;
+
+        // Ground Floor Collision (Y = 112)
+        if (py >= 112.0) {
+            py = 112.0;
+            vy = 0.0;
+            onGround = 1;
+        }
+
+        // Floating Brick Platform Collisions
+        // Platform 1: X in [80..130], Y = 84
+        if (px >= 76.0 && px <= 134.0 && py >= 80.0 && py <= 88.0 && vy >= 0.0) {
+            py = 84.0;
+            vy = 0.0;
+            onGround = 1;
+        }
+        // Platform 2: X in [170..230], Y = 64
+        if (px >= 166.0 && px <= 234.0 && py >= 60.0 && py <= 68.0 && vy >= 0.0) {
+            py = 64.0;
+            vy = 0.0;
+            onGround = 1;
+        }
+
+        px = max(px, 12.0);
+
+        // Smooth Camera Scroll following player
+        if (int(px) - scrollX > 80) {
+            scrollX = int(px) - 80;
+        } else if (int(px) - scrollX < 35 && scrollX > 0) {
+            scrollX = max(int(px) - 35, 0);
+        }
+
+        // --- 3. Enemies Simulation ---
+        // Enemy 1: Ground Slime
+        float e1x = float(c.stats.x);
+        float e1dir = (c.stats.y == 1u) ? 1.0 : -1.0;
+        e1x += e1dir * 0.65;
+        if (e1x > 180.0) { e1x = 180.0; c.stats.y = 0u; }
+        if (e1x < 110.0) { e1x = 110.0; c.stats.y = 1u; }
+        c.stats.x = uint(e1x);
+
+        // Check Stomp vs Slime
+        if (abs(px - e1x) < 10.0 && abs(py - 112.0) < 12.0) {
+            if (vy > 0.0 && py < 110.0) {
+                // Stomp enemy!
+                vy = -4.8; // bounce up
+                score += 200u;
+                c.stats.x = 9999u; // defeated
+                hbVibrate(2u, 60u, 300u);
+            } else {
+                // Player hurt!
+                lives--;
+                px -= float(facing) * 20.0;
+                py -= 8.0;
+                vy = -3.0;
+                hbVibrate(2u, 80u, 450u);
+            }
+        }
+
+        // Enemy 2: Flying Bat
+        float e2x = float(c.stats.z);
+        float e2dir = (c.stats.w == 1u) ? 1.0 : -1.0;
+        e2x += e2dir * 0.90;
+        if (e2x > 270.0) { e2x = 270.0; c.stats.w = 0u; }
+        if (e2x < 200.0) { e2x = 200.0; c.stats.w = 1u; }
+        c.stats.z = uint(e2x);
+        float e2y = 48.0 + sin(c.motion.x * 4.0) * 14.0;
+
+        if (abs(px - e2x) < 10.0 && abs(py - e2y) < 10.0) {
+            if (vy > 0.0 && py < e2y - 2.0) {
+                vy = -4.8;
+                score += 300u;
+                c.stats.z = 9999u; // defeated
+                hbVibrate(2u, 65u, 320u);
+            } else {
+                lives--;
+                px -= float(facing) * 20.0;
+                py -= 8.0;
+                vy = -3.0;
+                hbVibrate(2u, 80u, 450u);
+            }
+        }
+
+        // Coins Check (at X=105, Y=68 and X=200, Y=48)
+        if (abs(px - 105.0) < 10.0 && abs(py - 68.0) < 10.0 && (coins & 1u) == 0u) {
+            coins |= 1u;
+            score += 100u;
+            hbVibrate(2u, 30u, 220u);
+        }
+        if (abs(px - 200.0) < 10.0 && abs(py - 48.0) < 10.0 && (coins & 2u) == 0u) {
+            coins |= 2u;
+            score += 100u;
+            hbVibrate(2u, 30u, 220u);
+        }
+
+        // Save state
+        c.flow = vec4(px, py, vx, vy);
+        c.piece = ivec4(scrollX, anim, facing, onGround);
+        c.game = uvec4(state, score, coins, lives);
+    }
+
+    hbEndFrame();
+}
