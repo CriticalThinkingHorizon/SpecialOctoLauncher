@@ -1,0 +1,19 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "gyro-maze",
+  "name": "Gyro 3D Tilt Maze",
+  "version": "1.0.0",
+  "description": "3D physics tilt labyrinth driven by native SixAxis gyro & analog sticks",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  },
+  "sdk": {
+    "capabilities": ["vibration"]
+  }
+}

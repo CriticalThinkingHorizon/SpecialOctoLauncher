@@ -1,0 +1,174 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+#include "maze.glsl"
+
+void main(){
+    uint pressed = hbPressed();
+    c.motion.x += 1.0 / 60.0; // time
+    c.motion.w += 1.0;        // frame counter
+
+    // Universal Exit: Press MINUS to return to Launcher
+    if ((pressed & HB_MINUS) != 0u) {
+        hbExit();
+        hbEndFrame();
+        return;
+    }
+
+    uint state = c.game.x;
+    uint level = c.game.y;
+
+    // A Button: Reset / Restart level (or Advance if Victorious)
+    if ((pressed & HB_A) != 0u) {
+        if (state == 2u) {
+            level = (level + 1u) % 3u;
+            c.game.y = level;
+            c.game.w = 0u; // reset gems
+        }
+        c.flow.xy = getMazeStart(level);
+        c.flow.zw = vec2(0.0);
+        c.transition.z = 1.0;
+        c.game.x = 0u;
+        c.game.z = 0u;
+    }
+
+    // X Button: Cycle Level immediately
+    if ((pressed & HB_X) != 0u) {
+        level = (level + 1u) % 3u;
+        c.game.y = level;
+        c.flow.xy = getMazeStart(level);
+        c.flow.zw = vec2(0.0);
+        c.transition.z = 1.0;
+        c.game.x = 0u;
+        c.game.w = 0u;
+        c.game.z = 0u;
+    }
+
+    // Y Button: Tare / calibrate zero-tilt baseline
+    if ((pressed & HB_Y) != 0u) {
+        vec3 curAccel = hbAcceleration(0u);
+        c.piece.x = floatBitsToInt(curAccel.y);
+        c.piece.y = floatBitsToInt(-curAccel.x);
+        hbVibrate(2u, 40u, 200u);
+    }
+
+    // Compute target tilt from SixAxis accelerometer
+    vec3 accel = hbAcceleration(0u);
+    vec2 targetTilt = vec2(0.0);
+    vec2 tare = vec2(intBitsToFloat(c.piece.x), intBitsToFloat(c.piece.y));
+    if (hbMotionCount() > 0u && length(accel) > 0.05) {
+        targetTilt.x = (accel.y - tare.x) * 0.50;
+        targetTilt.y = (-accel.x - tare.y) * 0.50;
+    }
+
+    // Analog stick input support (Left Stick)
+    vec2 stick = hbStick(false);
+    if (length(stick) > 0.05) {
+        targetTilt.x += -stick.y * 0.42;
+        targetTilt.y += stick.x * 0.42;
+    }
+
+    // Smooth damp tilt angles
+    targetTilt = clamp(targetTilt, vec2(-0.38), vec2(0.38));
+    c.transition.xy = mix(c.transition.xy, targetTilt, 0.20);
+
+    // Physics Simulation
+    float dt = 1.0 / 60.0;
+    float ballRadius = 0.28;
+
+    if (state == 0u) {
+        // Active rolling state
+        vec2 gravityAccel = vec2(sin(c.transition.y), sin(c.transition.x)) * 34.0;
+        c.flow.zw = (c.flow.zw + gravityAccel * dt) * 0.982; // momentum with rolling friction
+        vec2 newPos = c.flow.xy + c.flow.zw * dt;
+
+        // Collision against maze walls
+        int minGx = max(int(floor(newPos.x - 0.7)), 0);
+        int maxGx = min(int(floor(newPos.x + 0.7)), int(MAZE_W - 1u));
+        int minGy = max(int(floor(newPos.y - 0.7)), 0);
+        int maxGy = min(int(floor(newPos.y + 0.7)), int(MAZE_H - 1u));
+
+        for (int gy = minGy; gy <= maxGy; gy++) {
+            for (int gx = minGx; gx <= maxGx; gx++) {
+                if (getMazeTile(level, uint(gx), uint(gy)) == 1u) {
+                    vec2 bMin = vec2(float(gx), float(gy));
+                    vec2 bMax = bMin + vec2(1.0);
+                    vec2 closest = clamp(newPos, bMin, bMax);
+                    vec2 diff = newPos - closest;
+                    float d = length(diff);
+                    if (d < ballRadius && d > 0.0001) {
+                        vec2 normal = diff / d;
+                        newPos = closest + normal * ballRadius;
+                        float velN = dot(c.flow.zw, normal);
+                        if (velN < 0.0) {
+                            c.flow.zw -= 1.45 * velN * normal; // bounce restitution
+                            float impact = abs(velN);
+                            if (impact > 1.2) {
+                                hbVibrate(2u, uint(min(impact * 25.0, 90.0)), uint(min(impact * 120.0, 750.0)));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        c.flow.xy = newPos;
+        c.transition.z = 1.0;
+
+        // Check hazard holes
+        uint curGx = uint(clamp(floor(newPos.x), 0.0, float(MAZE_W - 1u)));
+        uint curGy = uint(clamp(floor(newPos.y), 0.0, float(MAZE_H - 1u)));
+        vec2 cellCenter = vec2(float(curGx) + 0.5, float(curGy) + 0.5);
+
+        if (getMazeTile(level, curGx, curGy) == 2u) {
+            if (length(newPos - cellCenter) < 0.32) {
+                // Sunk into hazard hole!
+                c.game.x = 1u; // Falling
+                c.game.z = 65u; // 65 frames animation
+                hbVibrate(2u, 55u, 350u);
+            }
+        }
+
+        // Check collectible gems
+        if (getMazeTile(level, curGx, curGy) == 3u) {
+            uint gemId = curGy * MAZE_W + curGx;
+            uint gemMask = (1u << (gemId % 32u));
+            if ((c.game.w & gemMask) == 0u && length(newPos - cellCenter) < 0.36) {
+                c.game.w |= gemMask; // collect gem
+                hbVibrate(2u, 25u, 220u);
+            }
+        }
+
+        // Check goal
+        vec2 goalPos = getMazeGoal(level);
+        if (length(newPos - goalPos) < 0.38) {
+            c.game.x = 2u; // Victory
+            c.game.z = 0u;
+            hbVibrate(2u, 80u, 750u);
+        }
+
+    } else if (state == 1u) {
+        // Falling down hole
+        c.flow.zw *= 0.85;
+        c.transition.z = max(c.transition.z * 0.92 - 0.015, 0.0);
+        if (c.game.z > 0u) c.game.z--;
+        if (c.game.z == 0u) {
+            // Respawn
+            c.flow.xy = getMazeStart(level);
+            c.flow.zw = vec2(0.0);
+            c.transition.z = 1.0;
+            c.game.x = 0u;
+        }
+    } else if (state == 2u) {
+        // Victory state
+        c.game.z++;
+        c.flow.zw *= 0.88;
+        if (c.game.z % 20u == 0u && c.game.z < 100u) {
+            hbVibrate(2u, 35u, 450u);
+        }
+    }
+
+    hbEndFrame();
+}
