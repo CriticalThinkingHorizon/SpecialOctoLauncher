@@ -1,327 +1,693 @@
 #version 450
-#extension GL_GOOGLE_include_directive : require
-layout(location=0) out vec4 outColor;
-#define STATE_ACCESS readonly
-#include "abi.glsl"
-#include "draw.glsl"
-#include "text.glsl"
-#include "dmg.glsl"
 
-float drawChar(vec2 p, vec2 origin, uint ascii){
-    if(ascii<GLYPH_FIRST||ascii>=GLYPH_FIRST+GLYPH_COUNT)return 0.0;
-    uint idx=ascii-GLYPH_FIRST;
-    ivec4 rect=ivec4(int(idx%uint(GLYPH_COLS))*GLYPH_W,int(idx/uint(GLYPH_COLS))*GLYPH_H,GLYPH_W,GLYPH_H);
-    return text(p,origin,rect);
+// -----------------------------------------------------------------------------
+// GameBoy DMG-01 GPU Emulator — Authentic 1989 DMG-01 Shell, Bezel & PPU
+// -----------------------------------------------------------------------------
+// Vulkan Coordinate Space: gl_FragCoord.y = 0.0 is TOP, 1080.0 is BOTTOM.
+// Renders:
+//   - Authentic 1989 GameBoy DMG-01 putty-gray ABS shell with asymmetric
+//     bottom-right curve, molded top groove, "< OFF•ON >" power engraving
+//   - Dark grey screen lens bezel with asymmetric bottom-right corner,
+//     magenta (#8B1D41) & navy (#1D2951) double accent stripes,
+//     "DOT MATRIX WITH STEREO SOUND", glowing red BATTERY LED
+//   - Authentic 4-shade olive-green Dot Matrix LCD (5x integer scale: 800x720)
+//     with sub-pixel dot matrix grid, drop shadow, and interactive controls
+//   - Lower faceplate with "GAME BOY TM" navy text, cross D-Pad, angled
+//     magenta A & B buttons, angled Select/Start buttons, and 6 speaker slots
+//   - Live LR35902 CPU + PPU + VRAM/OAM Hardware Debugger wings on left/right
+// -----------------------------------------------------------------------------
+
+layout(location = 0) in vec2 vUV;
+layout(location = 0) out vec4 outColor;
+
+struct CPUState {
+    uvec4 regs0;     // x=AF, y=BC, z=DE, w=HL
+    uvec4 regs1;     // x=SP, y=PC, z=IME, w=halted
+    uvec4 io0;       // x=LCDC, y=STAT, z=SCY, w=SCX
+    uvec4 io1;       // x=LY, y=LYC, z=BGP, w=OBP0
+    uvec4 io2;       // x=OBP1, y=WY, z=WX, w=IF_reg
+    uvec4 io3;       // x=IE_reg, y=DIV, z=TIMA, w=TAC
+    uvec4 stats;     // x=totalCycles, y=frameCount, z=romLoaded, w=joypSelect
+    uvec4 events;    // x=lastInput, y=audioPulse, z=bootDone, w=reserved
+};
+
+layout(std430, set = 0, binding = 0) readonly buffer StateBuf {
+    CPUState cpu;
+    uint vram[2048];     // 8 KB VRAM
+    uint wram[2048];     // 8 KB WRAM
+    uint oam[40];        // 160 B OAM
+    uint hram[32];       // 128 B HRAM
+    uint lcd[5760];      // 160 x 144 pixels (4 pixels per uint)
+    uint rom[8192];      // 32 KB Cartridge ROM
+};
+
+// -----------------------------------------------------------------------------
+// 5x7 Arcade Font Engine
+// -----------------------------------------------------------------------------
+int getGlyphRow(int c, int row) {
+    int r = 0;
+    if (c == 32) r = 0x00000;
+    else if (c == 33) r = 0x2082020; // !
+    else if (c == 40) r = 0x1104104; // (
+    else if (c == 41) r = 0x4104110; // )
+    else if (c == 43) r = 0x0087E20; // +
+    else if (c == 45) r = 0x0003800; // -
+    else if (c == 46) r = 0x0000020; // .
+    else if (c == 47) r = 0x0841040; // /
+    else if (c == 48) r = 0x3A6B52E; // 0
+    else if (c == 49) r = 0x118208E; // 1
+    else if (c == 50) r = 0x3A0F84F; // 2
+    else if (c == 51) r = 0x3A0982E; // 3
+    else if (c == 52) r = 0x0B29F22; // 4
+    else if (c == 53) r = 0x7E1F02E; // 5
+    else if (c == 54) r = 0x3A1F46E; // 6
+    else if (c == 55) r = 0x7C10844; // 7
+    else if (c == 56) r = 0x3A2746E; // 8
+    else if (c == 57) r = 0x3A2782E; // 9
+    else if (c == 58) r = 0x0020020; // :
+    else if (c == 60) r = 0x0908082; // <
+    else if (c == 62) r = 0x4102110; // >
+    else if (c == 65) r = 0x3A2F462; // A
+    else if (c == 66) r = 0x7A2F46E; // B
+    else if (c == 67) r = 0x3A2104E; // C
+    else if (c == 68) r = 0x7A2346E; // D
+    else if (c == 69) r = 0x7E1F04F; // E
+    else if (c == 70) r = 0x7E1F041; // F
+    else if (c == 71) r = 0x3A2746E; // G
+    else if (c == 72) r = 0x462F462; // H
+    else if (c == 73) r = 0x388208E; // I
+    else if (c == 74) r = 0x041094C; // J
+    else if (c == 75) r = 0x4653262; // K
+    else if (c == 76) r = 0x421084F; // L
+    else if (c == 77) r = 0x4775462; // M
+    else if (c == 78) r = 0x4735662; // N
+    else if (c == 79) r = 0x3A2344E; // O
+    else if (c == 80) r = 0x7A2F041; // P
+    else if (c == 81) r = 0x3A2354A; // Q
+    else if (c == 82) r = 0x7A2F262; // R
+    else if (c == 83) r = 0x3A1702E; // S
+    else if (c == 84) r = 0x7C82084; // T
+    else if (c == 85) r = 0x462346E; // U
+    else if (c == 86) r = 0x4623454; // V
+    else if (c == 87) r = 0x46256B5; // W
+    else if (c == 88) r = 0x4542152; // X
+    else if (c == 89) r = 0x4542084; // Y
+    else if (c == 90) r = 0x7C1110F; // Z
+
+    int shift = (6 - row) * 4;
+    if (row == 6) return (r & 0xF) << 1;
+    return (r >> shift) & 0x1F;
 }
 
-float drawDigit(vec2 p, vec2 origin, uint d){
-    if(d>9u)return 0.0;
-    return drawChar(p, origin, 48u + d);
-}
-
-float drawNumber5(vec2 p, vec2 origin, uint v){
-    float ink = 0.0;
-    float gw = float(GLYPH_W);
-    ink = max(ink, drawDigit(p, origin, (v / 10000u) % 10u));
-    ink = max(ink, drawDigit(p, origin + vec2(gw, 0.0), (v / 1000u) % 10u));
-    ink = max(ink, drawDigit(p, origin + vec2(gw * 2.0, 0.0), (v / 100u) % 10u));
-    ink = max(ink, drawDigit(p, origin + vec2(gw * 3.0, 0.0), (v / 10u) % 10u));
-    ink = max(ink, drawDigit(p, origin + vec2(gw * 4.0, 0.0), v % 10u));
-    return ink;
-}
-
-// Render pixel-art game scene in 160x144 GameBoy screen space
-uint renderDmgPixel(ivec2 p, uint palMode) {
-    int worldX = p.x + c.piece.x;
-    int worldY = p.y;
-
-    float px = c.flow.x;
-    float py = c.flow.y;
-    int facing = c.piece.z;
-    int anim = c.piece.y;
-    uint score = c.game.y;
-    uint lives = c.game.w;
-
-    // --- A. LCD Status Bar (Top 12 pixels) ---
-    if (p.y < 12) {
-        // Top background bar
-        if (p.y == 11) return 3u; // black separator line
-        // Text "SCORE 00500"
-        int sX = p.x - 4;
-        if (sX >= 0 && sX < 30 && p.y >= 2 && p.y <= 9) {
-            return 2u; // text label
+float drawChar(vec2 p, vec2 pos, float scale, int ch) {
+    vec2 lp = (p - pos) / scale;
+    if (lp.x < 0.0 || lp.x >= 5.0 || lp.y < 0.0 || lp.y >= 7.0) return 0.0;
+    int col = int(lp.x);
+    int row = int(lp.y);
+    if (row == 6) {
+        if (ch == 48 || ch == 50 || ch == 51 || ch == 53 || ch == 54 || ch == 56 || ch == 57 ||
+            ch == 66 || ch == 67 || ch == 68 || ch == 69 || ch == 71 || ch == 73 || ch == 74 ||
+            ch == 76 || ch == 79 || ch == 83 || ch == 85 || ch == 90) {
+            return (col >= 1 && col <= 3) ? 1.0 : 0.0;
         }
-        // Heart icons for lives
-        for (uint i = 0u; i < 3u; i++) {
-            if (i < lives) {
-                int hx = 130 + int(i) * 9;
-                if (p.x >= hx && p.x <= hx + 6 && p.y >= 3 && p.y <= 8) {
-                    return 3u; // dark heart
+        if (ch == 49 || ch == 55 || ch == 73 || ch == 84 || ch == 89) return (col == 2) ? 1.0 : 0.0;
+        if (ch == 65 || ch == 72 || ch == 75 || ch == 77 || ch == 78 || ch == 82 || ch == 87 || ch == 88) {
+            return (col == 0 || col == 4) ? 1.0 : 0.0;
+        }
+        if (ch == 80 || ch == 70) return (col == 0) ? 1.0 : 0.0;
+        if (ch == 86) return (col == 2) ? 1.0 : 0.0;
+        if (ch == 46 || ch == 58 || ch == 33) return (col == 2) ? 1.0 : 0.0;
+        return 0.0;
+    }
+    int bits = getGlyphRow(ch, row);
+    int bit = (bits >> (4 - col)) & 1;
+    return float(bit);
+}
+
+int hexDigit(uint v, int nib) {
+    uint d = (v >> (nib * 4)) & 0xFu;
+    return (d < 10u) ? int(48u + d) : int(55u + d);
+}
+
+float drawHex16(vec2 p, vec2 pos, float scale, uint val) {
+    float adv = 6.0 * scale;
+    float a = 0.0;
+    for (int i = 0; i < 4; i++) {
+        a = max(a, drawChar(p, pos + vec2(float(i) * adv, 0.0), scale, hexDigit(val, 3 - i)));
+    }
+    return a;
+}
+
+float drawHex8(vec2 p, vec2 pos, float scale, uint val) {
+    float adv = 6.0 * scale;
+    float a = 0.0;
+    a = max(a, drawChar(p, pos, scale, hexDigit(val, 1)));
+    a = max(a, drawChar(p, pos + vec2(adv, 0.0), scale, hexDigit(val, 0)));
+    return a;
+}
+
+float sdRoundBox(vec2 p, vec2 b, float r) {
+    vec2 q = abs(p) - b + r;
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+}
+
+// 4-corner independent radius rounded box:
+// r.x = top-right, r.y = bottom-right, r.z = top-left, r.w = bottom-left
+// (With Y=0 at TOP, p.y < 0 is TOP, p.y > 0 is BOTTOM)
+float sdRoundBox4(vec2 p, vec2 b, vec4 r) {
+    vec2 rad = (p.x > 0.0) ? r.xy : r.zw;
+    float radius = (p.y > 0.0) ? rad.y : rad.x;
+    vec2 q = abs(p) - b + radius;
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
+}
+
+// Authentic DMG-01 Olive-Green 4-shade LCD Palette
+vec3 dmgColor(uint shade) {
+    if (shade == 0u) return vec3(0.608, 0.737, 0.059); // #9BBC0F (Lightest Olive)
+    if (shade == 1u) return vec3(0.545, 0.675, 0.059); // #8BAC0F (Light Olive)
+    if (shade == 2u) return vec3(0.188, 0.384, 0.188); // #306230 (Dark Olive)
+    return vec3(0.059, 0.220, 0.059);                  // #0F380F (Darkest Olive)
+}
+
+uint readLCD(ivec2 p) {
+    int idx = p.y * 160 + p.x;
+    uint word = lcd[idx >> 2];
+    uint shift = uint(idx & 3) * 8u;
+    return (word >> shift) & 3u;
+}
+
+uint readVRAMByte(uint addr) {
+    uint a = addr & 0x1FFFu;
+    uint w = vram[a >> 2];
+    return (w >> ((a & 3u) * 8u)) & 0xFFu;
+}
+
+void main() {
+    vec2 sp = gl_FragCoord.xy; // sp.y = 0 at TOP, 1080 at BOTTOM
+
+    // Deep retro studio backdrop with subtle grid
+    vec3 col = mix(vec3(0.05, 0.06, 0.09), vec3(0.09, 0.11, 0.15), sp.y / 1080.0);
+    if (mod(sp.x, 32.0) < 1.0 || mod(sp.y, 32.0) < 1.0) {
+        col += vec3(0.008, 0.010, 0.015);
+    }
+
+    uint buttons = cpu.events.x;
+
+    // =========================================================================
+    // 1. AUTHENTIC 1989 GAME BOY DMG-01 HANDHELD BODY & BEZEL
+    // =========================================================================
+    // Shell spans X: [410, 1510] (width 1100), Y: [14, 1066] (height 1052)
+    vec2 shellCenter = vec2(960.0, 540.0);
+    vec2 shellHalf   = vec2(550.0, 526.0);
+    // Corners: TR=28, BR=115 (iconic DMG bottom-right curve), TL=28, BL=28
+    float dShell = sdRoundBox4(sp - shellCenter, shellHalf, vec4(28.0, 115.0, 28.0, 28.0));
+
+    // Soft drop shadow behind handheld shell
+    float dShellShadow = sdRoundBox4(sp - (shellCenter + vec2(12.0, 16.0)), shellHalf, vec4(28.0, 115.0, 28.0, 28.0));
+    if (dShellShadow < 0.0) {
+        col *= 0.35;
+    }
+
+    if (dShell < 0.0) {
+        // Authentic DMG-01 warm putty grey ABS plastic (#D4CFC2)
+        vec3 puttyBase = vec3(0.831, 0.812, 0.761);
+        // Subtle matte ABS texture noise
+        float grain = fract(sin(dot(floor(sp), vec2(12.9898, 78.233))) * 43758.5453);
+        vec3 shellCol = puttyBase + (grain - 0.5) * 0.014;
+
+        // 3D beveled plastic edge lighting along outer boundary
+        float edgeDist = -dShell;
+        if (edgeDist < 10.0) {
+            float bevel = 1.0 - edgeDist / 10.0;
+            // Top & left highlight, bottom & right shadow
+            float lightDir = ((sp.x < 960.0 ? 0.4 : -0.5) + (sp.y < 540.0 ? 0.6 : -0.6));
+            shellCol += vec3(lightDir * bevel * 0.14);
+        }
+
+        // Characteristic DMG-01 top horizontal relief seam groove (Y = 46)
+        if (abs(sp.y - 46.0) < 2.0 && sp.x > 414.0 && sp.x < 1506.0) {
+            shellCol = (sp.y < 46.0) ? shellCol * 0.68 : shellCol * 1.08;
+        }
+        // Top vertical corner notch grooves (X = 468 and X = 1452, above Y = 46)
+        if (sp.y < 46.0 && (abs(sp.x - 468.0) < 2.0 || abs(sp.x - 1452.0) < 2.0)) {
+            shellCol *= 0.70;
+        }
+
+        // Molded "< OFF•ON >" recessed pill badge on top-left (Y = 28)
+        float dOffOnPill = sdRoundBox(sp - vec2(548.0, 28.0), vec2(58.0, 9.0), 8.0);
+        if (dOffOnPill < 0.0) {
+            shellCol *= 0.90;
+        } else if (dOffOnPill < 1.5) {
+            shellCol *= 1.05;
+        }
+        int offOnStr[8] = int[8](60, 79, 70, 70, 46, 79, 78, 62); // "<OFF.ON>"
+        float offOnTxt = 0.0;
+        for (int i = 0; i < 8; i++) {
+            offOnTxt = max(offOnTxt, drawChar(sp, vec2(502.0 + float(i) * 11.5, 22.0), 1.6, offOnStr[i]));
+        }
+        shellCol = mix(shellCol, shellCol * 0.66, offOnTxt);
+
+        // =====================================================================
+        // 2. DARK GREY SCREEN LENS BEZEL (Y: 60 to 870, X: 446 to 1474)
+        // =====================================================================
+        vec2 bezelCenter = vec2(960.0, 465.0);
+        vec2 bezelHalf   = vec2(514.0, 405.0);
+        // Corners: TR=18, BR=78 (chamfered curve), TL=18, BL=18
+        float dBezel = sdRoundBox4(sp - bezelCenter, bezelHalf, vec4(18.0, 78.0, 18.0, 18.0));
+
+        // Recessed plastic seam around bezel lens
+        if (abs(dBezel) < 2.5) {
+            shellCol *= 0.62;
+        }
+
+        if (dBezel < 0.0) {
+            // Authentic DMG-01 dark brownish-slate screen protector lens (#5A5864)
+            vec3 lensCol = vec3(0.353, 0.345, 0.392);
+            // Subtle diagonal glass reflection sheen
+            float sheen = smoothstep(0.0, 140.0, 140.0 - abs((sp.x - 960.0) * 0.55 + (sp.y - 465.0) + 180.0));
+            lensCol += vec3(0.025) * sheen;
+
+            // Inner bevel at outer edge of lens
+            if (-dBezel < 4.0) {
+                lensCol *= 0.78;
+            }
+
+            // -----------------------------------------------------------------
+            // Double Accent Lines (Magenta #8B1D41 & Navy #1D2951) + Header Text
+            // -----------------------------------------------------------------
+            vec3 stripeBurgundy = vec3(0.580, 0.125, 0.275);
+            vec3 stripeNavy     = vec3(0.145, 0.195, 0.385);
+
+            // Top header text: "DOT MATRIX WITH STEREO SOUND" at Y = 80..94
+            // Stripe 1 (Burgundy): Y = 77..81
+            // Stripe 2 (Navy):     Y = 91..95
+            // Left segment of stripes: X = 472..788, Right segment: X = 1296..1448
+            bool inStripeX = (sp.x >= 472.0 && sp.x <= 788.0) || (sp.x >= 1296.0 && sp.x <= 1448.0);
+            if (inStripeX) {
+                if (sp.y >= 77.0 && sp.y <= 81.0) lensCol = stripeBurgundy;
+                if (sp.y >= 91.0 && sp.y <= 95.0) lensCol = stripeNavy;
+            }
+
+            // "DOT MATRIX WITH STEREO SOUND" in crisp silver-white at X = 800, Y = 80
+            int hdr[28] = int[28](
+                68, 79, 84, 32, 77, 65, 84, 82, 73, 88, 32,
+                87, 73, 84, 72, 32,
+                83, 84, 69, 82, 69, 79, 32,
+                83, 79, 85, 78, 68
+            );
+            float hdrTxt = 0.0;
+            for (int i = 0; i < 28; i++) {
+                hdrTxt = max(hdrTxt, drawChar(sp, vec2(800.0 + float(i) * 17.5, 80.0), 2.2, hdr[i]));
+            }
+            lensCol = mix(lensCol, vec3(0.88, 0.88, 0.90), hdrTxt);
+
+            // -----------------------------------------------------------------
+            // Red "BATTERY" Indicator LED on Left Bezel (X = 502, Y = 430)
+            // -----------------------------------------------------------------
+            vec2 ledPos = vec2(502.0, 430.0);
+            float ledDist = length(sp - ledPos);
+            // Soft red glow halo
+            lensCol += vec3(0.45, 0.04, 0.02) * exp(-ledDist * 0.09);
+            if (ledDist < 12.0) {
+                // Dark LED bezel ring
+                lensCol = vec3(0.15, 0.05, 0.05);
+            }
+            if (ledDist < 9.5) {
+                // 3D glossy red dome LED
+                float dome = sqrt(max(0.0, 1.0 - (ledDist / 9.5) * (ledDist / 9.5)));
+                lensCol = vec3(0.85, 0.08, 0.05) + vec3(0.35, 0.25, 0.20) * pow(dome, 3.0);
+                // Specular highlight dot on top-left of LED
+                if (length(sp - (ledPos + vec2(-3.0, -3.0))) < 2.8) {
+                    lensCol = vec3(1.0, 0.85, 0.80);
+                }
+            }
+
+            // "BATTERY" label below the LED (Y = 460)
+            int batStr[7] = int[7](66, 65, 84, 84, 69, 82, 89);
+            float batTxt = 0.0;
+            for (int i = 0; i < 7; i++) {
+                batTxt = max(batTxt, drawChar(sp, vec2(465.0 + float(i) * 11.5, 460.0), 1.65, batStr[i]));
+            }
+            lensCol = mix(lensCol, vec3(0.86, 0.86, 0.88), batTxt);
+
+            // -----------------------------------------------------------------
+            // 3. SUNKEN 160x144 DOT-MATRIX LCD WINDOW (5x scale -> 800x720)
+            //    Spans X: [560, 1360], Y: [116, 836]
+            // -----------------------------------------------------------------
+            // Olive-green outer LCD frame border (X: [548, 1372], Y: [106, 846])
+            if (sp.x >= 548.0 && sp.x < 1372.0 && sp.y >= 106.0 && sp.y < 846.0) {
+                // Sunken olive margin around active pixel matrix
+                lensCol = vec3(0.51, 0.62, 0.09);
+
+                // Inner bezel drop shadow cast onto top & left of LCD glass
+                float shadowTop  = clamp((124.0 - sp.y) / 18.0, 0.0, 1.0);
+                float shadowLeft = clamp((566.0 - sp.x) / 18.0, 0.0, 1.0);
+                lensCol *= (1.0 - 0.38 * max(shadowTop, shadowLeft));
+
+                // Active 160x144 pixel matrix (X: [560, 1360], Y: [116, 836])
+                if (sp.x >= 560.0 && sp.x < 1360.0 && sp.y >= 116.0 && sp.y < 836.0) {
+                    vec2 lcdP = (sp - vec2(560.0, 116.0)) / 5.0;
+                    // Right-side up: lcdP.y = 0 at top (row 0), 143 at bottom (row 143)
+                    ivec2 p = ivec2(floor(lcdP));
+                    p = clamp(p, ivec2(0), ivec2(159, 143));
+
+                    uint shade = readLCD(p);
+                    vec3 pixCol = dmgColor(shade);
+
+                    // Authentic Dot-Matrix sub-pixel grid (5x5 screen pixels per GB pixel)
+                    vec2 sub = fract(lcdP);
+                    float gridX = smoothstep(0.0, 0.16, sub.x) * smoothstep(1.0, 0.84, sub.x);
+                    float gridY = smoothstep(0.0, 0.16, sub.y) * smoothstep(1.0, 0.84, sub.y);
+                    float dotMask = gridX * gridY;
+
+                    // Unlit olive-green substrate visible between liquid crystal dots
+                    vec3 substrate = vec3(0.635, 0.755, 0.095);
+                    // Darker pixels cast a tiny shadow onto the reflective backing
+                    pixCol = mix(mix(substrate, pixCol, 0.42), pixCol, dotMask);
+
+                    // Top/left recessed shadow from the physical bezel frame onto the active LCD
+                    float innerShadowT = clamp((126.0 - sp.y) / 10.0, 0.0, 1.0);
+                    float innerShadowL = clamp((570.0 - sp.x) / 10.0, 0.0, 1.0);
+                    pixCol *= (1.0 - 0.25 * max(innerShadowT, innerShadowL));
+
+                    lensCol = pixCol;
+                }
+            }
+
+            shellCol = lensCol;
+        }
+
+        // =====================================================================
+        // 4. LOWER FACEPLATE DETAILS (Y: 870 to 1066)
+        //    "GAME BOY TM" Logo, Cross D-Pad, A/B Buttons, Select/Start, Speaker
+        // =====================================================================
+        if (dBezel >= 0.0 && sp.y > 870.0) {
+            // "GAME BOY TM" Navy Emblem below bottom-left of bezel (X = 460, Y = 886)
+            vec3 logoNavy = vec3(0.14, 0.18, 0.42);
+            int gbLogo[8] = int[8](71, 65, 77, 69, 32, 66, 79, 89); // "GAME BOY"
+            float logoMask = 0.0;
+            for (int i = 0; i < 8; i++) {
+                logoMask = max(logoMask, drawChar(sp, vec2(460.0 + float(i) * 24.0, 886.0), 3.4, gbLogo[i]));
+            }
+            // Small "TM" next to GAME BOY
+            logoMask = max(logoMask, drawChar(sp, vec2(660.0, 898.0), 1.6, 84)); // T
+            logoMask = max(logoMask, drawChar(sp, vec2(671.0, 898.0), 1.6, 77)); // M
+            shellCol = mix(shellCol, logoNavy, logoMask);
+
+            // -----------------------------------------------------------------
+            // Cross D-Pad on Left (Center: X = 565, Y = 980)
+            // -----------------------------------------------------------------
+            vec2 dpadC = vec2(565.0, 980.0);
+            vec2 dp = sp - dpadC;
+            // Subtle circular recessed well in the shell
+            if (length(dp) < 62.0) {
+                shellCol *= 0.96;
+            }
+            float dHoriz = sdRoundBox(dp, vec2(50.0, 17.0), 4.0);
+            float dVert  = sdRoundBox(dp, vec2(17.0, 50.0), 4.0);
+            float dCross = min(dHoriz, dVert);
+            if (dCross < 2.5 && dCross >= 0.0) {
+                shellCol *= 0.55; // Dark recess around D-Pad
+            } else if (dCross < 0.0) {
+                // Matte black/charcoal D-Pad plastic
+                vec3 dpadCol = vec3(0.14, 0.14, 0.16);
+                // Bevel highlight on edges
+                if (-dCross < 3.5) dpadCol += vec3(0.08);
+                // Center pivot circle dimple
+                float rCenter = length(dp);
+                if (rCenter < 11.0) {
+                    dpadCol = vec3(0.10, 0.10, 0.12) + vec3(0.04) * (dp.y / 11.0);
+                }
+                // Molded directional grip ribs (3 ridges per arm)
+                if (abs(dp.y) < 10.0 && (abs(abs(dp.x) - 24.0) < 1.8 || abs(abs(dp.x) - 32.0) < 1.8 || abs(abs(dp.x) - 40.0) < 1.8)) {
+                    dpadCol *= 0.72;
+                }
+                if (abs(dp.x) < 10.0 && (abs(abs(dp.y) - 24.0) < 1.8 || abs(abs(dp.y) - 32.0) < 1.8 || abs(abs(dp.y) - 40.0) < 1.8)) {
+                    dpadCol *= 0.72;
+                }
+                // Highlight active direction when pressed on S2 controller
+                if ((buttons & (1u << 12)) != 0u && dp.x < -15.0 && abs(dp.y) < 15.0) dpadCol += vec3(0.18, 0.18, 0.22); // Left
+                if ((buttons & (1u << 14)) != 0u && dp.x >  15.0 && abs(dp.y) < 15.0) dpadCol += vec3(0.18, 0.18, 0.22); // Right
+                if ((buttons & (1u << 13)) != 0u && dp.y < -15.0 && abs(dp.x) < 15.0) dpadCol += vec3(0.18, 0.18, 0.22); // Up
+                if ((buttons & (1u << 15)) != 0u && dp.y >  15.0 && abs(dp.x) < 15.0) dpadCol += vec3(0.18, 0.18, 0.22); // Down
+                shellCol = dpadCol;
+            }
+
+            // -----------------------------------------------------------------
+            // Angled Burgundy A & B Buttons in Sunken Pill Recess (Right)
+            //   B at (1235, 992), A at (1330, 948) -> ~25 deg angle
+            // -----------------------------------------------------------------
+            vec2 abCenter = vec2(1282.5, 970.0);
+            vec2 abRel = sp - abCenter;
+            float ang = -0.436; // -25 degrees
+            float ca = cos(ang), sa = sin(ang);
+            vec2 abRot = vec2(ca * abRel.x - sa * abRel.y, sa * abRel.x + ca * abRel.y);
+            // Sunken pill well around A & B buttons
+            float dABWell = sdRoundBox(abRot, vec2(86.0, 36.0), 36.0);
+            if (dABWell < 0.0) {
+                shellCol *= 0.91;
+                if (-dABWell < 3.0) shellCol *= 0.88;
+            }
+
+            vec2 posB = vec2(1235.0, 992.0);
+            vec2 posA = vec2(1330.0, 948.0);
+            float distB = length(sp - posB);
+            float distA = length(sp - posA);
+            bool pressB = (buttons & ((1u << 1) | (1u << 2))) != 0u;
+            bool pressA = (buttons & ((1u << 0) | (1u << 3))) != 0u;
+
+            if (distB < 27.0 || distA < 27.0) {
+                vec2 bRel = (distB < 27.0) ? (sp - posB) : (sp - posA);
+                bool isPressed = (distB < 27.0) ? pressB : pressA;
+                float r = length(bRel);
+                if (r > 24.5) {
+                    shellCol = vec3(0.15, 0.06, 0.10); // Button hole shadow
+                } else {
+                    // Authentic DMG-01 glossy burgundy/magenta button (#8B1D41)
+                    float dome = sqrt(max(0.0, 1.0 - (r / 24.5) * (r / 24.5)));
+                    vec3 btnCol = vec3(0.56, 0.10, 0.27) * (0.75 + 0.35 * dome);
+                    // Glossy specular reflection on top-left of button cap
+                    float spec = exp(-length(bRel - vec2(-7.0, -8.0)) * 0.16);
+                    btnCol += vec3(0.32, 0.18, 0.22) * spec;
+                    if (isPressed) btnCol += vec3(0.22, 0.08, 0.12);
+                    shellCol = btnCol;
+                }
+            }
+
+            // "B" and "A" navy labels below-right of each button
+            float lblB = drawChar(sp, vec2(1250.0, 1022.0), 2.5, 66); // B
+            float lblA = drawChar(sp, vec2(1345.0, 978.0), 2.5, 65);  // A
+            shellCol = mix(shellCol, logoNavy, max(lblB, lblA));
+
+            // -----------------------------------------------------------------
+            // Angled Silicone SELECT & START Pill Buttons (Center-Bottom)
+            // -----------------------------------------------------------------
+            vec2 selCenter = vec2(885.0, 1018.0);
+            vec2 staCenter = vec2(985.0, 1018.0);
+            vec2 selRot = vec2(ca * (sp.x - selCenter.x) - sa * (sp.y - selCenter.y),
+                               sa * (sp.x - selCenter.x) + ca * (sp.y - selCenter.y));
+            vec2 staRot = vec2(ca * (sp.x - staCenter.x) - sa * (sp.y - staCenter.y),
+                               sa * (sp.x - staCenter.x) + ca * (sp.y - staCenter.y));
+            float dSel = sdRoundBox(selRot, vec2(24.0, 6.5), 6.5);
+            float dSta = sdRoundBox(staRot, vec2(24.0, 6.5), 6.5);
+            if (dSel < 2.0 && dSel >= 0.0) shellCol *= 0.72;
+            if (dSta < 2.0 && dSta >= 0.0) shellCol *= 0.72;
+            if (dSel < 0.0 || dSta < 0.0) {
+                shellCol = vec3(0.38, 0.37, 0.41); // Grey rubber silicone pill
+                bool selPressed = (buttons & (1u << 11)) != 0u;
+                bool staPressed = (buttons & (1u << 10)) != 0u;
+                if ((dSel < 0.0 && selPressed) || (dSta < 0.0 && staPressed)) {
+                    shellCol += vec3(0.20);
+                }
+            }
+            // "SELECT" and "START" labels below the pills
+            int selTxt[6] = int[6](83, 69, 76, 69, 67, 84);
+            int staTxt[5] = int[5](83, 84, 65, 82, 84);
+            float ssMask = 0.0;
+            for (int i = 0; i < 6; i++) ssMask = max(ssMask, drawChar(sp, vec2(855.0 + float(i) * 10.5, 1038.0), 1.5, selTxt[i]));
+            for (int i = 0; i < 5; i++) ssMask = max(ssMask, drawChar(sp, vec2(960.0 + float(i) * 10.5, 1038.0), 1.5, staTxt[i]));
+            shellCol = mix(shellCol, logoNavy, ssMask);
+
+            // -----------------------------------------------------------------
+            // 6 Diagonal Speaker Grille Slots in Bottom-Right Curve
+            // -----------------------------------------------------------------
+            float spkAng = 0.58; // ~33 deg diagonal slots
+            float cs = cos(spkAng), ss = sin(spkAng);
+            for (int i = 0; i < 6; i++) {
+                vec2 slotC = vec2(1375.0 + float(i) * 18.0, 1028.0 - float(i) * 11.0);
+                vec2 sr = sp - slotC;
+                vec2 sRot = vec2(cs * sr.x - ss * sr.y, ss * sr.x + cs * sr.y);
+                float dSlot = sdRoundBox(sRot, vec2(3.5, 30.0), 3.5);
+                if (dSlot < 0.0) {
+                    shellCol = vec3(0.12, 0.11, 0.10); // Dark acoustic mesh inside slot
+                } else if (dSlot < 1.8) {
+                    shellCol *= 0.78; // Beveled slot lip
                 }
             }
         }
-        return 0u;
+
+        col = shellCol;
     }
 
-    // --- B. Ground & Tilemap ---
-    if (worldY >= 120) {
-        // Underground solid rock
-        bool checker = ((worldX / 8) + (worldY / 8)) % 2 == 0;
-        return checker ? 3u : 2u;
-    } else if (worldY >= 112) {
-        // Ground grass surface
-        if (worldY == 112) return 3u; // grass edge
-        return (worldX % 4 == 0) ? 2u : 1u;
-    }
+    // =========================================================================
+    // 5. LEFT HARDWARE MONITOR WING (X: 25 to 385, Y: 60 to 1020)
+    //    Live Sharp LR35902 CPU Registers + Timer/Interrupt Status
+    // =========================================================================
+    float dLeftWing = sdRoundBox(sp - vec2(205.0, 540.0), vec2(180.0, 480.0), 14.0);
+    if (dLeftWing < 0.0) {
+        vec3 pCol = vec3(0.08, 0.10, 0.14);
+        if (dLeftWing > -2.5) pCol = vec3(0.22, 0.28, 0.38);
 
-    // Floating Platform 1: X in [80..130], Y in [84..90]
-    if (worldX >= 80 && worldX <= 130 && worldY >= 84 && worldY <= 90) {
-        bool brickLine = (worldX % 8 == 0) || (worldY == 84) || (worldY == 90);
-        return brickLine ? 3u : 2u;
-    }
-    // Floating Platform 2: X in [170..230], Y in [64..70]
-    if (worldX >= 170 && worldX <= 230 && worldY >= 64 && worldY <= 70) {
-        bool brickLine = (worldX % 8 == 0) || (worldY == 64) || (worldY == 70);
-        return brickLine ? 3u : 2u;
-    }
-
-    // --- C. Collectible Coins ---
-    // Coin 1 at (105, 68)
-    if ((c.game.z & 1u) == 0u) {
-        ivec2 cd = abs(ivec2(worldX, worldY) - ivec2(105, 68));
-        int coinW = int(abs(sin(c.motion.x * 6.0)) * 4.0) + 1;
-        if (cd.x <= coinW && cd.y <= 5) {
-            return (cd.x == coinW || cd.y == 5) ? 3u : 1u;
+        // Header: "LR35902 CPU" (Y = 85)
+        int title[11] = int[11](76, 82, 51, 53, 57, 48, 50, 32, 67, 80, 85);
+        float tm = 0.0;
+        for (int i = 0; i < 11; i++) {
+            tm = max(tm, drawChar(sp, vec2(50.0 + float(i) * 20.0, 85.0), 2.8, title[i]));
         }
-    }
-    // Coin 2 at (200, 48)
-    if ((c.game.z & 2u) == 0u) {
-        ivec2 cd = abs(ivec2(worldX, worldY) - ivec2(200, 48));
-        int coinW = int(abs(sin(c.motion.x * 6.0)) * 4.0) + 1;
-        if (cd.x <= coinW && cd.y <= 5) {
-            return (cd.x == coinW || cd.y == 5) ? 3u : 1u;
-        }
-    }
+        pCol = mix(pCol, vec3(0.608, 0.737, 0.059), tm);
 
-    // --- D. Enemies ---
-    // Slime 1
-    float e1x = float(c.stats.x);
-    if (e1x < 500.0) {
-        ivec2 ed = abs(ivec2(worldX - int(e1x), worldY - 110));
-        if (ed.x <= 7 && ed.y <= 5) {
-            if (ed.x == 7 || ed.y == 5) return 3u;
-            if (ed.y == 1 && ed.x <= 3) return 0u; // eye
-            return 2u;
-        }
-    }
+        // 16-bit Register Readouts (AF, BC, DE, HL, SP, PC)
+        uint regs[6] = uint[6](
+            cpu.regs0.x, cpu.regs0.y, cpu.regs0.z,
+            cpu.regs0.w, cpu.regs1.x, cpu.regs1.y
+        );
+        int rNames[12] = int[12](65, 70, 66, 67, 68, 69, 72, 76, 83, 80, 80, 67);
 
-    // Bat 2
-    float e2x = float(c.stats.z);
-    if (e2x < 500.0) {
-        float e2y = 48.0 + sin(c.motion.x * 4.0) * 14.0;
-        ivec2 bd = abs(ivec2(worldX - int(e2x), worldY - int(e2y)));
-        if (bd.x <= 8 && bd.y <= 5) {
-            bool flap = mod(c.motion.w, 16.0) < 8.0;
-            if (flap && bd.y <= 2) return 3u;
-            return 2u;
-        }
-    }
+        for (int r = 0; r < 6; r++) {
+            float ry = 145.0 + float(r) * 44.0;
+            float lbl = 0.0;
+            lbl = max(lbl, drawChar(sp, vec2(50.0, ry), 2.6, rNames[r * 2]));
+            lbl = max(lbl, drawChar(sp, vec2(68.0, ry), 2.6, rNames[r * 2 + 1]));
+            lbl = max(lbl, drawChar(sp, vec2(86.0, ry), 2.6, 58)); // :
+            pCol = mix(pCol, vec3(0.55, 0.65, 0.78), lbl);
 
-    // --- E. Hero Character (Player) ---
-    // Size: 12 wide x 16 high centered at (px, py - 8)
-    int hRelX = (worldX - int(px)) * facing;
-    int hRelY = worldY - (int(py) - 8);
-
-    if (abs(hRelX) <= 6 && abs(hRelY) <= 8) {
-        // Hat / Hair (top 4 pixels)
-        if (hRelY < -4) return 3u;
-        // Face / Eyes (middle 4 pixels)
-        if (hRelY >= -4 && hRelY <= 0) {
-            if (hRelX == 2 && hRelY >= -2 && hRelY <= -1) return 3u; // eye
-            return 1u; // face skin
-        }
-        // Body / Shirt
-        if (hRelY > 0 && hRelY <= 5) {
-            return 2u; // overalls
-        }
-        // Legs (animated running)
-        if (hRelY > 5) {
-            bool legStep = (anim % 16) < 8;
-            if (legStep && hRelX < 0) return 3u;
-            if (!legStep && hRelX >= 0) return 3u;
-            return 1u;
-        }
-    }
-
-    // --- F. Background Clouds & Hills ---
-    // Distant mountain parallax
-    int hillY = 112 - int(sin(float(worldX) * 0.04) * 16.0 + 12.0);
-    if (worldY >= hillY) {
-        return (worldY - hillY < 2) ? 2u : 1u;
-    }
-
-    // Clouds
-    int cloudX = int(worldX * 0.5 + c.motion.x * 6.0) % 180;
-    if (cloudX > 30 && cloudX < 75 && worldY >= 26 && worldY <= 38) {
-        return 1u;
-    }
-
-    return 0u; // Sky background (lightest tone)
-}
-
-void main(){
-    vec2 sp = gl_FragCoord.xy; // 0..1920, 0..1080
-    uint palMode = uint(c.transition.x);
-
-    // Screen Center: 1920x1080
-    // GameBoy DMG LCD Screen Area: 160x144 scaled 6x = 960x864 pixels
-    // Centered: X from 480 to 1440, Y from 108 to 972
-    vec2 lcdMin = vec2(480.0, 108.0);
-    vec2 lcdMax = vec2(1440.0, 972.0);
-    vec2 lcdSize = lcdMax - lcdMin;
-
-    vec3 col = vec3(0.08, 0.09, 0.11); // Dark Studio Background
-
-    // 1. GAMEBOY DMG CHASSIS (Bezel surrounding LCD)
-    vec2 chassisMin = vec2(380.0, 50.0);
-    vec2 chassisMax = vec2(1540.0, 1030.0);
-    float dChassis = box(sp, vec2(960.0, 540.0), (chassisMax - chassisMin) * 0.5, 32.0);
-
-    if (dChassis < 0.0) {
-        // Classic DMG off-white / light warm gray plastic
-        col = vec3(0.84, 0.83, 0.80);
-
-        // Dark Gray Bezel Frame around LCD
-        vec2 bezelMin = vec2(430.0, 80.0);
-        vec2 bezelMax = vec2(1490.0, 1000.0);
-        float dBezel = box(sp, vec2(960.0, 540.0), (bezelMax - bezelMin) * 0.5, 18.0);
-
-        if (dBezel < 0.0) {
-            col = vec3(0.44, 0.46, 0.48); // Matte Charcoal Bezel
-
-            // Accent stripes above screen (Magenta & Cobalt Blue)
-            if (sp.y >= 978.0 && sp.y <= 982.0 && sp.x >= 450.0 && sp.x <= 1470.0) {
-                col = vec3(0.70, 0.15, 0.45); // Magenta line
-            }
-            if (sp.y >= 984.0 && sp.y <= 988.0 && sp.x >= 450.0 && sp.x <= 1470.0) {
-                col = vec3(0.15, 0.25, 0.65); // Blue line
-            }
-
-            // Red Battery LED Indicator
-            float dLed = length(sp - vec2(455.0, 680.0)) - 7.0;
-            if (dLed < 0.0) {
-                col = vec3(1.0, 0.15, 0.10); // Glowing Red LED
-            } else if (dLed < 2.0) {
-                col = vec3(0.20, 0.05, 0.05); // LED bezel ring
-            }
-        }
-    }
-
-    // 2. LCD DOT-MATRIX DISPLAY (160x144, 6x integer scale)
-    if (sp.x >= lcdMin.x && sp.x < lcdMax.x && sp.y >= lcdMin.y && sp.y < lcdMax.y) {
-        vec2 lcdP = (sp - lcdMin) / 6.0;
-        ivec2 p = ivec2(floor(lcdP));
-        p.y = 143 - p.y; // invert Y for screen coords
-
-        uint shade = renderDmgPixel(p, palMode);
-        vec3 pixelCol = getDmgColor(shade, palMode);
-
-        // Sub-pixel dot-matrix grid lines (subtle gap between pixels)
-        vec2 gridFrac = fract(lcdP);
-        float gridLine = smoothstep(0.04, 0.10, min(gridFrac.x, 1.0 - gridFrac.x)) *
-                         smoothstep(0.04, 0.10, min(gridFrac.y, 1.0 - gridFrac.y));
-        pixelCol *= (0.88 + 0.12 * gridLine);
-
-        col = pixelCol;
-    }
-
-    // 3. HARDWARE REGISTER DEBUG WINGS (Left & Right Panels)
-    float gw = float(GLYPH_W);
-    float gh = float(GLYPH_H);
-
-    // Left Panel: Specs & Architecture Info
-    if (sp.x < 360.0) {
-        col = vec3(0.06, 0.07, 0.09);
-
-        // "GAMEBOY DMG-01"
-        const uint T1[] = uint[](71u,65u,77u,69u,66u,79u,89u,32u,68u,77u,71u,45u,48u,49u);
-        for (uint i = 0u; i < 14u; i++) {
-            col = mix(col, vec3(0.95, 0.85, 0.30), drawChar(sp, vec2(30.0 + float(i) * gw, 940.0), T1[i]));
+            float val = drawHex16(sp, vec2(125.0, ry), 2.6, regs[r]);
+            pCol = mix(pCol, vec3(0.92, 0.96, 1.0), val);
         }
 
-        // "CPU: LR35902"
-        const uint T2[] = uint[](67u,80u,85u,58u,32u,76u,82u,51u,53u,57u,48u,50u);
-        for (uint i = 0u; i < 12u; i++) {
-            col = mix(col, vec3(0.75, 0.80, 0.90), drawChar(sp, vec2(30.0 + float(i) * gw, 880.0), T2[i]));
+        // PPU Hardware Registers (LCDC, STAT, SCY, SCX, LY, BGP)
+        int ioTitle[7] = int[7](80, 80, 85, 32, 82, 69, 71); // "PPU REG"
+        float iot = 0.0;
+        for (int i = 0; i < 7; i++) {
+            iot = max(iot, drawChar(sp, vec2(50.0 + float(i) * 20.0, 440.0), 2.6, ioTitle[i]));
+        }
+        pCol = mix(pCol, vec3(0.608, 0.737, 0.059), iot);
+
+        uint ios[6] = uint[6](
+            cpu.io0.x, cpu.io0.y, cpu.io0.z,
+            cpu.io0.w, cpu.io1.x, cpu.io1.z
+        );
+        int ioNames[18] = int[18](
+            76, 67, 68,   // LCD
+            83, 84, 65,   // STA
+            83, 67, 89,   // SCY
+            83, 67, 88,   // SCX
+            76, 89, 32,   // LY
+            66, 71, 80    // BGP
+        );
+
+        for (int r = 0; r < 6; r++) {
+            float ry = 490.0 + float(r) * 40.0;
+            float lbl = 0.0;
+            lbl = max(lbl, drawChar(sp, vec2(50.0, ry), 2.4, ioNames[r * 3]));
+            lbl = max(lbl, drawChar(sp, vec2(66.0, ry), 2.4, ioNames[r * 3 + 1]));
+            lbl = max(lbl, drawChar(sp, vec2(82.0, ry), 2.4, ioNames[r * 3 + 2]));
+            lbl = max(lbl, drawChar(sp, vec2(98.0, ry), 2.4, 58));
+            pCol = mix(pCol, vec3(0.55, 0.65, 0.78), lbl);
+
+            float val = drawHex8(sp, vec2(135.0, ry), 2.4, ios[r]);
+            pCol = mix(pCol, vec3(0.92, 0.96, 1.0), val);
         }
 
-        // "CLK: 4.194 MHz"
-        const uint T3[] = uint[](67u,76u,75u,58u,32u,52u,46u,49u,57u,52u,32u,77u,72u,122u);
-        for (uint i = 0u; i < 14u; i++) {
-            col = mix(col, vec3(0.55, 0.65, 0.75), drawChar(sp, vec2(30.0 + float(i) * gw, 840.0), T3[i]));
+        // Controls Guide at bottom of Left Wing (Y = 780..950)
+        int cTitle[8] = int[8](67, 79, 78, 84, 82, 79, 76, 83); // "CONTROLS"
+        float ct = 0.0;
+        for (int i = 0; i < 8; i++) {
+            ct = max(ct, drawChar(sp, vec2(50.0 + float(i) * 18.0, 780.0), 2.4, cTitle[i]));
         }
+        pCol = mix(pCol, vec3(0.608, 0.737, 0.059), ct);
 
-        // "PPU: 160x144"
-        const uint T4[] = uint[](80u,80u,85u,58u,32u,49u,54u,48u,120u,49u,52u,52u);
-        for (uint i = 0u; i < 12u; i++) {
-            col = mix(col, vec3(0.55, 0.65, 0.75), drawChar(sp, vec2(30.0 + float(i) * gw, 800.0), T4[i]));
-        }
+        // "DPAD: MOVE"
+        int c1[10] = int[10](68, 80, 65, 68, 58, 32, 77, 79, 86, 69);
+        // "A/B : ROTATE"
+        int c2[12] = int[12](65, 47, 66, 32, 58, 32, 82, 79, 84, 65, 84, 69);
+        // "PLUS: START"
+        int c3[11] = int[11](80, 76, 85, 83, 58, 32, 83, 84, 65, 82, 84);
+        float cm = 0.0;
+        for (int i = 0; i < 10; i++) cm = max(cm, drawChar(sp, vec2(50.0 + float(i) * 14.0, 830.0), 2.0, c1[i]));
+        for (int i = 0; i < 12; i++) cm = max(cm, drawChar(sp, vec2(50.0 + float(i) * 14.0, 866.0), 2.0, c2[i]));
+        for (int i = 0; i < 11; i++) cm = max(cm, drawChar(sp, vec2(50.0 + float(i) * 14.0, 902.0), 2.0, c3[i]));
+        pCol = mix(pCol, vec3(0.75, 0.82, 0.90), cm);
 
-        // "FPS: 59.73 Hz"
-        const uint T5[] = uint[](70u,80u,83u,58u,32u,53u,57u,46u,55u,51u,32u,72u,122u);
-        for (uint i = 0u; i < 13u; i++) {
-            col = mix(col, vec3(0.40, 0.85, 0.40), drawChar(sp, vec2(30.0 + float(i) * gw, 760.0), T5[i]));
-        }
+        col = pCol;
     }
 
-    // Right Panel: Live CPU Registers & Hardware Debug
-    if (sp.x > 1560.0) {
-        col = vec3(0.06, 0.07, 0.09);
+    // =========================================================================
+    // 6. RIGHT HARDWARE MONITOR WING (X: 1535 to 1895, Y: 60 to 1020)
+    //    Live VRAM 8x8 Tile Viewer + OAM Sprite Table Inspector
+    // =========================================================================
+    float dRightWing = sdRoundBox(sp - vec2(1715.0, 540.0), vec2(180.0, 480.0), 14.0);
+    if (dRightWing < 0.0) {
+        vec3 pCol = vec3(0.08, 0.10, 0.14);
+        if (dRightWing > -2.5) pCol = vec3(0.22, 0.28, 0.38);
 
-        // "CPU REGISTERS"
-        const uint R_HDR[] = uint[](67u,80u,85u,32u,82u,69u,71u,73u,83u,84u,69u,82u,83u);
-        for (uint i = 0u; i < 13u; i++) {
-            col = mix(col, vec3(0.30, 0.85, 1.0), drawChar(sp, vec2(1580.0 + float(i) * gw, 940.0), R_HDR[i]));
+        // Header: "VRAM TILES" (Y = 85)
+        int vt[10] = int[10](86, 82, 65, 77, 32, 84, 73, 76, 69, 83);
+        float vtm = 0.0;
+        for (int i = 0; i < 10; i++) {
+            vtm = max(vtm, drawChar(sp, vec2(1560.0 + float(i) * 20.0, 85.0), 2.8, vt[i]));
+        }
+        pCol = mix(pCol, vec3(0.608, 0.737, 0.059), vtm);
+
+        // Live 16x16 Grid of 8x8 VRAM Tiles (128x128 pixels scaled 2x -> 256x256)
+        // Spans X: [1587, 1843], Y: [135, 391]
+        if (sp.x >= 1587.0 && sp.x < 1843.0 && sp.y >= 135.0 && sp.y < 391.0) {
+            ivec2 vp = ivec2((sp - vec2(1587.0, 135.0)) / 2.0);
+            int tileX = vp.x >> 3;
+            int tileY = vp.y >> 3;
+            int tileIdx = tileY * 16 + tileX;
+            int py = vp.y & 7;
+            int px = 7 - (vp.x & 7);
+
+            uint addr = uint(tileIdx * 16 + py * 2);
+            uint lo = readVRAMByte(addr);
+            uint hi = readVRAMByte(addr + 1u);
+            uint colorId = ((lo >> px) & 1u) | (((hi >> px) & 1u) << 1u);
+            uint shade = (cpu.io1.z >> (colorId * 2u)) & 3u;
+            pCol = dmgColor(shade);
         }
 
-        // "AF: 0x01B0"
-        const uint R_AF[] = uint[](65u,70u,58u,32u,48u,120u,48u,49u,66u,48u);
-        for (uint i = 0u; i < 10u; i++) col = mix(col, vec3(0.85), drawChar(sp, vec2(1580.0 + float(i) * gw, 880.0), R_AF[i]));
+        // OAM Sprite Inspector below VRAM Viewer (Y = 435)
+        int ot[11] = int[11](79, 65, 77, 32, 83, 80, 82, 73, 84, 69, 83);
+        float otm = 0.0;
+        for (int i = 0; i < 11; i++) {
+            otm = max(otm, drawChar(sp, vec2(1560.0 + float(i) * 18.0, 435.0), 2.5, ot[i]));
+        }
+        pCol = mix(pCol, vec3(0.608, 0.737, 0.059), otm);
 
-        // "BC: 0x0013"
-        const uint R_BC[] = uint[](66u,67u,58u,32u,48u,120u,48u,48u,49u,51u);
-        for (uint i = 0u; i < 10u; i++) col = mix(col, vec3(0.85), drawChar(sp, vec2(1580.0 + float(i) * gw, 840.0), R_BC[i]));
+        // Display first 10 OAM entries (Y, X, Tile, Attr)
+        for (int s = 0; s < 10; s++) {
+            uint w = oam[s];
+            uint sy = w & 0xFFu;
+            uint sx = (w >> 8u) & 0xFFu;
+            uint st = (w >> 16u) & 0xFFu;
+            uint sa = (w >> 24u) & 0xFFu;
 
-        // "DE: 0x00D8"
-        const uint R_DE[] = uint[](68u,69u,58u,32u,48u,120u,48u,48u,68u,56u);
-        for (uint i = 0u; i < 10u; i++) col = mix(col, vec3(0.85), drawChar(sp, vec2(1580.0 + float(i) * gw, 800.0), R_DE[i]));
+            float ry = 485.0 + float(s) * 44.0;
+            float sm = 0.0;
+            sm = max(sm, drawHex8(sp, vec2(1565.0, ry), 2.2, uint(s)));
+            sm = max(sm, drawChar(sp, vec2(1600.0, ry), 2.2, 58));
+            pCol = mix(pCol, vec3(0.50, 0.60, 0.72), sm);
 
-        // "HL: 0x014D"
-        const uint R_HL[] = uint[](72u,76u,58u,32u,48u,120u,48u,49u,52u,68u);
-        for (uint i = 0u; i < 10u; i++) col = mix(col, vec3(0.85), drawChar(sp, vec2(1580.0 + float(i) * gw, 760.0), R_HL[i]));
+            float vm = 0.0;
+            vm = max(vm, drawHex8(sp, vec2(1625.0, ry), 2.2, sx));
+            vm = max(vm, drawHex8(sp, vec2(1675.0, ry), 2.2, sy));
+            vm = max(vm, drawHex8(sp, vec2(1725.0, ry), 2.2, st));
+            vm = max(vm, drawHex8(sp, vec2(1775.0, ry), 2.2, sa));
+            pCol = mix(pCol, vec3(0.88, 0.94, 1.0), vm);
+        }
 
-        // "SP: 0xFFFE"
-        const uint R_SP[] = uint[](83u,80u,58u,32u,48u,120u,70u,70u,70u,69u);
-        for (uint i = 0u; i < 10u; i++) col = mix(col, vec3(0.85), drawChar(sp, vec2(1580.0 + float(i) * gw, 720.0), R_SP[i]));
-
-        // "PC: 0x0100"
-        const uint R_PC[] = uint[](80u,67u,58u,32u,48u,120u,48u,49u,48u,48u);
-        for (uint i = 0u; i < 10u; i++) col = mix(col, vec3(0.85), drawChar(sp, vec2(1580.0 + float(i) * gw, 680.0), R_PC[i]));
-
-        // "LY: 144" (VBlank line)
-        const uint R_LY[] = uint[](76u,89u,58u,32u,49u,52u,52u);
-        for (uint i = 0u; i < 7u; i++) col = mix(col, vec3(0.95, 0.65, 0.20), drawChar(sp, vec2(1580.0 + float(i) * gw, 640.0), R_LY[i]));
-    }
-
-    // Bottom Controls Bar: "(A) JUMP  |  (B) SPRINT  |  (X) PALETTE  |  (-) EXIT"
-    const uint B_HINT[] = uint[](
-        40u,65u,41u,32u,74u,85u,77u,80u,32u,32u,124u,32u,32u,
-        40u,66u,41u,32u,83u,80u,82u,73u,78u,84u,32u,32u,124u,32u,32u,
-        40u,88u,41u,32u,80u,65u,76u,69u,84u,84u,69u,32u,32u,124u,32u,32u,
-        40u,45u,41u,32u,69u,88u,73u,84u
-    );
-    for (uint i = 0u; i < uint(B_HINT.length()); i++) {
-        col = mix(col, vec3(0.60, 0.70, 0.80), drawChar(sp, vec2(420.0 + float(i) * gw, 18.0), B_HINT[i]));
+        col = pCol;
     }
 
     outColor = vec4(col, 1.0);

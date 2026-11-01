@@ -167,21 +167,21 @@ void main(){
 
     vec3 col = vec3(0.0);
 
-    if (sp.y > drawEnd) {
+    if (sp.y < drawStart) {
         // Ceiling (Slate Gray with distance darkening)
-        float ceilNorm = (sp.y - horizon) / 540.0;
+        float ceilNorm = (horizon - sp.y) / 540.0;
         col = mix(vec3(0.15, 0.16, 0.18), vec3(0.24, 0.25, 0.28), ceilNorm);
 
-    } else if (sp.y < drawStart) {
+    } else if (sp.y > drawEnd) {
         // Floor (Brown / Stone with perspective distance fog)
-        float floorNorm = (horizon - sp.y) / 540.0;
+        float floorNorm = (sp.y - horizon) / 540.0;
         col = mix(vec3(0.18, 0.14, 0.10), vec3(0.32, 0.26, 0.20), floorNorm);
 
     } else {
         // Wall Surface
         float wallX = (hitSide == 0) ? pos.y + perpWallDist * rayDir.y : pos.x + perpWallDist * rayDir.x;
         wallX = fract(wallX);
-        float texY = clamp((drawEnd - sp.y) / lineHeight, 0.0, 1.0);
+        float texY = clamp((sp.y - drawStart) / lineHeight, 0.0, 1.0);
         col = getWallTexColor(hitTile, vec2(wallX, texY), float(hitSide));
 
         // Depth fog attenuation
@@ -242,8 +242,8 @@ void main(){
 
     // --- 3. FIRST-PERSON WEAPON (Classic German Luger Pistol) ---
     float recoilY = c.transition.z * 45.0;
-    vec2 gunOrigin = vec2(960.0 + sin(c.motion.x * 2.0) * 4.0, 120.0 - recoilY);
-    vec2 gp = sp - gunOrigin;
+    vec2 gunOrigin = vec2(960.0 + sin(c.motion.x * 2.0) * 4.0, 995.0 + recoilY);
+    vec2 gp = vec2(sp.x - gunOrigin.x, gunOrigin.y - sp.y);
 
     if (gp.y > 0.0 && gp.y < 280.0 && abs(gp.x) < 120.0) {
         // Hand & Pistol Silhouette
@@ -262,7 +262,7 @@ void main(){
 
     // Muzzle Flash when firing
     if (c.game.z > 8u) {
-        vec2 flashPos = gunOrigin + vec2(0.0, 260.0);
+        vec2 flashPos = vec2(gunOrigin.x, gunOrigin.y - 260.0);
         float distFlash = length(sp - flashPos);
         if (distFlash < 80.0) {
             col += mix(vec3(1.0, 0.9, 0.3), vec3(1.0, 0.4, 0.1), distFlash / 80.0) * (1.0 - distFlash / 80.0);
@@ -275,59 +275,61 @@ void main(){
     }
 
     // --- 5. TOP-RIGHT MINIMAP RADAR ---
-    if (sp.x > 1680.0 && sp.y > 840.0) {
-        vec2 mapUV = (sp - vec2(1680.0, 840.0)) / 220.0; // 0..1 inside minimap
-        uint mx = uint(clamp(floor(mapUV.x * float(MAP_W)), 0.0, float(MAP_W - 1u)));
-        uint my = uint(clamp(floor((1.0 - mapUV.y) * float(MAP_H)), 0.0, float(MAP_H - 1u)));
-        uint tile = getMapTile(mx, my);
+    if (sp.x > 1680.0 && sp.y < 240.0) {
+        vec2 mapUV = (sp - vec2(1680.0, 20.0)) / 220.0; // 0..1 inside minimap
+        if (mapUV.x >= 0.0 && mapUV.x <= 1.0 && mapUV.y >= 0.0 && mapUV.y <= 1.0) {
+            uint mx = uint(clamp(floor(mapUV.x * float(MAP_W)), 0.0, float(MAP_W - 1u)));
+            uint my = uint(clamp(floor(mapUV.y * float(MAP_H)), 0.0, float(MAP_H - 1u)));
+            uint tile = getMapTile(mx, my);
 
-        vec3 mapCol = (tile > 0u) ? vec3(0.40, 0.45, 0.50) : vec3(0.10, 0.12, 0.15);
-        if (tile == 7u) mapCol = vec3(0.85, 0.70, 0.20); // door
-        if (tile == 8u) mapCol = vec3(0.20, 0.90, 0.30); // exit elevator
+            vec3 mapCol = (tile > 0u) ? vec3(0.40, 0.45, 0.50) : vec3(0.10, 0.12, 0.15);
+            if (tile == 7u) mapCol = vec3(0.85, 0.70, 0.20); // door
+            if (tile == 8u) mapCol = vec3(0.20, 0.90, 0.30); // exit elevator
 
-        // Player dot on radar
-        vec2 pGrid = vec2(pos.x / float(MAP_W), 1.0 - pos.y / float(MAP_H));
-        if (length(mapUV - pGrid) < 0.025) {
-            mapCol = vec3(0.10, 0.95, 1.0); // Cyan player blip
+            // Player dot on radar
+            vec2 pGrid = vec2(pos.x / float(MAP_W), pos.y / float(MAP_H));
+            if (length(mapUV - pGrid) < 0.025) {
+                mapCol = vec3(0.10, 0.95, 1.0); // Cyan player blip
+            }
+            col = mix(col, mapCol, 0.85);
         }
-        col = mix(col, mapCol, 0.85);
     }
 
     // --- 6. RETRO HUD STATUS BAR ---
     float gw = float(GLYPH_W);
     float gh = float(GLYPH_H);
 
-    // Bottom Bar (Wolf3D Classic Blue Status Bar)
-    if (sp.y < 85.0) {
+    // Bottom Bar (Wolf3D Classic Blue Status Bar: Y = 995..1080)
+    if (sp.y > 995.0) {
         col = vec3(0.05, 0.18, 0.45); // Classic Wolf3D Blue HUD
-        if (sp.y > 78.0) col = vec3(0.10, 0.35, 0.75); // Top highlight border
+        if (sp.y < 1002.0) col = vec3(0.10, 0.35, 0.75); // Top highlight border
 
         // "FLOOR: 1"
         const uint F_LABEL[] = uint[](70u,76u,79u,79u,82u,58u,32u,49u);
         for (uint i = 0u; i < 8u; i++) {
-            col = mix(col, vec3(0.95, 0.85, 0.30), drawChar(sp, vec2(60.0 + float(i) * gw, 25.0), F_LABEL[i]));
+            col = mix(col, vec3(0.95, 0.85, 0.30), drawChar(sp, vec2(60.0 + float(i) * gw, 1024.0), F_LABEL[i]));
         }
 
         // "HEALTH: [XXX]"
         const uint H_LABEL[] = uint[](72u,69u,65u,76u,84u,72u,58u,32u);
         for (uint i = 0u; i < 8u; i++) {
-            col = mix(col, vec3(0.95, 0.85, 0.30), drawChar(sp, vec2(500.0 + float(i) * gw, 25.0), H_LABEL[i]));
+            col = mix(col, vec3(0.95, 0.85, 0.30), drawChar(sp, vec2(500.0 + float(i) * gw, 1024.0), H_LABEL[i]));
         }
-        col = mix(col, (health < 25u ? vec3(1.0, 0.2, 0.2) : vec3(1.0)), drawNumber(sp, vec2(500.0 + 8.0 * gw, 25.0), health));
+        col = mix(col, (health < 25u ? vec3(1.0, 0.2, 0.2) : vec3(1.0)), drawNumber(sp, vec2(500.0 + 8.0 * gw, 1024.0), health));
 
         // "AMMO: [XX]"
         const uint A_LABEL[] = uint[](65u,77u,77u,79u,58u,32u);
         for (uint i = 0u; i < 6u; i++) {
-            col = mix(col, vec3(0.95, 0.85, 0.30), drawChar(sp, vec2(1000.0 + float(i) * gw, 25.0), A_LABEL[i]));
+            col = mix(col, vec3(0.95, 0.85, 0.30), drawChar(sp, vec2(1000.0 + float(i) * gw, 1024.0), A_LABEL[i]));
         }
-        col = mix(col, vec3(1.0), drawNumber(sp, vec2(1000.0 + 6.0 * gw, 25.0), uint(ammo)));
+        col = mix(col, vec3(1.0), drawNumber(sp, vec2(1000.0 + 6.0 * gw, 1024.0), uint(ammo)));
 
         // "SCORE: [XXXX]"
         const uint S_LABEL[] = uint[](83u,67u,79u,82u,69u,58u,32u);
         for (uint i = 0u; i < 7u; i++) {
-            col = mix(col, vec3(0.95, 0.85, 0.30), drawChar(sp, vec2(1450.0 + float(i) * gw, 25.0), S_LABEL[i]));
+            col = mix(col, vec3(0.95, 0.85, 0.30), drawChar(sp, vec2(1450.0 + float(i) * gw, 1024.0), S_LABEL[i]));
         }
-        col = mix(col, vec3(1.0), drawNumber(sp, vec2(1450.0 + 7.0 * gw, 25.0), kills));
+        col = mix(col, vec3(1.0), drawNumber(sp, vec2(1450.0 + 7.0 * gw, 1024.0), kills));
     }
 
     // Crosshair in center

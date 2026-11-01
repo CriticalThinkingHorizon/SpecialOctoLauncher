@@ -143,8 +143,8 @@ vec3 calcNormal(vec3 p, uint level, vec2 ballPos, float ballScale, uint gemMask)
 }
 
 void main(){
-    vec2 sp = gl_FragCoord.xy; // 0..1920, 0..1080
-    vec2 uv = (sp - 0.5 * vec2(1920.0, 1080.0)) / 1080.0;
+    vec2 sp = gl_FragCoord.xy; // 0..1920, 0..1080 (sp.y = 0 at TOP, 1080 at BOTTOM)
+    vec2 uv = vec2(sp.x - 960.0, 540.0 - sp.y) / 1080.0;
 
     uint state = c.game.x;
     uint level = c.game.y;
@@ -261,8 +261,8 @@ void main(){
     float gw = float(GLYPH_W);
     float gh = float(GLYPH_H);
 
-    // Top Header Background Ribbon
-    float topBar = box(sp, vec2(960.0, 1035.0), vec2(940.0, 32.0), 10.0);
+    // Top Header Background Ribbon (Y = 42 at top of screen)
+    float topBar = box(sp, vec2(960.0, 42.0), vec2(940.0, 32.0), 10.0);
     if (topBar < 0.0) {
         col = mix(col, vec3(0.08, 0.12, 0.18), 0.85);
     }
@@ -273,7 +273,7 @@ void main(){
     );
     float hInk = 0.0;
     for (uint i = 0u; i < 17u; i++) {
-        hInk = max(hInk, drawChar(sp, vec2(50.0 + float(i) * gw, 1022.0), H_TITLE[i]));
+        hInk = max(hInk, drawChar(sp, vec2(50.0 + float(i) * gw, 28.0), H_TITLE[i]));
     }
     col = mix(col, vec3(0.95, 0.80, 0.35), hInk);
 
@@ -281,15 +281,15 @@ void main(){
     const uint L_CHARS[] = uint[](76u,69u,86u,69u,76u,32u); // "LEVEL "
     float lInk = 0.0;
     for (uint i = 0u; i < 6u; i++) {
-        lInk = max(lInk, drawChar(sp, vec2(1500.0 + float(i) * gw, 1022.0), L_CHARS[i]));
+        lInk = max(lInk, drawChar(sp, vec2(1500.0 + float(i) * gw, 28.0), L_CHARS[i]));
     }
-    lInk = max(lInk, drawDigit(sp, vec2(1500.0 + 6.0 * gw, 1022.0), level + 1u));
-    lInk = max(lInk, drawChar(sp, vec2(1500.0 + 7.0 * gw, 1022.0), 47u)); // '/'
-    lInk = max(lInk, drawDigit(sp, vec2(1500.0 + 8.0 * gw, 1022.0), 3u)); // '3'
+    lInk = max(lInk, drawDigit(sp, vec2(1500.0 + 6.0 * gw, 28.0), level + 1u));
+    lInk = max(lInk, drawChar(sp, vec2(1500.0 + 7.0 * gw, 28.0), 47u)); // '/'
+    lInk = max(lInk, drawDigit(sp, vec2(1500.0 + 8.0 * gw, 28.0), 3u)); // '3'
     col = mix(col, vec3(0.30, 0.85, 1.0), lInk);
 
-    // Bottom Controls Hint Bar
-    float botBar = box(sp, vec2(960.0, 42.0), vec2(940.0, 26.0), 8.0);
+    // Bottom Controls Hint Bar (Y = 1038 at bottom of screen)
+    float botBar = box(sp, vec2(960.0, 1038.0), vec2(940.0, 26.0), 8.0);
     if (botBar < 0.0) {
         col = mix(col, vec3(0.08, 0.12, 0.18), 0.85);
     }
@@ -304,7 +304,7 @@ void main(){
     );
     float hintInk = 0.0;
     for (uint i = 0u; i < uint(HINTS.length()); i++) {
-        hintInk = max(hintInk, drawChar(sp, vec2(120.0 + float(i) * gw, 30.0), HINTS[i]));
+        hintInk = max(hintInk, drawChar(sp, vec2(120.0 + float(i) * gw, 1024.0), HINTS[i]));
     }
     col = mix(col, vec3(0.70, 0.78, 0.88), hintInk);
 
@@ -321,7 +321,7 @@ void main(){
         const uint V_MSG1[] = uint[](76u,69u,86u,69u,76u,32u,67u,79u,77u,80u,76u,69u,84u,69u,68u,33u);
         float vInk1 = 0.0;
         for (uint i = 0u; i < 16u; i++) {
-            vInk1 = max(vInk1, drawChar(sp, vec2(780.0 + float(i) * gw, 570.0), V_MSG1[i]));
+            vInk1 = max(vInk1, drawChar(sp, vec2(780.0 + float(i) * gw, 500.0), V_MSG1[i]));
         }
         col = mix(col, vec3(1.0, 0.88, 0.25), vInk1);
 
@@ -331,7 +331,7 @@ void main(){
         );
         float vInk2 = 0.0;
         for (uint i = 0u; i < 23u; i++) {
-            vInk2 = max(vInk2, drawChar(sp, vec2(710.0 + float(i) * gw, 510.0), V_MSG2[i]));
+            vInk2 = max(vInk2, drawChar(sp, vec2(710.0 + float(i) * gw, 550.0), V_MSG2[i]));
         }
         col = mix(col, vec3(0.90, 0.95, 1.0), vInk2);
     }
