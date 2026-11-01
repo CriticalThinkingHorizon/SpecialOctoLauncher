@@ -1,0 +1,169 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+#include "map.glsl"
+
+void main(){
+    uint pressed = hbPressed();
+    uint buttons = hbButtons();
+    c.motion.x += 1.0 / 60.0; // time
+    c.motion.w += 1.0;        // frame counter
+
+    // Universal Exit: Press MINUS to return to Launcher
+    if ((pressed & HB_MINUS) != 0u) {
+        hbExit();
+        hbEndFrame();
+        return;
+    }
+
+    uint state = c.game.x;
+    uint kills = c.game.y;
+    uint weaponTimer = c.game.z;
+    uint health = c.game.w;
+
+    vec2 pos = c.flow.xy;
+    float dirAngle = c.flow.z;
+    float ammo = c.flow.w;
+
+    float dt = 1.0 / 60.0;
+
+    // Restart / Respawn with A if dead or completed
+    if ((state == 2u || state == 3u) && (pressed & HB_A) != 0u) {
+        c.game.x = 0u;
+        c.game.w = 100u; // health
+        c.flow.xy = vec2(2.5, 2.5);
+        c.flow.z = 0.0;
+        c.flow.w = 32.0; // ammo
+        c.piece.x = 0;   // doors closed
+        c.stats = uvec4(1u, 1u, 1u, 1u); // revive 4 enemies
+        hbEndFrame();
+        return;
+    }
+
+    if (state == 0u || state == 1u) {
+        // --- 1. Rotation (Right Stick + SixAxis Gyro) ---
+        vec2 rStick = hbStick(true);
+        float turnInput = rStick.x;
+
+        // D-Pad Left/Right also turns if no right stick
+        if ((buttons & HB_LEFT) != 0u) turnInput -= 1.0;
+        if ((buttons & HB_RIGHT) != 0u) turnInput += 1.0;
+
+        // SixAxis gyro yaw / roll assist
+        vec3 gyro = hbGyroscope(0u);
+        if (hbMotionCount() > 0u && abs(gyro.z) > 0.08) {
+            turnInput -= gyro.z * 0.40;
+        }
+
+        dirAngle += turnInput * 2.8 * dt;
+        c.flow.z = dirAngle;
+
+        vec2 dir = vec2(cos(dirAngle), sin(dirAngle));
+        vec2 right = vec2(-sin(dirAngle), cos(dirAngle));
+
+        // --- 2. Movement (Left Stick + D-Pad) ---
+        vec2 lStick = hbStick(false);
+        float moveFwd = lStick.y;
+        float moveStrafe = lStick.x;
+
+        if ((buttons & HB_UP) != 0u) moveFwd += 1.0;
+        if ((buttons & HB_DOWN) != 0u) moveFwd -= 1.0;
+
+        vec2 moveDelta = (dir * moveFwd + right * moveStrafe) * 3.4 * dt;
+
+        if (length(moveDelta) > 0.0001) {
+            c.transition.x += length(moveDelta) * 5.0; // head bob timer
+
+            // Collision against walls and closed doors
+            vec2 newPosX = pos + vec2(moveDelta.x, 0.0);
+            uint tileX = getMapTile(uint(floor(newPosX.x + sign(moveDelta.x) * 0.25)), uint(floor(pos.y)));
+            bool passX = (tileX == 0u) || (tileX == 7u && c.piece.x > 50);
+            if (passX) pos.x = newPosX.x;
+
+            vec2 newPosY = pos + vec2(0.0, moveDelta.y);
+            uint tileY = getMapTile(uint(floor(pos.x)), uint(floor(newPosY.y + sign(moveDelta.y) * 0.25)));
+            bool passY = (tileY == 0u) || (tileY == 7u && c.piece.x > 50);
+            if (passY) pos.y = newPosY.y;
+        }
+
+        c.flow.xy = pos;
+
+        // --- 3. Door Opening / Action (Y button / L button) ---
+        if ((pressed & (HB_Y | HB_L)) != 0u) {
+            vec2 frontCheck = pos + dir * 1.2;
+            uint frontTile = getMapTile(uint(floor(frontCheck.x)), uint(floor(frontCheck.y)));
+            if (frontTile == 7u) {
+                // Toggle door timer: 0 = closed, 1..180 = opening/open
+                c.piece.x = (c.piece.x == 0) ? 180 : 0;
+                hbVibrate(2u, 35u, 250u);
+            } else if (frontTile == 8u) {
+                // Exit elevator! Level Clear!
+                c.game.x = 3u; // Victory
+                hbVibrate(2u, 90u, 800u);
+            }
+        }
+
+        // Automatic door countdown
+        if (c.piece.x > 0) {
+            c.piece.x--;
+        }
+
+        // --- 4. Weapon Firing (A button / R button) ---
+        bool firePressed = (pressed & (HB_A | HB_R)) != 0u;
+        if (firePressed && weaponTimer == 0u && ammo > 0.0) {
+            c.flow.w -= 1.0; // deduct ammo
+            c.game.z = 15u;  // 15 frames weapon recoil animation
+            c.transition.z = 1.0; // recoil kick
+            hbVibrate(2u, 85u, 350u); // heavy gunshot recoil
+
+            // Raycast hitscan to hit enemies
+            for (uint i = 0u; i < 4u; i++) {
+                if (c.stats[i] == 1u) {
+                    vec2 ePos = ENEMY_SPAWNS[i];
+                    vec2 toEnemy = ePos - pos;
+                    float dist = length(toEnemy);
+                    if (dist < 10.0) {
+                        float angleToEnemy = atan(toEnemy.y, toEnemy.x);
+                        float diff = abs(mod(angleToEnemy - dirAngle + 3.14159, 6.28318) - 3.14159);
+                        if (diff < 0.28) {
+                            // Hit enemy!
+                            c.stats[i] = 0u; // Killed!
+                            c.game.y += 100u; // Score +100
+                            hbVibrate(2u, 45u, 250u);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Weapon timer countdown
+        if (c.game.z > 0u) {
+            c.game.z--;
+        }
+        c.transition.z = max(c.transition.z - 0.12, 0.0); // recoil decay
+        c.transition.y = max(c.transition.y - 0.05, 0.0); // red damage flash decay
+
+        // --- 5. Enemy AI & Shooting ---
+        for (uint i = 0u; i < 4u; i++) {
+            if (c.stats[i] == 1u) {
+                vec2 ePos = ENEMY_SPAWNS[i];
+                float dist = length(pos - ePos);
+                if (dist < 7.0) {
+                    // Enemy takes shot every 90 frames
+                    if ((c.game.w > 0u) && (uint(c.motion.w + i * 23u) % 90u == 0u)) {
+                        c.game.w = (c.game.w > 8u) ? c.game.w - 8u : 0u;
+                        c.transition.y = 0.6; // damage red flash
+                        hbVibrate(2u, 60u, 300u); // player hurt haptic
+                        if (c.game.w == 0u) {
+                            c.game.x = 2u; // Player Dead!
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    hbEndFrame();
+}
