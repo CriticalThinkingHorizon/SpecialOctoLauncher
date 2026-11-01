@@ -3,6 +3,7 @@
 const float DMG_W = 160.0;
 const float DMG_H = 144.0;
 
+const uint GB_ROM_LIST_BASE = 65000u; // Persistent ROM catalog buffer (up to 16 entries)
 const uint GB_CPU_BASE  = 65536u; // 64 uints (CPU & PPU I/O registers)
 const uint GB_VRAM_BASE = 65600u; // 2048 uints (8 KB VRAM: 0x8000..0x9FFF)
 const uint GB_WRAM_BASE = 67648u; // 2048 uints (8 KB WRAM: 0xC000..0xDFFF)
@@ -44,4 +45,18 @@ uint gbReadLcdPixel(ivec2 p) {
     uint idx = uint(p.y * 160 + p.x);
     uint w = c.atlas[GB_LCD_BASE + (idx >> 2u)];
     return (w >> ((idx & 3u) * 8u)) & 3u;
+}
+
+uint gbRomCount() {
+    return c.atlas[GB_ROM_LIST_BASE];
+}
+
+uint gbRomNameByte(uint entry, uint byteIdx) {
+    if (entry >= 16u || byteIdx >= 48u) return 0u;
+    return gbReadByteAt(GB_ROM_LIST_BASE + 2u + entry * 16u, byteIdx);
+}
+
+uint gbRomType(uint entry) {
+    if (entry >= 16u) return 0u;
+    return c.atlas[GB_ROM_LIST_BASE + 2u + entry * 16u + 12u];
 }

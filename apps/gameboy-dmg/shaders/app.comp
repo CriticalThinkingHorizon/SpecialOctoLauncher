@@ -815,8 +815,8 @@ void main() {
         return;
     }
 
-    // Auto-fetch ROM list on startup if response buffer is empty
-    if (c.reserved.x == 0u && hbFsEntryByte(0u, 0u) == 0u && !hbBusy()) {
+    // Auto-fetch ROM list on startup if persistent ROM list buffer is empty
+    if (c.reserved.x == 0u && gbRomCount() == 0u && !hbBusy()) {
         hbFsListRoms();
     }
 
@@ -824,17 +824,20 @@ void main() {
     // MODE A: CARTRIDGE ROM PICKER MENU OPEN (c.reserved.x == 0u)
     // -------------------------------------------------------------------------
     if (c.reserved.x == 0u) {
-        uint romCount = clamp(hbFsEntryCount(), 1u, 16u);
+        uint rawCount = gbRomCount();
+        if (rawCount == 0u) {
+            hbEndFrame();
+            return;
+        }
+        uint romCount = clamp(rawCount, 1u, 16u);
         uint sel = c.reserved.y;
         if (sel >= romCount) sel = 0u;
 
         if ((pressed & HB_DOWN) != 0u) {
             sel = (sel + 1u) % romCount;
-            hbVibrate(2u, 15u, 120u);
         }
         if ((pressed & HB_UP) != 0u) {
             sel = (sel + romCount - 1u) % romCount;
-            hbVibrate(2u, 15u, 120u);
         }
         c.reserved.y = sel;
 
@@ -842,7 +845,6 @@ void main() {
         if ((pressed & HB_A) != 0u && !hbBusy()) {
             if (hbFsLoadRom(sel)) {
                 c.reserved.x = 2u; // Waiting for ROM download & GPU load to finish
-                hbVibrate(2u, 45u, 240u);
             }
         }
         hbEndFrame();

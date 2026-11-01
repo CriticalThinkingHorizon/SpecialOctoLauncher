@@ -264,8 +264,8 @@ vec3 renderRomMenuLCD(vec2 sp, uint palMode) {
         return col;
     }
 
-    // List up to 10 ROM entries from server roms/ + S2 tmp:/
-    uint romCount = clamp(hbFsEntryCount(), 1u, 10u);
+    // List up to 10 ROM entries from persistent GB_ROM_LIST_BASE buffer
+    uint romCount = clamp(gbRomCount(), 1u, 10u);
     uint selected = c.reserved.y;
 
     for (uint r = 0u; r < 10u; r++) {
@@ -283,13 +283,13 @@ vec3 renderRomMenuLCD(vec2 sp, uint palMode) {
         vec3 txtCol = isSel ? c0 : c3;
         float rowInk = 0.0;
         for (uint cIdx = 0u; cIdx < 30u; cIdx++) {
-            uint ch = hbFsEntryByte(r, cIdx);
+            uint ch = gbRomNameByte(r, cIdx);
             if (ch == 0u) break;
             rowInk = max(rowInk, drawChar(sp, vec2(600.0 + float(cIdx) * float(GLYPH_W), rowY + 2.0), ch));
         }
 
         // Badge on right of row: [TMP:/] if already on S2 tmp:/ (type==2), [SERVER] if on server (type==1)
-        uint rType = hbFsEntryType(r);
+        uint rType = gbRomType(r);
         const uint B_TMP[] = uint[](91u, 84u, 77u, 80u, 58u, 47u, 93u); // "[TMP:/]"
         const uint B_SRV[] = uint[](91u, 83u, 82u, 86u, 93u);           // "[SRV]"
         if (rType == 2u) {

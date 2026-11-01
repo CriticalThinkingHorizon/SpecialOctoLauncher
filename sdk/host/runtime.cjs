@@ -305,6 +305,8 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
       payload.writeUInt32LE(r.inTmp?2:1,o+48);
       payload.writeBigInt64LE(BigInt(r.size||0),o+56);
      }
+     // Mirror ROM catalog to persistent GPU buffer at c.atlas[65000] so vibration/other RPCs never clear it
+     await rpc.write(mapped+1024+65000*4,payload);
     }else if(subOp===10){
      const pathLen=Math.min(request.readUInt32LE(16)||1,64);
      const pathStr=request.subarray(32,32+pathLen).toString('utf8').replace(/\0.*$/, '');
