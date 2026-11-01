@@ -253,8 +253,20 @@ async function main(directory, attempt = 'auto') {
 
     // Start continuous frame loop
     const inputInspection = JSON.parse(await fs.readFile(path.join(directory, 'input-inspection.json')));
-    const input = inputInspection.imports['_ZN2nn3hid12GetNpadStateEPNS0_17NpadHandheldStateERKj'];
-    const touch = inputInspection.imports['_ZN2nn3hid19GetTouchScreenStateILm16EEEvPNS0_16TouchScreenStateIXT_EEE'];
+    let input = inputInspection.imports['_ZN2nn3hid12GetNpadStateEPNS0_17NpadHandheldStateERKj'];
+    let touch = inputInspection.imports['_ZN2nn3hid19GetTouchScreenStateILm16EEEvPNS0_16TouchScreenStateIXT_EEE'];
+
+    if (!input || input.unresolved || !input.bytes || input.bytes.startsWith('00000000') || input.target === rpc.a.main + 0x29b850) {
+      const fallbackTarget = rpc.a.sdk + 4845408;
+      const bytes = await rpc.read(fallbackTarget, 64);
+      input = { target: fallbackTarget, bytes: bytes.toString('hex'), unresolved: false };
+    }
+
+    if (!touch || touch.unresolved || !touch.bytes || touch.bytes.startsWith('00000000') || touch.target === rpc.a.main + 0x29b850) {
+      const fallbackTarget = rpc.a.sdk + 4852400;
+      const bytes = await rpc.read(fallbackTarget, 64);
+      touch = { target: fallbackTarget, bytes: bytes.toString('hex'), unresolved: false };
+    }
 
     const temp = rpc.a.scratch + 0x10000, savedScratch = await rpc.read(temp, 8);
     let base;
