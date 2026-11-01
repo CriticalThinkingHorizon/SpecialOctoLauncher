@@ -51,12 +51,14 @@ void main(){
  // Note: MINUS in Launcher is disabled as returning to SB4 after Vulkan overlay teardown is unsupported
 
  // Press A to launch the selected app or trigger [UPDATE]
- if((pressed&HB_A)!=0u&&c.game.z==2u&&!hbBusy()){
+ if((pressed&HB_A)!=0u&&c.game.z==2u){
   uint sel=c.game.y;
   uint rowType=hbFsEntryType(sel);
   if(rowType==2u){
-   c.reserved.w=99u;
-   c.game.z=0u;
+   if(!hbBusy()){
+    c.reserved.w=99u;
+    c.game.z=0u;
+   }
   }else{
    c.reserved.w=sel+1u;
    hbExit();

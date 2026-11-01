@@ -606,8 +606,9 @@ async function main(directory, attempt = 'auto') {
 
         // 2. Response payload handling
         if (name === 'launcher') {
-          // If returning to launcher, restore directory entries (titles & types) and ensure c.game.z = 2
+          // If returning to launcher, restore directory entries (titles & types), ensure c.game.z = 2, and sync request/response sequence to ensure hbBusy() is false
           if (!launcherDirReply) launcherDirReply = await buildLauncherDirReply();
+          await rpc.write(mapped + 0x7f0000 + 2048, Buffer.from([1, 0, 0, 0]));
           await rpc.write(mapped + 0x7f0000 + 4096, launcherDirReply);
 
           const readyBuf = Buffer.alloc(8);
@@ -639,6 +640,7 @@ async function main(directory, attempt = 'auto') {
         await new Promise(r => setTimeout(r, 20));
         if (name === 'launcher') {
           if (!launcherDirReply) launcherDirReply = await buildLauncherDirReply();
+          await rpc.write(mapped + 0x7f0000 + 2048, Buffer.from([1, 0, 0, 0]));
           await rpc.write(mapped + 0x7f0000 + 4096, launcherDirReply);
           const readyBuf = Buffer.alloc(8);
           readyBuf.writeUInt32LE(2, 0);
