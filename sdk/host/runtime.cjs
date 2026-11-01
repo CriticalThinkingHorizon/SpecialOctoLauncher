@@ -16,7 +16,6 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
   const op=hdr.readUInt32LE(4);
   if(!op)return;
   const request=await rpc.read(base+L.FIELD.request,1056);
-  const op=request.readUInt32LE(4);
   const config=validateManifest(app?.manifest?.sdk);
   let status=L.STATUS.ok,payload=Buffer.alloc(0);
   try{
