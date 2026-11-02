@@ -64,6 +64,7 @@ void main(){
 
   if(i==0u)lineCol=vec3(0.40,0.95,1.0); // Main title line
   else if(b0==91u)lineCol=vec3(0.98,0.86,0.40); // '[' Step / Section header
+  else if(b2==33u)lineCol=vec3(1.0,0.35,0.35);  // '  ! ' Error detail line
   else if(b2==83u)lineCol=vec3(0.35,1.0,0.60);  // '  STATUS:'
   else if(b2==45u)lineCol=vec3(1.0,0.65,0.45);  // '  - save:/...' target item
   else if(b0==45u)lineCol=vec3(0.55,0.85,0.75); // '---' Separator
