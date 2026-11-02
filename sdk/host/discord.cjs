@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
+const http = require('node:http');
 
 const DISCORD_API = 'https://discord.com/api';
 const GATEWAY_URL = 'wss://gateway.discord.gg/?v=6&encoding=json';
@@ -10,6 +11,7 @@ const REPO_TOKEN_FILE = path.join(__dirname, '../../discord-token.txt');
 const HOME_TOKEN_DIR = path.join(os.homedir(), '.openclaw', 'discord');
 const HOME_TOKEN_FILE = path.join(HOME_TOKEN_DIR, 'token.txt');
 const S2_TMP_TOKEN_PATH = 'tmp:/discord_token.txt';
+const TOKEN_PORTAL_PORT = Number(process.env.DISCORD_PORTAL_PORT || 39381);
 
 const OperationCodes = {
   Dispatch: 0,
@@ -84,8 +86,10 @@ function formatTimestamp(isoStr) {
 class S2DiscordClient {
   constructor() {
     this.token = null;
+    this.lastFileMtime = 0;
+    this.pendingServerTokenSync = false;
     this.status = 0; // 0 = No Token, 1 = Connecting, 2 = Connected, 3 = Auth Error
-    this.statusDetail = 'No token set. Press (+) or add discord-token.txt';
+    this.statusDetail = 'No token! Use http://<server>:39381 or press (+)';
     this.user = null;
     this.guilds = [];       // [{ id: '@me', name: '[Direct Messages]', isDm: true }, ...guilds]
     this.dmChannels = [];   // [{ id, name, lastMessageId, raw }]
@@ -104,6 +108,143 @@ class S2DiscordClient {
     this.socketLastSequence = null;
     this.readyData = null;
     this.gatewayState = 0; // 0 = off, 1 = connected, 2 = reconnecting
+    this.portalServer = null;
+    this.startTokenPortal();
+  }
+
+  startTokenPortal() {
+    if (this.portalServer) return;
+    try {
+      const srv = http.createServer((req, res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        if (req.method === 'OPTIONS') {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+        if (req.method === 'GET' && req.url === '/status') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            status: this.status,
+            statusDetail: this.statusDetail,
+            user: this.user,
+            guilds: this.guilds.length,
+            gatewayState: this.gatewayState
+          }));
+          return;
+        }
+        if (req.method === 'POST' && (req.url === '/token' || req.url === '/')) {
+          let body = '';
+          req.on('data', chunk => {
+            if (body.length < 4096) body += chunk.toString('utf8');
+          });
+          req.on('end', async () => {
+            let newToken = body.trim();
+            try {
+              if (newToken.startsWith('{')) {
+                const parsed = JSON.parse(newToken);
+                newToken = String(parsed.token || '').trim();
+              } else if (newToken.startsWith('token=')) {
+                newToken = decodeURIComponent(newToken.slice(6).replace(/\+/g, ' ')).trim();
+              }
+            } catch {}
+            newToken = newToken.replace(/^["']|["']$/g, '').trim();
+            if (newToken.length > 20) {
+              await this.saveToken(newToken, null);
+              this.pendingServerTokenSync = true;
+              this.status = 0; // Trigger immediate reconnect on next S2 poll or right now
+              await this.connect(null);
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                ok: true,
+                status: this.status,
+                user: this.user ? `@${this.user.username}` : null,
+                detail: this.statusDetail
+              }));
+            } else {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, error: 'Token too short or invalid' }));
+            }
+          });
+          return;
+        }
+
+        // Default GET: Render Token Portal Web UI
+        const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Discord S2 - Server Token Sender</title>
+  <style>
+    body { background: #1e1f22; color: #f2f3f5; font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .card { background: #313338; padding: 32px; border-radius: 12px; width: 100%; max-width: 480px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); border: 1px solid #5865f2; }
+    h1 { margin: 0 0 8px; font-size: 22px; color: #fff; }
+    p { margin: 0 0 20px; color: #b5bac1; font-size: 14px; line-height: 1.4; }
+    input { width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 8px; border: 1px solid #1e1f22; background: #1e1f22; color: #fff; font-size: 14px; margin-bottom: 16px; outline: none; }
+    input:focus { border-color: #5865f2; }
+    button { width: 100%; padding: 12px; border: none; border-radius: 8px; background: #5865f2; color: #fff; font-weight: 600; font-size: 15px; cursor: pointer; }
+    button:hover { background: #4752c4; }
+    .status { margin-top: 16px; padding: 10px 12px; border-radius: 6px; background: #2b2d31; font-size: 13px; color: #dbdee1; }
+    code { background: #1e1f22; padding: 2px 6px; border-radius: 4px; color: #949cf7; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Discord S2 Token Sender</h1>
+    <p>Paste your Discord JWT token below to send it directly from the server to your S2 console (saved to <code>discord-token.txt</code> and synced to <code>tmp:/discord_token.txt</code>).</p>
+    <input id="tok" type="password" placeholder="Paste Discord JWT Token here..." autocomplete="off" />
+    <button onclick="sendToken()">Send Token to S2 & Connect</button>
+    <div class="status" id="st">Status: ${this.statusDetail.replace(/</g, '&lt;')}</div>
+  </div>
+  <script>
+    async function sendToken() {
+      const tok = document.getElementById('tok').value.trim();
+      const st = document.getElementById('st');
+      if (!tok) { st.textContent = 'Please paste a token first.'; return; }
+      st.textContent = 'Sending token & connecting to Discord...';
+      try {
+        const r = await fetch('/token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: tok }) });
+        const d = await r.json();
+        st.textContent = d.ok ? ('Success! ' + d.detail) : ('Error: ' + d.error);
+      } catch (e) {
+        st.textContent = 'Request failed: ' + e.message;
+      }
+    }
+  </script>
+</body>
+</html>`;
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+      });
+      srv.on('error', () => {});
+      srv.listen(TOKEN_PORTAL_PORT, '0.0.0.0', () => {
+        console.log(`[DISCORD PORTAL] Web Token Sender listening on http://0.0.0.0:${TOKEN_PORTAL_PORT}`);
+      });
+      srv.unref();
+      this.portalServer = srv;
+    } catch {}
+  }
+
+  checkServerFileUpdate() {
+    try {
+      if (fs.existsSync(REPO_TOKEN_FILE)) {
+        const st = fs.statSync(REPO_TOKEN_FILE);
+        if (st.mtimeMs > this.lastFileMtime) {
+          const t = fs.readFileSync(REPO_TOKEN_FILE, 'utf8').replace(/^["']|["']$/g, '').trim();
+          if (t.length > 20 && t !== this.token) {
+            this.token = t;
+            this.lastFileMtime = st.mtimeMs;
+            this.pendingServerTokenSync = true;
+            return true;
+          }
+          this.lastFileMtime = st.mtimeMs;
+        }
+      }
+    } catch {}
+    return false;
   }
 
   async authorizedFetch(endpointOrUrl, options = {}) {
@@ -626,6 +767,17 @@ class S2DiscordClient {
   }
 
   async handleAction({ action = 0, arg = 0, fsService, swkbdService }) {
+    if (this.checkServerFileUpdate()) {
+      this.status = 0;
+    }
+    if (this.pendingServerTokenSync && this.token && fsService) {
+      this.pendingServerTokenSync = false;
+      try {
+        await fsService.deletePath(S2_TMP_TOKEN_PATH).catch(() => {});
+        await fsService.writeBytesAt(S2_TMP_TOKEN_PATH, 0, Buffer.from(this.token, 'utf8'));
+      } catch {}
+    }
+
     if (action === 0) {
       // Init or Refresh
       if (this.status !== 2) {

@@ -61,17 +61,16 @@ void main(){
 
  // 3. Interactive Navigation when Idle
  if (c.game.x == 0u && !hbBusy()) {
-  // Periodic background message refresh every 6 seconds when connected
-  if (hbDiscordStatus() == 2u) {
-   c.piece.y++;
-   if (c.piece.y >= 360) {
-    c.piece.y = 0;
-    if (hbDiscordAction(0u, 0u)) {
-     c.game.x = 1u;
-     c.piece.z = 99;
-     hbEndFrame();
-     return;
-    }
+  // Periodic background sync (every 3s while waiting for server token, every 6s when connected)
+  c.piece.y++;
+  int pollTarget = (hbDiscordStatus() == 2u) ? 360 : 180;
+  if (c.piece.y >= pollTarget) {
+   c.piece.y = 0;
+   if (hbDiscordAction(0u, 0u)) {
+    c.game.x = 1u;
+    c.piece.z = (hbDiscordStatus() == 2u) ? 99 : 0;
+    hbEndFrame();
+    return;
    }
   }
 

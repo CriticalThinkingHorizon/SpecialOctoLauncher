@@ -38,12 +38,12 @@ const uint FOOT_CHARS[79] = uint[79](
 // Setup Card Prompts when no token is configured:
 // "DISCORD JWT TOKEN LOGIN REQUIRED" (32 chars)
 const uint LOGIN1[32] = uint[32](68u,73u,83u,67u,79u,82u,68u,32u,74u,87u,84u,32u,84u,79u,75u,69u,78u,32u,76u,79u,71u,73u,78u,32u,82u,69u,81u,85u,73u,82u,69u,68u);
-// "1. Press (+) or (A) to enter token via S2 Keyboard" (50 chars)
-const uint LOGIN2[50] = uint[50](49u,46u,32u,80u,114u,101u,115u,115u,32u,40u,43u,41u,32u,111u,114u,32u,40u,65u,41u,32u,116u,111u,32u,101u,110u,116u,101u,114u,32u,116u,111u,107u,101u,110u,32u,118u,105u,97u,32u,83u,50u,32u,75u,101u,121u,98u,111u,97u,114u,100u);
-// "2. Or save token in discord-token.txt on the server" (51 chars)
-const uint LOGIN3[51] = uint[51](50u,46u,32u,79u,114u,32u,115u,97u,118u,101u,32u,116u,111u,107u,101u,110u,32u,105u,110u,32u,100u,105u,115u,99u,111u,114u,100u,45u,116u,111u,107u,101u,110u,46u,116u,120u,116u,32u,111u,110u,32u,116u,104u,101u,32u,115u,101u,114u,118u,101u,114u);
-// "3. Or place token at tmp:/discord_token.txt on S2" (49 chars)
-const uint LOGIN4[49] = uint[49](51u,46u,32u,79u,114u,32u,112u,108u,97u,99u,101u,32u,116u,111u,107u,101u,110u,32u,97u,116u,32u,116u,109u,112u,58u,47u,100u,105u,115u,99u,111u,114u,100u,95u,116u,111u,107u,101u,110u,46u,116u,120u,116u,32u,111u,110u,32u,83u,50u);
+// "1. Web Portal: Open http://<server>:39381 in browser" (52 chars)
+const uint LOGIN2[52] = uint[52](49u,46u,32u,87u,101u,98u,32u,80u,111u,114u,116u,97u,108u,58u,32u,79u,112u,101u,110u,32u,104u,116u,116u,112u,58u,47u,47u,60u,115u,101u,114u,118u,101u,114u,62u,58u,51u,57u,51u,56u,49u,32u,105u,110u,32u,98u,114u,111u,119u,115u,101u,114u);
+// "2. Server CLI: node sdk/set-discord-token.cjs <TOK>" (51 chars)
+const uint LOGIN3[51] = uint[51](50u,46u,32u,83u,101u,114u,118u,101u,114u,32u,67u,76u,73u,58u,32u,110u,111u,100u,101u,32u,115u,100u,107u,47u,115u,101u,116u,45u,100u,105u,115u,99u,111u,114u,100u,45u,116u,111u,107u,101u,110u,46u,99u,106u,115u,32u,60u,84u,79u,75u,62u);
+// "3. Or press (+) to enter token via S2 Keyboard" (46 chars)
+const uint LOGIN4[46] = uint[46](51u,46u,32u,79u,114u,32u,112u,114u,101u,115u,115u,32u,40u,43u,41u,32u,116u,111u,32u,101u,110u,116u,101u,114u,32u,116u,111u,107u,101u,110u,32u,118u,105u,97u,32u,83u,50u,32u,75u,101u,121u,98u,111u,97u,114u,100u);
 
 void main(){
  vec2 p = gl_FragCoord.xy;
@@ -248,15 +248,15 @@ void main(){
     color = mix(color, vec3(0.45, 0.80, 1.0), i1);
    }
    if (p.y >= 455.0 && p.y <= 505.0) {
-    for (uint i = 0u; i < 50u; i++) i2 = max(i2, drawChar(p, vec2(900.0 + float(i) * gw, 466.0), LOGIN2[i]));
+    for (uint i = 0u; i < 52u; i++) i2 = max(i2, drawChar(p, vec2(890.0 + float(i) * gw, 466.0), LOGIN2[i]));
     color = mix(color, vec3(0.95, 0.96, 1.0), i2);
    }
    if (p.y >= 515.0 && p.y <= 565.0) {
-    for (uint i = 0u; i < 51u; i++) i3 = max(i3, drawChar(p, vec2(900.0 + float(i) * gw, 526.0), LOGIN3[i]));
+    for (uint i = 0u; i < 51u; i++) i3 = max(i3, drawChar(p, vec2(890.0 + float(i) * gw, 526.0), LOGIN3[i]));
     color = mix(color, vec3(0.80, 0.85, 0.92), i3);
    }
    if (p.y >= 575.0 && p.y <= 625.0) {
-    for (uint i = 0u; i < 49u; i++) i4 = max(i4, drawChar(p, vec2(900.0 + float(i) * gw, 586.0), LOGIN4[i]));
+    for (uint i = 0u; i < 46u; i++) i4 = max(i4, drawChar(p, vec2(890.0 + float(i) * gw, 586.0), LOGIN4[i]));
     color = mix(color, vec3(0.80, 0.85, 0.92), i4);
    }
   } else {
