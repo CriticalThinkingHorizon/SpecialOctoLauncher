@@ -412,6 +412,19 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
      payload=Buffer.alloc(16);
      payload.writeUInt32LE(cm.result===0?1:0,0);
      payload.writeUInt32LE(cm.result>>>0,12);
+    }else if(subOp===25){
+     const action=request.readUInt32LE(12)||0;
+     delete require.cache[require.resolve('./fs.cjs')];
+     const activeFs=await require('./fs.cjs').create(rpc);
+     const res=await activeFs.cleanGapDirectories(action);
+     payload=Buffer.alloc(16+res.lines.length*48);
+     payload.writeUInt32LE(res.lines.length,0);
+     payload.writeUInt32LE(res.foundCount>>>0,4);
+     payload.writeUInt32LE(res.deletedCount>>>0,8);
+     payload.writeUInt32LE(res.commitRes>>>0,12);
+     for(let i=0;i<res.lines.length;i++){
+      payload.write(res.lines[i].substring(0,47),16+i*48,48,'utf8');
+     }
     }else{
      status=L.STATUS.invalid;
     }

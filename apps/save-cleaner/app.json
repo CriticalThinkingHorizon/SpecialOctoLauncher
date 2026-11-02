@@ -1,0 +1,16 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "save-cleaner",
+  "name": "Save GAP Cleaner (NS2_GAP_*)",
+  "version": "1.0.0",
+  "description": "Scans save: for any NS2_GAP_* directories, deletes their contents and folders recursively, and commits",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  }
+}

@@ -1249,6 +1249,230 @@ async function create(rpc) {
         commitRes,
         lines: logLines
       };
+    },
+    async cleanGapDirectories(action = 0) {
+      const pathOff = 0x1000;
+      const handleOff = 0x2000;
+      const countOff = 0x2010;
+      const entryOff = 0x4000;
+      const batchSize = 32;
+
+      const joinSavePath = (parent, name) => {
+        if (parent.endsWith('/')) return `${parent}${name}`;
+        return `${parent}/${name}`;
+      };
+
+      const readAllDir = async (dirPath) => {
+        await client.write(pathOff, Buffer.from(dirPath + '\0', 'utf8'));
+        const openRes = await client.result('OpenDirectory', [client.base + handleOff, client.base + pathOff, 3]);
+        if (openRes !== 0) {
+          return { result: openRes, entries: [] };
+        }
+        const handle = (await client.read(handleOff, 8)).readBigUInt64LE(0);
+        const entries = [];
+        let readRes = 0;
+        try {
+          for (let iter = 0; iter < 16; iter++) {
+            await client.write(countOff, Buffer.alloc(8));
+            await client.write(entryOff, Buffer.alloc(batchSize * ENTRY_STRIDE));
+            readRes = await client.result('ReadDirectory', [client.base + countOff, client.base + entryOff, handle, batchSize]);
+            if (readRes !== 0) break;
+            const count = Number((await client.read(countOff, 8)).readBigInt64LE(0));
+            if (count <= 0) break;
+            const n = Math.min(count, batchSize);
+            const rawEntries = await client.read(entryOff, n * ENTRY_STRIDE);
+            for (let i = 0; i < n; i++) {
+              const slice = rawEntries.subarray(i * ENTRY_STRIDE, (i + 1) * ENTRY_STRIDE);
+              const name = slice.toString('utf8', 0, NAME_LEN).replace(/\0.*$/, '');
+              const type = slice.readUInt32LE(TYPE_OFFSET);
+              const size = Number(slice.readBigInt64LE(SIZE_OFFSET));
+              if (name && name !== '.' && name !== '..') {
+                entries.push({ name, type: type === 0 ? 'dir' : 'file', size });
+              }
+            }
+            if (count < batchSize) break;
+          }
+        } finally {
+          await client.call('CloseDirectory', [handle]);
+        }
+        return { result: readRes, entries };
+      };
+
+      const findGapTargets = async () => {
+        const found = [];
+        const walk = async (dirPath, depth) => {
+          if (depth > 3) return;
+          const { result, entries } = await readAllDir(dirPath);
+          if (result !== 0) return;
+          for (const e of entries) {
+            const fullPath = joinSavePath(dirPath, e.name);
+            if (/^NS2_GAP_/i.test(e.name)) {
+              found.push({ path: fullPath, name: e.name, type: e.type, size: e.size });
+            } else if (e.type === 'dir') {
+              await walk(fullPath, depth + 1);
+            }
+          }
+        };
+        await walk('save:/', 0);
+        return found;
+      };
+
+      const inspectTree = async (dirPath, depth = 0) => {
+        const stats = { files: 0, dirs: 0, bytes: 0 };
+        if (depth > 6) return stats;
+        const { result, entries } = await readAllDir(dirPath);
+        if (result !== 0) return stats;
+        for (const e of entries) {
+          const childPath = joinSavePath(dirPath, e.name);
+          if (e.type === 'dir') {
+            stats.dirs++;
+            const sub = await inspectTree(childPath, depth + 1);
+            stats.files += sub.files;
+            stats.dirs += sub.dirs;
+            stats.bytes += sub.bytes;
+          } else {
+            stats.files++;
+            stats.bytes += Math.max(0, e.size || 0);
+          }
+        }
+        return stats;
+      };
+
+      const deleteTree = async (dirPath, depth = 0) => {
+        const stats = { filesDeleted: 0, dirsDeleted: 0, bytesDeleted: 0, errors: 0, lastErr: 0 };
+        if (depth > 6) return stats;
+        const { result, entries } = await readAllDir(dirPath);
+        if (result === 0) {
+          for (const e of entries) {
+            const childPath = joinSavePath(dirPath, e.name);
+            if (e.type === 'dir') {
+              const sub = await deleteTree(childPath, depth + 1);
+              stats.filesDeleted += sub.filesDeleted;
+              stats.dirsDeleted += sub.dirsDeleted;
+              stats.bytesDeleted += sub.bytesDeleted;
+              stats.errors += sub.errors;
+              if (sub.lastErr !== 0) stats.lastErr = sub.lastErr;
+            } else {
+              const delRes = await this.deletePath(childPath);
+              if (delRes.result === 0) {
+                stats.filesDeleted++;
+                stats.bytesDeleted += Math.max(0, e.size || 0);
+              } else {
+                stats.errors++;
+                stats.lastErr = delRes.result;
+              }
+            }
+          }
+        }
+        const rmRes = await this.rmdirPath(dirPath);
+        if (rmRes.result === 0) {
+          stats.dirsDeleted++;
+        } else {
+          stats.errors++;
+          stats.lastErr = rmRes.result;
+        }
+        return stats;
+      };
+
+      const logLines = [];
+      logLines.push('=== S2 SAVE GAP CLEANER (NS2_GAP_* REMOVER) ===');
+      logLines.push('[STEP 1] Scanning save: for NS2_GAP_* dirs...');
+
+      const targets = await findGapTargets();
+      const targetSummaries = [];
+      for (const t of targets) {
+        if (t.type === 'dir') {
+          const st = await inspectTree(t.path);
+          targetSummaries.push({ ...t, files: st.files, dirs: st.dirs, bytes: st.bytes });
+        } else {
+          targetSummaries.push({ ...t, files: 1, dirs: 0, bytes: t.size || 0 });
+        }
+      }
+
+      if (targetSummaries.length === 0) {
+        logLines.push('  Found: 0 matching NS2_GAP_* directories');
+        logLines.push('  STATUS: ALREADY CLEAN (No NS2_GAP_* present)');
+      } else {
+        logLines.push(`  STATUS: FOUND ${targetSummaries.length} NS2_GAP_* TARGET(S)!`);
+        const maxShow = Math.min(targetSummaries.length, 5);
+        for (let i = 0; i < maxShow; i++) {
+          const t = targetSummaries[i];
+          const desc = t.type === 'dir' ? `${t.files}f/${t.dirs}d, ${t.bytes}B` : `file, ${t.bytes}B`;
+          logLines.push(`  - ${t.path} (${desc})`.substring(0, 47));
+        }
+        if (targetSummaries.length > maxShow) {
+          logLines.push(`  ...and ${targetSummaries.length - maxShow} more NS2_GAP_* target(s)`);
+        }
+      }
+
+      let totalFilesDel = 0;
+      let totalDirsDel = 0;
+      let totalBytesDel = 0;
+      let totalErrors = 0;
+      let commitRes = 0;
+
+      // action === 0 or 1: Clean & Commit; action === 2: Scan/Verify Only
+      if (action !== 2) {
+        logLines.push('[STEP 2] Recursive Delete (Contents + Dirs):');
+        if (targetSummaries.length === 0) {
+          logLines.push('  Skipped (nothing to delete).');
+        } else {
+          for (const t of targetSummaries) {
+            if (t.type === 'dir') {
+              const st = await deleteTree(t.path);
+              totalFilesDel += st.filesDeleted;
+              totalDirsDel += st.dirsDeleted;
+              totalBytesDel += st.bytesDeleted;
+              totalErrors += st.errors;
+            } else {
+              const delRes = await this.deletePath(t.path);
+              if (delRes.result === 0) {
+                totalFilesDel++;
+                totalBytesDel += t.bytes;
+              } else {
+                totalErrors++;
+              }
+            }
+          }
+          logLines.push(`  Removed: ${totalDirsDel} dir(s), ${totalFilesDel} file(s) (${totalBytesDel}B)`);
+          logLines.push(`  Delete Status: ${totalErrors === 0 ? 'ALL REMOVED OK' : `${totalErrors} ERROR(S)`}`);
+
+          logLines.push('[STEP 3] Committing changes to save:...');
+          const cm = await this.commitMount('save');
+          commitRes = cm.result;
+          logLines.push(`  nn::fs::CommitSaveData("save") -> 0x${commitRes.toString(16)} ${commitRes === 0 ? '(OK)' : '(ERR)'}`);
+
+          const remaining = await findGapTargets();
+          logLines.push('[STEP 4] Post-Cleanup Verification:');
+          logLines.push(remaining.length === 0
+            ? '  STATUS: CONFIRMED 0 NS2_GAP_* REMAINING!'
+            : `  STATUS: ${remaining.length} NS2_GAP_* STILL PRESENT!`);
+        }
+      } else {
+        logLines.push('[STEP 2] Verify-Only Mode (No Deletion Run):');
+        logLines.push(targetSummaries.length === 0
+          ? '  STATUS: VERIFIED CLEAN (0 NS2_GAP_* DIRS)'
+          : '  Press A to delete all NS2_GAP_* & commit.');
+      }
+
+      const rootList = await readAllDir('save:/');
+      const fList = await readAllDir('save:/f');
+      const rootNames = rootList.entries.map(e => e.type === 'dir' ? `${e.name}/` : e.name).join(', ');
+      const fNames = fList.entries.map(e => e.type === 'dir' ? `${e.name}/` : e.name).join(', ');
+
+      while (logLines.length < 16) logLines.push('');
+      logLines.push(`[SAVE:/] ${(rootNames || '(empty)').substring(0, 38)}`);
+      logLines.push(`[SAVE:/F] ${(fNames || '(empty)').substring(0, 37)}`);
+      logLines.push('-----------------------------------------------');
+      logLines.push('A: Clean & Commit   Y: Verify Only      -: Exit');
+
+      return {
+        result: 0,
+        foundCount: targetSummaries.length,
+        deletedCount: totalDirsDel + totalFilesDel,
+        commitRes,
+        lines: logLines.slice(0, 20)
+      };
     }
   };
 }
