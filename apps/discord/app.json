@@ -1,0 +1,16 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "discord",
+  "name": "Discord S2 (JWT Client)",
+  "version": "1.0.0",
+  "description": "JWT-token Discord client with Servers, DMs, Channels, Live Gateway & S2 Keyboard",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  }
+}

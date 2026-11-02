@@ -1,0 +1,222 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+
+void main(){
+ uint pressed = hbPressed();
+ uint held = hbButtons();
+ vec2 stick = hbStick(false);
+
+ c.motion.x += 1.0 / 60.0;
+ c.flow.w += 1.0;
+
+ // Universal Exit: Press MINUS to return to Launcher
+ if (((pressed | held) & HB_MINUS) != 0u) {
+  hbExit();
+  hbEndFrame();
+  return;
+ }
+
+ // State layout:
+ // c.game.x: 0 = Idle, 1 = Waiting for Discord RPC
+ // c.game.y: Active pane focus (0 = Servers/DMs, 1 = Channels, 2 = Messages)
+ // c.game.z: Cursor index in Servers pane (0..11)
+ // c.game.w: Cursor index in Channels pane (0..13)
+ // c.piece.x: Cursor index in Messages pane (0..4)
+ // c.piece.y: Auto-refresh timer ticks
+ // c.piece.z: Last requested action
+
+ // 1. Initial sync on launch
+ if (c.flow.w < 5.0 && c.game.x == 0u && !hbBusy()) {
+  if (hbDiscordAction(0u, 0u)) {
+   c.game.x = 1u;
+   c.piece.z = 0;
+  }
+ }
+
+ // 2. Handle RPC completion
+ if (c.game.x == 1u && !hbBusy()) {
+  c.game.x = 0u;
+  uint gCount = max(hbDiscordGuildCount(), 1u);
+  uint cCount = max(hbDiscordChannelCount(), 1u);
+  uint mCount = hbDiscordMessageCount();
+
+  if (c.piece.z == 0 || c.piece.z == 6) {
+   c.game.z = min(hbDiscordActiveGuild(), gCount - 1u);
+   c.game.w = min(hbDiscordActiveChannel(), cCount - 1u);
+   c.piece.x = mCount > 0u ? int(mCount - 1u) : 0;
+  } else if (c.piece.z == 1) {
+   c.game.w = 0u;
+   c.piece.x = mCount > 0u ? int(mCount - 1u) : 0;
+  } else if (c.piece.z == 2) {
+   c.piece.x = mCount > 0u ? int(mCount - 1u) : 0;
+  }
+  if (mCount > 0u && uint(c.piece.x) >= mCount) {
+   c.piece.x = int(mCount - 1u);
+  }
+  hbVibrate(2u, 12u, 220u);
+ }
+
+ // 3. Interactive Navigation when Idle
+ if (c.game.x == 0u && !hbBusy()) {
+  // Periodic background message refresh every 6 seconds when connected
+  if (hbDiscordStatus() == 2u) {
+   c.piece.y++;
+   if (c.piece.y >= 360) {
+    c.piece.y = 0;
+    if (hbDiscordAction(0u, 0u)) {
+     c.game.x = 1u;
+     c.piece.z = 99;
+     hbEndFrame();
+     return;
+    }
+   }
+  }
+
+  // Stick & D-Pad Up/Down with repeat
+  bool stickDown = (stick.y < -0.5);
+  bool stickUp = (stick.y > 0.5);
+  bool navDown = ((pressed & HB_DOWN) != 0u);
+  bool navUp = ((pressed & HB_UP) != 0u);
+
+  if (c.flow.x > 0.0) c.flow.x -= 1.0;
+  if (!stickDown && !stickUp) {
+   c.flow.x = 0.0;
+  } else if (c.flow.x == 0.0) {
+   if (stickDown) { navDown = true; c.flow.x = 12.0; }
+   else if (stickUp) { navUp = true; c.flow.x = 12.0; }
+  }
+
+  // Switch Pane Focus with Left / Right or L / R
+  if ((pressed & (HB_RIGHT | HB_R)) != 0u) {
+   if (c.game.y < 2u) {
+    c.game.y++;
+    hbVibrate(0u, 12u, 250u);
+   }
+  }
+  if ((pressed & (HB_LEFT | HB_L)) != 0u) {
+   if (c.game.y > 0u) {
+    c.game.y--;
+    hbVibrate(0u, 12u, 250u);
+   }
+  }
+  if ((pressed & HB_B) != 0u) {
+   if (c.game.y > 0u) {
+    c.game.y--;
+    hbVibrate(0u, 12u, 250u);
+   }
+  }
+
+  uint gCount = hbDiscordGuildCount();
+  uint cCount = hbDiscordChannelCount();
+  uint mCount = hbDiscordMessageCount();
+
+  // Up / Down inside focused pane
+  if (c.game.y == 0u && gCount > 0u) {
+   if (navDown) {
+    if (c.game.z + 1u < gCount) {
+     c.game.z++;
+     hbVibrate(0u, 10u, 180u);
+    } else if (hbDiscordTotalGuilds() > gCount) {
+     if (hbDiscordAction(7u, 2u)) { c.game.x = 1u; c.piece.z = 7; }
+    }
+   } else if (navUp) {
+    if (c.game.z > 0u) {
+     c.game.z--;
+     hbVibrate(0u, 10u, 180u);
+    } else if (hbDiscordTotalGuilds() > gCount) {
+     if (hbDiscordAction(7u, 1u)) { c.game.x = 1u; c.piece.z = 7; }
+    }
+   }
+  } else if (c.game.y == 1u && cCount > 0u) {
+   if (navDown) {
+    if (c.game.w + 1u < cCount) {
+     c.game.w++;
+     hbVibrate(0u, 10u, 180u);
+    } else if (hbDiscordTotalChannels() > cCount) {
+     if (hbDiscordAction(7u, 4u)) { c.game.x = 1u; c.piece.z = 7; }
+    }
+   } else if (navUp) {
+    if (c.game.w > 0u) {
+     c.game.w--;
+     hbVibrate(0u, 10u, 180u);
+    } else if (hbDiscordTotalChannels() > cCount) {
+     if (hbDiscordAction(7u, 3u)) { c.game.x = 1u; c.piece.z = 7; }
+    }
+   }
+  } else if (c.game.y == 2u && mCount > 0u) {
+   if (navUp) {
+    if (c.piece.x > 0) {
+     c.piece.x--;
+     hbVibrate(1u, 10u, 180u);
+    } else if (hbDiscordTotalMessages() > mCount) {
+     if (hbDiscordAction(3u, 1u)) { c.game.x = 1u; c.piece.z = 3; }
+    }
+   } else if (navDown) {
+    if (uint(c.piece.x + 1) < mCount) {
+     c.piece.x++;
+     hbVibrate(1u, 10u, 180u);
+    } else if (hbDiscordTotalMessages() > mCount) {
+     if (hbDiscordAction(3u, 2u)) { c.game.x = 1u; c.piece.z = 3; }
+    }
+   }
+  }
+
+  // Press (A): Activate selection in current pane
+  if ((pressed & HB_A) != 0u) {
+   if (hbDiscordStatus() != 2u) {
+    // If not logged in yet, A also triggers Token Login prompt
+    if (hbDiscordAction(6u, 0u)) {
+     c.game.x = 1u;
+     c.piece.z = 6;
+    }
+   } else if (c.game.y == 0u) {
+    if (hbDiscordAction(1u, c.game.z)) {
+     c.game.x = 1u;
+     c.piece.z = 1;
+     c.game.y = 1u;
+    }
+   } else if (c.game.y == 1u) {
+    if (hbDiscordAction(2u, c.game.w)) {
+     c.game.x = 1u;
+     c.piece.z = 2;
+     c.game.y = 2u;
+    }
+   } else if (c.game.y == 2u && mCount > 0u) {
+    if (hbDiscordAction(4u, uint(c.piece.x))) {
+     c.game.x = 1u;
+     c.piece.z = 4;
+    }
+   }
+  }
+
+  // Press (Y): Compose & Send Message via S2 Native Software Keyboard
+  if ((pressed & HB_Y) != 0u && hbDiscordStatus() == 2u) {
+   if (hbDiscordAction(5u, 0u)) {
+    c.game.x = 1u;
+    c.piece.z = 5;
+   }
+  }
+
+  // Press (X): Manual Sync / Reload Messages
+  if ((pressed & HB_X) != 0u) {
+   c.piece.y = 0;
+   if (hbDiscordAction(0u, 0u)) {
+    c.game.x = 1u;
+    c.piece.z = 99;
+   }
+  }
+
+  // Press (+): Set / Update Discord JWT Token via S2 Native Software Keyboard
+  if ((pressed & HB_PLUS) != 0u) {
+   if (hbDiscordAction(6u, 0u)) {
+    c.game.x = 1u;
+    c.piece.z = 6;
+   }
+  }
+ }
+
+ hbEndFrame();
+}

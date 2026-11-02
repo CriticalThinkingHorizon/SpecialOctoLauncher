@@ -211,6 +211,52 @@ uint nnNonopostGetContentByte(uint postIdx,uint byteIdx){
  return (postIdx < 4u && byteIdx < 160u) ? nnNonopostGetFeedByte(16u + postIdx * 240u + 80u + byteIdx) : 0u;
 }
 
+// Discord JWT Client Response Accessors (subOp 40, stored persistently at c.atlas[DISCORD_BASE])
+const uint DISCORD_BASE = 72000u;
+
+uint hbDiscordByte(uint byteOffset){
+ uint wordIdx = DISCORD_BASE + (byteOffset / 4u);
+ uint shift = (byteOffset % 4u) * 8u;
+ return (c.atlas[wordIdx] >> shift) & 255u;
+}
+
+uint hbDiscordStatus(){return c.atlas[DISCORD_BASE + 0u];}
+uint hbDiscordGuildCount(){return c.atlas[DISCORD_BASE + 1u];}
+uint hbDiscordChannelCount(){return c.atlas[DISCORD_BASE + 2u];}
+uint hbDiscordMessageCount(){return c.atlas[DISCORD_BASE + 3u];}
+uint hbDiscordActiveGuild(){return c.atlas[DISCORD_BASE + 4u];}
+uint hbDiscordActiveChannel(){return c.atlas[DISCORD_BASE + 5u];}
+uint hbDiscordTotalGuilds(){return c.atlas[DISCORD_BASE + 6u];}
+uint hbDiscordTotalChannels(){return c.atlas[DISCORD_BASE + 7u];}
+uint hbDiscordTotalMessages(){return c.atlas[DISCORD_BASE + 8u];}
+uint hbDiscordGatewayState(){return c.atlas[DISCORD_BASE + 9u];}
+
+uint hbDiscordUserByte(uint idx){return idx < 24u ? hbDiscordByte(40u + idx) : 0u;}
+uint hbDiscordGuildByte(uint guildIdx, uint charIdx){
+ return (guildIdx < 12u && charIdx < 32u) ? hbDiscordByte(64u + guildIdx * 32u + charIdx) : 0u;
+}
+uint hbDiscordChannelByte(uint chIdx, uint charIdx){
+ return (chIdx < 14u && charIdx < 32u) ? hbDiscordByte(448u + chIdx * 32u + charIdx) : 0u;
+}
+uint hbDiscordBannerByte(uint charIdx){
+ return charIdx < 64u ? hbDiscordByte(896u + charIdx) : 0u;
+}
+uint hbDiscordMsgAuthorByte(uint msgIdx, uint charIdx){
+ return (msgIdx < 5u && charIdx < 24u) ? hbDiscordByte(960u + msgIdx * 256u + charIdx) : 0u;
+}
+uint hbDiscordMsgTimeByte(uint msgIdx, uint charIdx){
+ return (msgIdx < 5u && charIdx < 16u) ? hbDiscordByte(960u + msgIdx * 256u + 24u + charIdx) : 0u;
+}
+uint hbDiscordMsgBadgeByte(uint msgIdx, uint charIdx){
+ return (msgIdx < 5u && charIdx < 16u) ? hbDiscordByte(960u + msgIdx * 256u + 40u + charIdx) : 0u;
+}
+uint hbDiscordMsgLineByte(uint msgIdx, uint lineIdx, uint charIdx){
+ return (msgIdx < 5u && lineIdx < 3u && charIdx < 60u) ? hbDiscordByte(960u + msgIdx * 256u + 56u + lineIdx * 60u + charIdx) : 0u;
+}
+uint hbDiscordMsgFlags(uint msgIdx){
+ return msgIdx < 5u ? c.atlas[DISCORD_BASE + (960u + msgIdx * 256u + 236u) / 4u] : 0u;
+}
+
 // nn::time & nn::os Response Accessors (after calling nnTimeGetNow() or nnOsGetSystemInfo())
 uvec2 nnTimeResultSteadyClockTick(){return uvec2(hbWord(4128u),hbWord(4132u));}
 uvec2 nnTimeResultSteadyClockFreq(){return uvec2(hbWord(4136u),hbWord(4140u));}
@@ -407,6 +453,9 @@ bool nnNonopostCreatePost(uint authorLen,uint contentLen){return hbRequest(10u,3
 bool hbNonopostPost(uint authorLen,uint contentLen){return nnNonopostCreatePost(authorLen,contentLen);}
 bool nnNonopostRatePost(uint postIndex,uint rating){return hbRequest(10u,32u,postIndex,clamp(rating,1u,10u));}
 bool hbNonopostRate(uint postIndex,uint rating){return nnNonopostRatePost(postIndex,rating);}
+
+// Discord JWT Client Request Primitive (subOp 40)
+bool hbDiscordAction(uint action,uint arg){return hbRequest(10u,40u,action,arg);}
 
 // --- nn::swkbd (S2 Native Software Keyboard) ---
 void nnSwkbdSetPromptByte(uint index, uint value) {
