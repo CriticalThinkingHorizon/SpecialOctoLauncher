@@ -21,12 +21,13 @@ void main(){
 
  // State layout:
  // c.game.x: 0 = Idle, 1 = Waiting for Discord RPC
- // c.game.y: Active pane focus (0 = Servers/DMs, 1 = Channels, 2 = Messages)
+ // c.game.y: Active pane focus (0 = Servers/DMs or [>>] Open Button, 1 = Channels, 2 = Messages)
  // c.game.z: Cursor index in Servers pane (0..11)
  // c.game.w: Cursor index in Channels pane (0..13)
  // c.piece.x: Cursor index in Messages pane (0..4)
  // c.piece.y: Auto-refresh timer ticks
  // c.piece.z: Last requested action
+ // c.piece.w: 0 = Servers & DMs panel expanded, 1 = Servers & DMs panel collapsed
 
  // 1. Initial sync on launch
  if (c.flow.w < 5.0 && c.game.x == 0u && !hbBusy()) {
@@ -52,6 +53,7 @@ void main(){
    c.piece.x = mCount > 0u ? int(mCount - 1u) : 0;
   } else if (c.piece.z == 2) {
    c.piece.x = mCount > 0u ? int(mCount - 1u) : 0;
+   c.piece.w = 1; // Collapse Servers & DMs panel when a chat is opened
   }
   if (mCount > 0u && uint(c.piece.x) >= mCount) {
    c.piece.x = int(mCount - 1u);
@@ -88,10 +90,21 @@ void main(){
    else if (stickUp) { navUp = true; c.flow.x = 12.0; }
   }
 
+  // Touch input: Tap the small [>>] SRV button (or left rail) when collapsed to reopen Servers & DMs
+  if (hbTouchCount() > 0u) {
+   vec2 pt = hbTouch(0u);
+   if (c.piece.w == 1 && pt.x >= 16.0 && pt.x <= 125.0 && pt.y >= 80.0 && pt.y <= 220.0) {
+    c.piece.w = 0;
+    c.game.y = 0u;
+    hbVibrate(0u, 14u, 260u);
+   }
+  }
+
   // Switch Pane Focus with Left / Right or L / R
   if ((pressed & (HB_RIGHT | HB_R)) != 0u) {
    if (c.game.y < 2u) {
     c.game.y++;
+    if (c.game.y == 2u) c.piece.w = 1; // Collapse Servers & DMs when entering Chat pane
     hbVibrate(0u, 12u, 250u);
    }
   }
@@ -99,12 +112,18 @@ void main(){
    if (c.game.y > 0u) {
     c.game.y--;
     hbVibrate(0u, 12u, 250u);
+   } else if (c.piece.w == 1) {
+    c.piece.w = 0;
+    hbVibrate(0u, 14u, 260u);
    }
   }
   if ((pressed & HB_B) != 0u) {
    if (c.game.y > 0u) {
     c.game.y--;
     hbVibrate(0u, 12u, 250u);
+   } else if (c.piece.w == 1) {
+    c.piece.w = 0;
+    hbVibrate(0u, 14u, 260u);
    }
   }
 
@@ -113,7 +132,7 @@ void main(){
   uint mCount = hbDiscordMessageCount();
 
   // Up / Down inside focused pane
-  if (c.game.y == 0u && gCount > 0u) {
+  if (c.game.y == 0u && c.piece.w == 0 && gCount > 0u) {
    if (navDown) {
     if (c.game.z + 1u < gCount) {
      c.game.z++;
@@ -172,7 +191,11 @@ void main(){
      c.piece.z = 6;
     }
    } else if (c.game.y == 0u) {
-    if (hbDiscordAction(1u, c.game.z)) {
+    if (c.piece.w == 1) {
+     // Re-open collapsed Servers & DMs panel via the small [>>] button
+     c.piece.w = 0;
+     hbVibrate(0u, 14u, 260u);
+    } else if (hbDiscordAction(1u, c.game.z)) {
      c.game.x = 1u;
      c.piece.z = 1;
      c.game.y = 1u;
@@ -182,6 +205,7 @@ void main(){
      c.game.x = 1u;
      c.piece.z = 2;
      c.game.y = 2u;
+     c.piece.w = 1; // Collapse Servers & DMs panel when opening a chat
     }
    } else if (c.game.y == 2u && mCount > 0u) {
     if (hbDiscordAction(4u, uint(c.piece.x))) {

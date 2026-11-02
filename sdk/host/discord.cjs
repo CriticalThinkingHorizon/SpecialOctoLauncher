@@ -10,7 +10,8 @@ const GATEWAY_URL = 'wss://gateway.discord.gg/?v=6&encoding=json';
 const REPO_TOKEN_FILE = path.join(__dirname, '../../discord-token.txt');
 const HOME_TOKEN_DIR = path.join(os.homedir(), '.openclaw', 'discord');
 const HOME_TOKEN_FILE = path.join(HOME_TOKEN_DIR, 'token.txt');
-const S2_TMP_TOKEN_PATH = 'tmp:/discord_token.txt';
+const S2_SAVE_TOKEN_PATH = 'save:/discord_token.txt';
+const S2_LEGACY_TMP_TOKEN_PATH = 'tmp:/discord_token.txt';
 const TOKEN_PORTAL_PORT = Number(process.env.DISCORD_PORTAL_PORT || 39381);
 
 const OperationCodes = {
@@ -194,7 +195,7 @@ class S2DiscordClient {
 <body>
   <div class="card">
     <h1>Discord S2 Token Sender</h1>
-    <p>Paste your Discord JWT token below to send it directly from the server to your S2 console (saved to <code>discord-token.txt</code> and synced to <code>tmp:/discord_token.txt</code>).</p>
+    <p>Paste your Discord JWT token below to send it directly from the server to your S2 console (saved to <code>discord-token.txt</code> and committed to <code>save:/discord_token.txt</code>).</p>
     <input id="tok" type="password" placeholder="Paste Discord JWT Token here..." autocomplete="off" />
     <button onclick="sendToken()">Send Token to S2 & Connect</button>
     <div class="status" id="st">Status: ${this.statusDetail.replace(/</g, '&lt;')}</div>
@@ -261,47 +262,27 @@ class S2DiscordClient {
     });
   }
 
+  async persistTokenToS2Save(tokenStr, fsService) {
+    if (!fsService || !tokenStr) return;
+    try {
+      await fsService.deletePath(S2_SAVE_TOKEN_PATH).catch(() => {});
+      const wr = await fsService.writeBytesAt(S2_SAVE_TOKEN_PATH, 0, Buffer.from(tokenStr, 'utf8'));
+      if (wr.result === 0) {
+        await fsService.commitMount('save');
+        console.log(`[DISCORD] Token saved and committed to ${S2_SAVE_TOKEN_PATH} (${wr.bytesWritten}B)`);
+      }
+    } catch (err) {
+      console.warn('[DISCORD] Failed to persist token to save::', err.message);
+    }
+  }
+
   async loadStoredToken(fsService) {
     if (this.token) return this.token;
 
-    // 1. Check environment variable
-    if (process.env.DISCORD_TOKEN && process.env.DISCORD_TOKEN.trim().length > 20) {
-      this.token = process.env.DISCORD_TOKEN.trim();
-      return this.token;
-    }
-
-    // 2. Check repo discord-token.txt
-    try {
-      if (fs.existsSync(REPO_TOKEN_FILE)) {
-        const t = fs.readFileSync(REPO_TOKEN_FILE, 'utf8').trim();
-        if (t.length > 20) {
-          this.token = t;
-          if (fsService) {
-            await fsService.writeBytesAt(S2_TMP_TOKEN_PATH, 0, Buffer.from(t, 'utf8')).catch(() => {});
-          }
-          return this.token;
-        }
-      }
-    } catch {}
-
-    // 3. Check ~/.openclaw/discord/token.txt
-    try {
-      if (fs.existsSync(HOME_TOKEN_FILE)) {
-        const t = fs.readFileSync(HOME_TOKEN_FILE, 'utf8').trim();
-        if (t.length > 20) {
-          this.token = t;
-          if (fsService) {
-            await fsService.writeBytesAt(S2_TMP_TOKEN_PATH, 0, Buffer.from(t, 'utf8')).catch(() => {});
-          }
-          return this.token;
-        }
-      }
-    } catch {}
-
-    // 4. Check S2 tmp:/discord_token.txt
+    // 1. Check S2 persistent save:/discord_token.txt first
     if (fsService) {
       try {
-        const rd = await fsService.readBytesAt(S2_TMP_TOKEN_PATH, 0, 256);
+        const rd = await fsService.readBytesAt(S2_SAVE_TOKEN_PATH, 0, 256);
         if (rd.result === 0 && rd.data && rd.data.length > 20) {
           const t = rd.data.toString('utf8').replace(/\0.*$/, '').trim();
           if (t.length > 20) {
@@ -310,7 +291,52 @@ class S2DiscordClient {
           }
         }
       } catch {}
+
+      // Migrate legacy tmp:/discord_token.txt to save:/discord_token.txt if present
+      try {
+        const rdTmp = await fsService.readBytesAt(S2_LEGACY_TMP_TOKEN_PATH, 0, 256);
+        if (rdTmp.result === 0 && rdTmp.data && rdTmp.data.length > 20) {
+          const t = rdTmp.data.toString('utf8').replace(/\0.*$/, '').trim();
+          if (t.length > 20) {
+            this.token = t;
+            await this.persistTokenToS2Save(t, fsService);
+            await fsService.deletePath(S2_LEGACY_TMP_TOKEN_PATH).catch(() => {});
+            return this.token;
+          }
+        }
+      } catch {}
     }
+
+    // 2. Check environment variable
+    if (process.env.DISCORD_TOKEN && process.env.DISCORD_TOKEN.trim().length > 20) {
+      this.token = process.env.DISCORD_TOKEN.trim();
+      await this.persistTokenToS2Save(this.token, fsService);
+      return this.token;
+    }
+
+    // 3. Check repo discord-token.txt
+    try {
+      if (fs.existsSync(REPO_TOKEN_FILE)) {
+        const t = fs.readFileSync(REPO_TOKEN_FILE, 'utf8').trim();
+        if (t.length > 20) {
+          this.token = t;
+          await this.persistTokenToS2Save(t, fsService);
+          return this.token;
+        }
+      }
+    } catch {}
+
+    // 4. Check ~/.openclaw/discord/token.txt
+    try {
+      if (fs.existsSync(HOME_TOKEN_FILE)) {
+        const t = fs.readFileSync(HOME_TOKEN_FILE, 'utf8').trim();
+        if (t.length > 20) {
+          this.token = t;
+          await this.persistTokenToS2Save(t, fsService);
+          return this.token;
+        }
+      }
+    } catch {}
 
     return null;
   }
@@ -326,12 +352,7 @@ class S2DiscordClient {
     try {
       fs.writeFileSync(REPO_TOKEN_FILE, clean, 'utf8');
     } catch {}
-    if (fsService) {
-      try {
-        await fsService.deletePath(S2_TMP_TOKEN_PATH).catch(() => {});
-        await fsService.writeBytesAt(S2_TMP_TOKEN_PATH, 0, Buffer.from(clean, 'utf8'));
-      } catch {}
-    }
+    await this.persistTokenToS2Save(clean, fsService);
     return true;
   }
 
@@ -772,10 +793,7 @@ class S2DiscordClient {
     }
     if (this.pendingServerTokenSync && this.token && fsService) {
       this.pendingServerTokenSync = false;
-      try {
-        await fsService.deletePath(S2_TMP_TOKEN_PATH).catch(() => {});
-        await fsService.writeBytesAt(S2_TMP_TOKEN_PATH, 0, Buffer.from(this.token, 'utf8'));
-      } catch {}
+      await this.persistTokenToS2Save(this.token, fsService);
     }
 
     if (action === 0) {

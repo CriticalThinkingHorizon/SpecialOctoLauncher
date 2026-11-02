@@ -21,6 +21,10 @@ const uint LOGO_CHARS[10] = uint[10](68u,73u,83u,67u,79u,82u,68u,32u,83u,50u);
 // "SERVERS & DMS" (13 chars)
 const uint SRV_HDR[13] = uint[13](83u,69u,82u,86u,69u,82u,83u,32u,38u,32u,68u,77u,83u);
 
+// "[>>]" (4 chars) and "SRV" (3 chars) for collapsed Servers & DMs open button
+const uint BTN_OPEN[4] = uint[4](91u,62u,62u,93u);
+const uint BTN_SRV[3]  = uint[3](83u,82u,86u);
+
 // "CHANNELS" (8 chars)
 const uint CH_HDR[8] = uint[8](67u,72u,65u,78u,78u,69u,76u,83u);
 
@@ -63,6 +67,7 @@ void main(){
 
  uint status = hbDiscordStatus();
  uint activePane = c.game.y;
+ bool srvCollapsed = (c.piece.w != 0);
 
  // ==========================================================================
  // 1. Top Header Bar (y = 14..74)
@@ -110,79 +115,132 @@ void main(){
  }
 
  // ==========================================================================
- // 2. Left Sidebar: Servers & DMs (x = 24..394, y = 84..996)
+ // 2. Left Sidebar: Servers & DMs (Expanded: x=24..394 | Collapsed: x=24..116)
  // ==========================================================================
- vec2 srvCenter = vec2(209.0, 540.0);
- vec2 srvHalf = vec2(185.0, 456.0);
- float srvPanel = fill(box(p, srvCenter, srvHalf, 12.0));
- float srvBorder = line(box(p, srvCenter, srvHalf, 12.0), activePane == 0u ? 2.5 : 1.0);
- color = mix(color, colServersBg, srvPanel);
- color = mix(color, activePane == 0u ? colBlurple : vec3(0.22, 0.24, 0.28), srvBorder);
+ if (!srvCollapsed) {
+  vec2 srvCenter = vec2(209.0, 540.0);
+  vec2 srvHalf = vec2(185.0, 456.0);
+  float srvPanel = fill(box(p, srvCenter, srvHalf, 12.0));
+  float srvBorder = line(box(p, srvCenter, srvHalf, 12.0), activePane == 0u ? 2.5 : 1.0);
+  color = mix(color, colServersBg, srvPanel);
+  color = mix(color, activePane == 0u ? colBlurple : vec3(0.22, 0.24, 0.28), srvBorder);
 
- if (p.x >= 24.0 && p.x <= 394.0 && p.y >= 84.0 && p.y <= 996.0) {
-  // Header "SERVERS & DMS"
-  if (p.y >= 96.0 && p.y <= 134.0) {
-   float hInk = 0.0;
-   for (uint i = 0u; i < 13u; i++) {
-    hInk = max(hInk, drawChar(p, vec2(44.0 + float(i) * gw, 100.0), SRV_HDR[i]));
+  if (p.x >= 24.0 && p.x <= 394.0 && p.y >= 84.0 && p.y <= 996.0) {
+   // Header "SERVERS & DMS"
+   if (p.y >= 96.0 && p.y <= 134.0) {
+    float hInk = 0.0;
+    for (uint i = 0u; i < 13u; i++) {
+     hInk = max(hInk, drawChar(p, vec2(44.0 + float(i) * gw, 100.0), SRV_HDR[i]));
+    }
+    color = mix(color, activePane == 0u ? vec3(0.65, 0.72, 1.0) : vec3(0.58, 0.61, 0.66), hInk);
    }
-   color = mix(color, activePane == 0u ? vec3(0.65, 0.72, 1.0) : vec3(0.58, 0.61, 0.66), hInk);
+
+   uint gCount = min(hbDiscordGuildCount(), 12u);
+   uint activeG = hbDiscordActiveGuild();
+   uint cursorG = c.game.z;
+
+   for (uint i = 0u; i < 12u; i++) {
+    if (i >= gCount) break;
+    float rowY = 166.0 + float(i) * 68.0;
+    if (abs(p.y - rowY) > 33.0) continue;
+
+    bool isAct = (i == activeG);
+    bool isCur = (activePane == 0u && i == cursorG);
+
+    vec2 rCenter = vec2(209.0, rowY);
+    float rBox = fill(box(p, rCenter, vec2(170.0, 28.0), 8.0));
+    float rLine = line(box(p, rCenter, vec2(170.0, 28.0), 8.0), 2.0);
+
+    if (isAct) {
+     color = mix(color, colBlurple * 0.45, rBox);
+     // Left Discord pill bar
+     float pill = fill(box(p, vec2(31.0, rowY), vec2(3.5, 18.0), 2.0));
+     color = mix(color, vec3(1.0), pill);
+    } else if (isCur) {
+     color = mix(color, vec3(0.22, 0.24, 0.29), rBox);
+    }
+    if (isCur) {
+     color = mix(color, colBlurple, rLine);
+    }
+
+    float gInk = 0.0;
+    for (uint cIdx = 0u; cIdx < 18u; cIdx++) {
+     uint ch = hbDiscordGuildByte(i, cIdx);
+     if (ch == 0u) break;
+     gInk = max(gInk, drawChar(p, vec2(48.0 + float(cIdx) * gw, rowY - 14.0), ch));
+    }
+    vec3 gCol = isAct ? vec3(1.0) : (isCur ? vec3(0.95, 0.96, 1.0) : vec3(0.70, 0.73, 0.78));
+    color = mix(color, gCol, gInk);
+   }
   }
+ } else {
+  // Collapsed Left Rail (x = 24..116, y = 84..996) with small Open Button at top
+  vec2 railCenter = vec2(70.0, 540.0);
+  vec2 railHalf = vec2(46.0, 456.0);
+  float railPanel = fill(box(p, railCenter, railHalf, 12.0));
+  float railBorder = line(box(p, railCenter, railHalf, 12.0), activePane == 0u ? 2.5 : 1.0);
+  color = mix(color, colServersBg, railPanel);
+  color = mix(color, activePane == 0u ? colBlurple : vec3(0.22, 0.24, 0.28), railBorder);
 
-  uint gCount = min(hbDiscordGuildCount(), 12u);
-  uint activeG = hbDiscordActiveGuild();
-  uint cursorG = c.game.z;
+  if (p.x >= 24.0 && p.x <= 116.0 && p.y >= 84.0 && p.y <= 996.0) {
+   // Small Open Button [>>] / SRV at top (x = 32..108, y = 96..176)
+   vec2 btnCenter = vec2(70.0, 136.0);
+   vec2 btnHalf = vec2(38.0, 38.0);
+   float btnFill = fill(box(p, btnCenter, btnHalf, 10.0));
+   float btnLine = line(box(p, btnCenter, btnHalf, 10.0), 2.5);
+   vec3 btnBg = (activePane == 0u) ? colBlurple : vec3(0.22, 0.25, 0.34);
+   color = mix(color, btnBg, btnFill);
+   color = mix(color, (activePane == 0u) ? vec3(0.75, 0.82, 1.0) : colBlurple, btnLine);
 
-  for (uint i = 0u; i < 12u; i++) {
-   if (i >= gCount) break;
-   float rowY = 166.0 + float(i) * 68.0;
-   if (abs(p.y - rowY) > 33.0) continue;
-
-   bool isAct = (i == activeG);
-   bool isCur = (activePane == 0u && i == cursorG);
-
-   vec2 rCenter = vec2(209.0, rowY);
-   float rBox = fill(box(p, rCenter, vec2(170.0, 28.0), 8.0));
-   float rLine = line(box(p, rCenter, vec2(170.0, 28.0), 8.0), 2.0);
-
-   if (isAct) {
-    color = mix(color, colBlurple * 0.45, rBox);
-    // Left Discord pill bar
-    float pill = fill(box(p, vec2(31.0, rowY), vec2(3.5, 18.0), 2.0));
-    color = mix(color, vec3(1.0), pill);
-   } else if (isCur) {
-    color = mix(color, vec3(0.22, 0.24, 0.29), rBox);
+   if (p.y >= 98.0 && p.y <= 174.0) {
+    float bInk1 = 0.0;
+    for (uint i = 0u; i < 4u; i++) {
+     bInk1 = max(bInk1, drawChar(p, vec2(34.0 + float(i) * gw, 106.0), BTN_OPEN[i]));
+    }
+    float bInk2 = 0.0;
+    for (uint i = 0u; i < 3u; i++) {
+     bInk2 = max(bInk2, drawChar(p, vec2(43.0 + float(i) * gw, 138.0), BTN_SRV[i]));
+    }
+    color = mix(color, vec3(1.0), max(bInk1, bInk2));
    }
-   if (isCur) {
-    color = mix(color, colBlurple, rLine);
-   }
 
-   float gInk = 0.0;
-   for (uint cIdx = 0u; cIdx < 18u; cIdx++) {
-    uint ch = hbDiscordGuildByte(i, cIdx);
-    if (ch == 0u) break;
-    gInk = max(gInk, drawChar(p, vec2(48.0 + float(cIdx) * gw, rowY - 14.0), ch));
+   // Active Server mini badge below the Open button
+   uint activeG = hbDiscordActiveGuild();
+   vec2 badgeCenter = vec2(70.0, 232.0);
+   float badgeFill = fill(box(p, badgeCenter, vec2(34.0, 28.0), 10.0));
+   color = mix(color, colBlurple * 0.45, badgeFill);
+   float pill = fill(box(p, vec2(29.0, 232.0), vec2(3.5, 18.0), 2.0));
+   color = mix(color, vec3(1.0), pill);
+
+   if (p.y >= 204.0 && p.y <= 260.0) {
+    float aInk = 0.0;
+    for (uint i = 0u; i < 3u; i++) {
+     uint ch = hbDiscordGuildByte(activeG, i);
+     if (ch == 0u) break;
+     aInk = max(aInk, drawChar(p, vec2(43.0 + float(i) * gw, 218.0), ch));
+    }
+    color = mix(color, vec3(0.95, 0.96, 1.0), aInk);
    }
-   vec3 gCol = isAct ? vec3(1.0) : (isCur ? vec3(0.95, 0.96, 1.0) : vec3(0.70, 0.73, 0.78));
-   color = mix(color, gCol, gInk);
   }
  }
 
  // ==========================================================================
- // 3. Middle Sidebar: Channels (x = 406..776, y = 84..996)
+ // 3. Middle Sidebar: Channels (Slides left when Servers & DMs is collapsed)
  // ==========================================================================
- vec2 chCenter = vec2(591.0, 540.0);
+ float chMinX = srvCollapsed ? 128.0 : 406.0;
+ float chMaxX = srvCollapsed ? 498.0 : 776.0;
+ vec2 chCenter = vec2((chMinX + chMaxX) * 0.5, 540.0);
  vec2 chHalf = vec2(185.0, 456.0);
  float chPanel = fill(box(p, chCenter, chHalf, 12.0));
  float chBorder = line(box(p, chCenter, chHalf, 12.0), activePane == 1u ? 2.5 : 1.0);
  color = mix(color, colChannelBg, chPanel);
  color = mix(color, activePane == 1u ? colBlurple : vec3(0.24, 0.26, 0.30), chBorder);
 
- if (p.x >= 406.0 && p.x <= 776.0 && p.y >= 84.0 && p.y <= 996.0) {
+ if (p.x >= chMinX && p.x <= chMaxX && p.y >= 84.0 && p.y <= 996.0) {
   if (p.y >= 96.0 && p.y <= 134.0) {
    float hInk = 0.0;
    for (uint i = 0u; i < 8u; i++) {
-    hInk = max(hInk, drawChar(p, vec2(426.0 + float(i) * gw, 100.0), CH_HDR[i]));
+    hInk = max(hInk, drawChar(p, vec2(chMinX + 20.0 + float(i) * gw, 100.0), CH_HDR[i]));
    }
    color = mix(color, activePane == 1u ? vec3(0.65, 0.72, 1.0) : vec3(0.58, 0.61, 0.66), hInk);
   }
@@ -199,7 +257,7 @@ void main(){
    bool isAct = (i == activeC);
    bool isCur = (activePane == 1u && i == cursorC);
 
-   vec2 rCenter = vec2(591.0, rowY);
+   vec2 rCenter = vec2(chCenter.x, rowY);
    float rBox = fill(box(p, rCenter, vec2(170.0, 24.0), 6.0));
    float rLine = line(box(p, rCenter, vec2(170.0, 24.0), 6.0), 2.0);
 
@@ -216,7 +274,7 @@ void main(){
    for (uint cIdx = 0u; cIdx < 18u; cIdx++) {
     uint ch = hbDiscordChannelByte(i, cIdx);
     if (ch == 0u) break;
-    cInk = max(cInk, drawChar(p, vec2(430.0 + float(cIdx) * gw, rowY - 14.0), ch));
+    cInk = max(cInk, drawChar(p, vec2(chMinX + 24.0 + float(cIdx) * gw, rowY - 14.0), ch));
    }
    vec3 cCol = isAct ? vec3(1.0) : (isCur ? vec3(0.92, 0.94, 0.98) : vec3(0.62, 0.65, 0.70));
    color = mix(color, cCol, cInk);
@@ -224,39 +282,42 @@ void main(){
  }
 
  // ==========================================================================
- // 4. Right Main Chat Pane (x = 788..1896, y = 84..996)
+ // 4. Right Main Chat Pane (Expands wider when Servers & DMs is collapsed)
  // ==========================================================================
- vec2 chatCenter = vec2(1342.0, 540.0);
- vec2 chatHalf = vec2(554.0, 456.0);
+ float chatMinX = srvCollapsed ? 510.0 : 788.0;
+ float chatMaxX = 1896.0;
+ vec2 chatCenter = vec2((chatMinX + chatMaxX) * 0.5, 540.0);
+ vec2 chatHalf = vec2((chatMaxX - chatMinX) * 0.5, 456.0);
  float chatPanel = fill(box(p, chatCenter, chatHalf, 12.0));
  float chatBorder = line(box(p, chatCenter, chatHalf, 12.0), activePane == 2u ? 2.5 : 1.0);
  color = mix(color, colChatBg, chatPanel);
  color = mix(color, activePane == 2u ? colBlurple : vec3(0.26, 0.28, 0.32), chatBorder);
 
- if (p.x >= 788.0 && p.x <= 1896.0 && p.y >= 84.0 && p.y <= 996.0) {
+ if (p.x >= chatMinX && p.x <= chatMaxX && p.y >= 84.0 && p.y <= 996.0) {
   if (status != 2u) {
    // Token Setup / Login Prompt Card
-   vec2 cardCenter = vec2(1342.0, 520.0);
+   vec2 cardCenter = vec2(chatCenter.x, 520.0);
    float loginBox = fill(box(p, cardCenter, vec2(470.0, 170.0), 14.0));
    float loginBdr = line(box(p, cardCenter, vec2(470.0, 170.0), 14.0), 2.5);
    color = mix(color, colServersBg, loginBox);
    color = mix(color, colBlurple, loginBdr);
 
+   float cardLeft = cardCenter.x - 452.0;
    float i1 = 0.0, i2 = 0.0, i3 = 0.0, i4 = 0.0;
    if (p.y >= 380.0 && p.y <= 430.0) {
-    for (uint i = 0u; i < 32u; i++) i1 = max(i1, drawChar(p, vec2(960.0 + float(i) * gw, 392.0), LOGIN1[i]));
+    for (uint i = 0u; i < 32u; i++) i1 = max(i1, drawChar(p, vec2(cardLeft + 70.0 + float(i) * gw, 392.0), LOGIN1[i]));
     color = mix(color, vec3(0.45, 0.80, 1.0), i1);
    }
    if (p.y >= 455.0 && p.y <= 505.0) {
-    for (uint i = 0u; i < 52u; i++) i2 = max(i2, drawChar(p, vec2(890.0 + float(i) * gw, 466.0), LOGIN2[i]));
+    for (uint i = 0u; i < 52u; i++) i2 = max(i2, drawChar(p, vec2(cardLeft + float(i) * gw, 466.0), LOGIN2[i]));
     color = mix(color, vec3(0.95, 0.96, 1.0), i2);
    }
    if (p.y >= 515.0 && p.y <= 565.0) {
-    for (uint i = 0u; i < 51u; i++) i3 = max(i3, drawChar(p, vec2(890.0 + float(i) * gw, 526.0), LOGIN3[i]));
+    for (uint i = 0u; i < 51u; i++) i3 = max(i3, drawChar(p, vec2(cardLeft + float(i) * gw, 526.0), LOGIN3[i]));
     color = mix(color, vec3(0.80, 0.85, 0.92), i3);
    }
    if (p.y >= 575.0 && p.y <= 625.0) {
-    for (uint i = 0u; i < 46u; i++) i4 = max(i4, drawChar(p, vec2(890.0 + float(i) * gw, 586.0), LOGIN4[i]));
+    for (uint i = 0u; i < 46u; i++) i4 = max(i4, drawChar(p, vec2(cardLeft + float(i) * gw, 586.0), LOGIN4[i]));
     color = mix(color, vec3(0.80, 0.85, 0.92), i4);
    }
   } else {
@@ -274,8 +335,8 @@ void main(){
     bool isMe = (flags & 1u) != 0u;
     bool hasMyLike = (flags & 2u) != 0u;
 
-    vec2 mCenter = vec2(1342.0, mCenterY);
-    vec2 mHalf = vec2(530.0, 78.0);
+    vec2 mCenter = vec2(chatCenter.x, mCenterY);
+    vec2 mHalf = vec2(chatHalf.x - 24.0, 78.0);
     float mBox = fill(box(p, mCenter, mHalf, 10.0));
     float mLine = line(box(p, mCenter, mHalf, 10.0), isCur ? 2.5 : 1.0);
 
@@ -285,7 +346,8 @@ void main(){
     color = mix(color, mBdr, mLine);
 
     float topY = mCenterY - 64.0;
-    float leftX = 832.0;
+    float leftX = chatMinX + 44.0;
+    float rightEdge = chatMaxX - 44.0;
 
     // Author Name + Timestamp + Badge Row
     if (p.y >= topY - 4.0 && p.y <= topY + 34.0) {
@@ -302,7 +364,7 @@ void main(){
      for (uint i = 0u; i < 12u; i++) {
       uint ch = hbDiscordMsgTimeByte(m, i);
       if (ch == 0u) break;
-      tInk = max(tInk, drawChar(p, vec2(leftX + 410.0 + float(i) * gw, topY), ch));
+      tInk = max(tInk, drawChar(p, vec2(leftX + 420.0 + float(i) * gw, topY), ch));
      }
      color = mix(color, vec3(0.58, 0.61, 0.67), tInk);
 
@@ -310,7 +372,7 @@ void main(){
      for (uint i = 0u; i < 15u; i++) {
       uint ch = hbDiscordMsgBadgeByte(m, i);
       if (ch == 0u) break;
-      bInk = max(bInk, drawChar(p, vec2(leftX + 680.0 + float(i) * gw, topY), ch));
+      bInk = max(bInk, drawChar(p, vec2(rightEdge - 280.0 + float(i) * gw, topY), ch));
      }
      vec3 bCol = hasMyLike ? colAmber : vec3(0.55, 0.85, 0.95);
      color = mix(color, bCol, bInk);
