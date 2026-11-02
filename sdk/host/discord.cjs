@@ -10,7 +10,9 @@ const GATEWAY_URL = 'wss://gateway.discord.gg/?v=6&encoding=json';
 const REPO_TOKEN_FILE = path.join(__dirname, '../../discord-token.txt');
 const HOME_TOKEN_DIR = path.join(os.homedir(), '.openclaw', 'discord');
 const HOME_TOKEN_FILE = path.join(HOME_TOKEN_DIR, 'token.txt');
-const S2_SAVE_TOKEN_PATH = 'save:/discord_token.txt';
+const S2_SAVE_STORAGE_DIR = 'save:/hbstorage';
+const S2_SAVE_TOKEN_PATH = 'save:/hbstorage/discord_token.txt';
+const S2_LEGACY_SAVE_ROOT_TOKEN_PATH = 'save:/discord_token.txt';
 const S2_LEGACY_TMP_TOKEN_PATH = 'tmp:/discord_token.txt';
 const TOKEN_PORTAL_PORT = Number(process.env.DISCORD_PORTAL_PORT || 39381);
 
@@ -196,7 +198,7 @@ class S2DiscordClient {
 <body>
   <div class="card">
     <h1>Discord S2 Token Sender</h1>
-    <p>Paste your Discord JWT token below to send it directly from the server to your S2 console (saved to <code>discord-token.txt</code> and committed to <code>save:/discord_token.txt</code>).</p>
+    <p>Paste your Discord JWT token below to send it directly from the server to your S2 console (saved to <code>discord-token.txt</code> and committed to <code>save:/hbstorage/discord_token.txt</code>).</p>
     <input id="tok" type="password" placeholder="Paste Discord JWT Token here..." autocomplete="off" />
     <button onclick="sendToken()">Send Token to S2 & Connect</button>
     <div class="status" id="st">Status: ${this.statusDetail.replace(/</g, '&lt;')}</div>
@@ -266,6 +268,7 @@ class S2DiscordClient {
   async persistTokenToS2Save(tokenStr, fsService) {
     if (!fsService || !tokenStr) return;
     try {
+      await fsService.mkdirPath(S2_SAVE_STORAGE_DIR).catch(() => {});
       await fsService.deletePath(S2_SAVE_TOKEN_PATH).catch(() => {});
       const wr = await fsService.writeBytesAt(S2_SAVE_TOKEN_PATH, 0, Buffer.from(tokenStr, 'utf8'));
       if (wr.result === 0) {
@@ -273,14 +276,14 @@ class S2DiscordClient {
         console.log(`[DISCORD] Token saved and committed to ${S2_SAVE_TOKEN_PATH} (${wr.bytesWritten}B)`);
       }
     } catch (err) {
-      console.warn('[DISCORD] Failed to persist token to save::', err.message);
+      console.warn('[DISCORD] Failed to persist token to save:/hbstorage:', err.message);
     }
   }
 
   async loadStoredToken(fsService) {
     if (this.token) return this.token;
 
-    // 1. Check S2 persistent save:/discord_token.txt first
+    // 1. Check S2 persistent save:/hbstorage/discord_token.txt first
     if (fsService) {
       try {
         const rd = await fsService.readBytesAt(S2_SAVE_TOKEN_PATH, 0, 256);
@@ -293,19 +296,21 @@ class S2DiscordClient {
         }
       } catch {}
 
-      // Migrate legacy tmp:/discord_token.txt to save:/discord_token.txt if present
-      try {
-        const rdTmp = await fsService.readBytesAt(S2_LEGACY_TMP_TOKEN_PATH, 0, 256);
-        if (rdTmp.result === 0 && rdTmp.data && rdTmp.data.length > 20) {
-          const t = rdTmp.data.toString('utf8').replace(/\0.*$/, '').trim();
-          if (t.length > 20) {
-            this.token = t;
-            await this.persistTokenToS2Save(t, fsService);
-            await fsService.deletePath(S2_LEGACY_TMP_TOKEN_PATH).catch(() => {});
-            return this.token;
+      // Migrate legacy save:/discord_token.txt or tmp:/discord_token.txt to save:/hbstorage/discord_token.txt
+      for (const legacyPath of [S2_LEGACY_SAVE_ROOT_TOKEN_PATH, S2_LEGACY_TMP_TOKEN_PATH]) {
+        try {
+          const rdLegacy = await fsService.readBytesAt(legacyPath, 0, 256);
+          if (rdLegacy.result === 0 && rdLegacy.data && rdLegacy.data.length > 20) {
+            const t = rdLegacy.data.toString('utf8').replace(/\0.*$/, '').trim();
+            if (t.length > 20) {
+              this.token = t;
+              await fsService.deletePath(legacyPath).catch(() => {});
+              await this.persistTokenToS2Save(t, fsService);
+              return this.token;
+            }
           }
-        }
-      } catch {}
+        } catch {}
+      }
     }
 
     // 2. Check environment variable

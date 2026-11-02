@@ -103,11 +103,13 @@ async function pushToActiveConsole() {
     };
     const fsMod = require('./host/fs.cjs');
     const fsService = await fsMod.create(rpc);
+    await fsService.mkdirPath('save:/hbstorage').catch(() => {});
     await fsService.deletePath('save:/discord_token.txt').catch(() => {});
-    const wr = await fsService.writeBytesAt('save:/discord_token.txt', 0, Buffer.from(rawArg, 'utf8'));
+    await fsService.deletePath('save:/hbstorage/discord_token.txt').catch(() => {});
+    const wr = await fsService.writeBytesAt('save:/hbstorage/discord_token.txt', 0, Buffer.from(rawArg, 'utf8'));
     if (wr.result === 0) {
       const cm = await fsService.commitMount('save');
-      console.log(`[DISCORD TOKEN] Directly wrote save:/discord_token.txt (${wr.bytesWritten}B) and committed to S2 save: (0x${cm.result.toString(16)})!`);
+      console.log(`[DISCORD TOKEN] Directly wrote save:/hbstorage/discord_token.txt (${wr.bytesWritten}B) and committed to S2 save: (0x${cm.result.toString(16)})!`);
     }
   } catch {}
 }
