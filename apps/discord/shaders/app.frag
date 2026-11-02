@@ -237,12 +237,27 @@ void main(){
  color = mix(color, activePane == 1u ? colBlurple : vec3(0.24, 0.26, 0.30), chBorder);
 
  if (p.x >= chMinX && p.x <= chMaxX && p.y >= 84.0 && p.y <= 996.0) {
-  if (p.y >= 96.0 && p.y <= 134.0) {
+  if (p.y >= 90.0 && p.y <= 136.0) {
+   // Server Name Header Box at top of Channels Sidebar
+   float hdrBox = fill(box(p, vec2(chCenter.x, 112.0), vec2(173.0, 20.0), 7.0));
+   color = mix(color, vec3(0.125, 0.132, 0.150), hdrBox);
+   float hdrSep = fill(box(p, vec2(chCenter.x, 134.0), vec2(170.0, 1.0), 0.5));
+   color = mix(color, activePane == 1u ? colBlurple : vec3(0.26, 0.28, 0.34), hdrSep);
+
    float hInk = 0.0;
-   for (uint i = 0u; i < 8u; i++) {
-    hInk = max(hInk, drawChar(p, vec2(chMinX + 20.0 + float(i) * gw, 100.0), CH_HDR[i]));
+   uint activeG = hbDiscordActiveGuild();
+   if (status == 2u && hbDiscordGuildCount() > 0u) {
+    for (uint i = 0u; i < 18u; i++) {
+     uint ch = hbDiscordGuildByte(activeG, i);
+     if (ch == 0u) break;
+     hInk = max(hInk, drawChar(p, vec2(chMinX + 20.0 + float(i) * gw, 98.0), ch));
+    }
+   } else {
+    for (uint i = 0u; i < 8u; i++) {
+     hInk = max(hInk, drawChar(p, vec2(chMinX + 20.0 + float(i) * gw, 98.0), CH_HDR[i]));
+    }
    }
-   color = mix(color, activePane == 1u ? vec3(0.65, 0.72, 1.0) : vec3(0.58, 0.61, 0.66), hInk);
+   color = mix(color, activePane == 1u ? vec3(0.75, 0.82, 1.0) : vec3(0.92, 0.94, 0.98), hInk);
   }
 
   uint cCount = min(hbDiscordChannelCount(), 14u);
