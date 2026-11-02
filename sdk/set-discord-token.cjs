@@ -103,7 +103,11 @@ async function pushToActiveConsole() {
     };
     const fsMod = require('./host/fs.cjs');
     const fsService = await fsMod.create(rpc);
-    await fsService.mkdirPath('save:/hbstorage').catch(() => {});
+    if (typeof fsService.ensureDir === 'function') {
+      await fsService.ensureDir('save:/hbstorage');
+    } else {
+      await fsService.mkdirPath('save:/hbstorage').catch(() => {});
+    }
     await fsService.deletePath('save:/discord_token.txt').catch(() => {});
     await fsService.deletePath('save:/hbstorage/discord_token.txt').catch(() => {});
     const wr = await fsService.writeBytesAt('save:/hbstorage/discord_token.txt', 0, Buffer.from(rawArg, 'utf8'));

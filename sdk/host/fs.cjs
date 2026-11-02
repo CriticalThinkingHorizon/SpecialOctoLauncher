@@ -536,7 +536,39 @@ async function create(rpc) {
       await client.call('CloseFile', [handle]);
       return { result: readRes, fileSize, data };
     },
+    async ensureDir(dirPathStr) {
+      const mIdx = dirPathStr.indexOf(':/');
+      if (mIdx === -1) return { result: 0 };
+      const mount = dirPathStr.slice(0, mIdx + 2);
+      const rel = dirPathStr.slice(mIdx + 2).replace(/^\/+|\/+$/g, '');
+      if (!rel) return { result: 0 };
+      const parts = rel.split('/').filter(Boolean);
+      let cur = mount.slice(0, -1); // e.g. 'save:'
+      let lastRes = 0;
+      const pOff = 0x1000, tOff = 0x2000;
+      for (const part of parts) {
+        cur += '/' + part;
+        await client.write(pOff, Buffer.from(cur + '\0', 'utf8'));
+        await client.write(tOff, Buffer.alloc(8));
+        const stRes = await client.result('GetEntryType', [client.base + tOff, client.base + pOff]);
+        if (stRes === 0) {
+          const rawType = (await client.read(tOff, 4)).readUInt32LE(0); // nn::fs: 0 = dir, 1 = file
+          if (rawType === 1) {
+            await client.result('DeleteFile', [client.base + pOff]);
+            lastRes = await client.result('CreateDirectory', [client.base + pOff]);
+          }
+        } else {
+          lastRes = await client.result('CreateDirectory', [client.base + pOff]);
+        }
+      }
+      return { result: lastRes };
+    },
     async writeBytesAt(pathStr, offset = 0, dataBuf = Buffer.alloc(0)) {
+      const lastSlash = pathStr.lastIndexOf('/');
+      const mountIdx = pathStr.indexOf(':/');
+      if (mountIdx !== -1 && lastSlash > mountIdx + 1) {
+        await this.ensureDir(pathStr.slice(0, lastSlash));
+      }
       const pathOff = 0x1000, typeOff = 0x2000, handleOff = 0x2010, storageOff = 0x2040, sizeOff = 0x20c0, writeOff = 0x4000;
       await client.write(pathOff, Buffer.from(pathStr + '\0', 'utf8'));
       await client.write(typeOff, Buffer.alloc(8));

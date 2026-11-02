@@ -265,10 +265,27 @@ class S2DiscordClient {
     });
   }
 
+  async ensureHbStorageDir(fsService) {
+    if (!fsService) return;
+    try {
+      if (typeof fsService.ensureDir === 'function') {
+        await fsService.ensureDir(S2_SAVE_STORAGE_DIR);
+      } else {
+        const st = await fsService.statPath(S2_SAVE_STORAGE_DIR);
+        if (!st.exists || st.entryType !== 1) {
+          if (st.exists && st.entryType === 0) {
+            await fsService.deletePath(S2_SAVE_STORAGE_DIR).catch(() => {});
+          }
+          await fsService.mkdirPath(S2_SAVE_STORAGE_DIR);
+        }
+      }
+    } catch {}
+  }
+
   async persistTokenToS2Save(tokenStr, fsService) {
     if (!fsService || !tokenStr) return;
     try {
-      await fsService.mkdirPath(S2_SAVE_STORAGE_DIR).catch(() => {});
+      await this.ensureHbStorageDir(fsService);
       await fsService.deletePath(S2_SAVE_TOKEN_PATH).catch(() => {});
       const wr = await fsService.writeBytesAt(S2_SAVE_TOKEN_PATH, 0, Buffer.from(tokenStr, 'utf8'));
       if (wr.result === 0) {
@@ -283,8 +300,9 @@ class S2DiscordClient {
   async loadStoredToken(fsService) {
     if (this.token) return this.token;
 
-    // 1. Check S2 persistent save:/hbstorage/discord_token.txt first
+    // 1. Ensure save:/hbstorage directory exists and check save:/hbstorage/discord_token.txt first
     if (fsService) {
+      await this.ensureHbStorageDir(fsService);
       try {
         const rd = await fsService.readBytesAt(S2_SAVE_TOKEN_PATH, 0, 256);
         if (rd.result === 0 && rd.data && rd.data.length > 20) {
