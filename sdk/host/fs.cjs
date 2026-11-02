@@ -1300,20 +1300,13 @@ async function create(rpc) {
 
       const findGapTargets = async () => {
         const found = [];
-        const walk = async (dirPath, depth) => {
-          if (depth > 3) return;
-          const { result, entries } = await readAllDir(dirPath);
-          if (result !== 0) return;
-          for (const e of entries) {
-            const fullPath = joinSavePath(dirPath, e.name);
-            if (/^NS2_GAP_/i.test(e.name)) {
-              found.push({ path: fullPath, name: e.name, type: e.type, size: e.size });
-            } else if (e.type === 'dir') {
-              await walk(fullPath, depth + 1);
-            }
+        const { result, entries } = await readAllDir('save:/');
+        if (result !== 0) return found;
+        for (const e of entries) {
+          if (/^NS2_GAP_/i.test(e.name)) {
+            found.push({ path: `save:/${e.name}`, name: e.name, type: e.type, size: e.size });
           }
-        };
-        await walk('save:/', 0);
+        }
         return found;
       };
 
@@ -1456,13 +1449,10 @@ async function create(rpc) {
       }
 
       const rootList = await readAllDir('save:/');
-      const fList = await readAllDir('save:/f');
       const rootNames = rootList.entries.map(e => e.type === 'dir' ? `${e.name}/` : e.name).join(', ');
-      const fNames = fList.entries.map(e => e.type === 'dir' ? `${e.name}/` : e.name).join(', ');
 
-      while (logLines.length < 16) logLines.push('');
-      logLines.push(`[SAVE:/] ${(rootNames || '(empty)').substring(0, 38)}`);
-      logLines.push(`[SAVE:/F] ${(fNames || '(empty)').substring(0, 37)}`);
+      while (logLines.length < 17) logLines.push('');
+      logLines.push(`[SAVE:/ DIR] ${(rootNames || '(empty)').substring(0, 34)}`);
       logLines.push('-----------------------------------------------');
       logLines.push('A: Clean & Commit   Y: Verify Only      -: Exit');
 
