@@ -49,11 +49,14 @@ void main(){
    c.game.w = min(hbDiscordActiveChannel(), cCount - 1u);
    c.piece.x = mCount > 0u ? int(mCount - 1u) : 0;
   } else if (c.piece.z == 1) {
-   c.game.w = 0u;
+   c.game.w = min(hbDiscordActiveChannel(), cCount - 1u);
    c.piece.x = mCount > 0u ? int(mCount - 1u) : 0;
   } else if (c.piece.z == 2) {
+   if (c.game.w >= cCount) c.game.w = cCount - 1u;
    c.piece.x = mCount > 0u ? int(mCount - 1u) : 0;
    c.piece.w = 1; // Collapse Servers & DMs panel when a chat is opened
+  } else if (c.piece.z == 20) {
+   if (c.game.w >= cCount) c.game.w = cCount - 1u;
   }
   if (mCount > 0u && uint(c.piece.x) >= mCount) {
    c.piece.x = int(mCount - 1u);
@@ -201,11 +204,17 @@ void main(){
      c.game.y = 1u;
     }
    } else if (c.game.y == 1u) {
+    bool isSectionRow = (hbDiscordChannelFlags(c.game.w) & 1u) != 0u;
     if (hbDiscordAction(2u, c.game.w)) {
      c.game.x = 1u;
-     c.piece.z = 2;
-     c.game.y = 2u;
-     c.piece.w = 1; // Collapse Servers & DMs panel when opening a chat
+     if (isSectionRow) {
+      // Toggling a Category Section expands/collapses its channels and stays in Channels pane
+      c.piece.z = 20;
+     } else {
+      c.piece.z = 2;
+      c.game.y = 2u;
+      c.piece.w = 1; // Collapse Servers & DMs panel when opening a chat
+     }
     }
    } else if (c.game.y == 2u && mCount > 0u) {
     if (hbDiscordAction(4u, uint(c.piece.x))) {

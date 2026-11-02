@@ -94,8 +94,9 @@ class S2DiscordClient {
     this.user = null;
     this.guilds = [];       // [{ id: '@me', name: '[Direct Messages]', isDm: true }, ...guilds]
     this.dmChannels = [];   // [{ id, name, lastMessageId, raw }]
-    this.guildChannels = new Map(); // guildId -> [{ id, name, position, raw }]
-    this.activeChannels = []; // Currently displayed channel list
+    this.guildChannels = new Map(); // guildId -> [{ id, name, position, isSection, raw }]
+    this.collapsedSections = new Set(); // sectionId strings that the user collapsed
+    this.activeChannels = []; // Currently displayed channel & section list
     this.messagesByChannel = new Map(); // channelId -> [{ id, author, timestamp, content, reactions, isMe, hasMyThumb, raw }]
 
     this.guildWindowOffset = 0;
@@ -493,6 +494,111 @@ class S2DiscordClient {
     }
   }
 
+  canAccessChannel(channel, guild, memberRoles, roleMap, userId) {
+    // 1. Check base guild permissions if provided by /users/@me/guilds
+    const ALL_PERMS = (1n << 63n) - 1n;
+    const ADMINISTRATOR = 1n << 3n;
+    const VIEW_CHANNEL = 1n << 10n;
+
+    if (guild?.raw?.owner) return true;
+    if (guild?.raw?.permissions != null && (!roleMap || roleMap.size === 0)) {
+      try {
+        const gPerms = BigInt(guild.raw.permissions);
+        if ((gPerms & ADMINISTRATOR) === ADMINISTRATOR) return true;
+      } catch {}
+    }
+
+    // 2. Compute base permissions from @everyone role + member's assigned roles
+    let basePerms = VIEW_CHANNEL;
+    if (roleMap && roleMap.size > 0) {
+      const everyoneRole = roleMap.get(String(guild.id));
+      basePerms = everyoneRole ? BigInt(everyoneRole.permissions || 0) : 0n;
+      for (const rId of memberRoles) {
+        const r = roleMap.get(String(rId));
+        if (r && r.permissions != null) {
+          try { basePerms |= BigInt(r.permissions); } catch {}
+        }
+      }
+    } else if (guild?.raw?.permissions != null) {
+      try { basePerms = BigInt(guild.raw.permissions); } catch {}
+    }
+
+    if ((basePerms & ADMINISTRATOR) === ADMINISTRATOR) return true;
+
+    // 3. Apply channel permission_overwrites in Discord's official hierarchy:
+    //    (a) @everyone overwrite -> (b) Role overwrites (OR allow, OR deny) -> (c) Member overwrite
+    let perms = basePerms;
+    const overwrites = Array.isArray(channel.permission_overwrites) ? channel.permission_overwrites : [];
+    if (overwrites.length > 0) {
+      const owEveryone = overwrites.find(o => String(o.id) === String(guild.id));
+      if (owEveryone) {
+        try {
+          perms &= ~BigInt(owEveryone.deny ?? owEveryone.deny_new ?? 0);
+          perms |= BigInt(owEveryone.allow ?? owEveryone.allow_new ?? 0);
+        } catch {}
+      }
+
+      let roleAllow = 0n;
+      let roleDeny = 0n;
+      const roleSet = new Set(memberRoles.map(String));
+      for (const ow of overwrites) {
+        const isRoleOw = (ow.type === 0 || ow.type === 'role') && String(ow.id) !== String(guild.id);
+        if (isRoleOw && roleSet.has(String(ow.id))) {
+          try {
+            roleAllow |= BigInt(ow.allow ?? ow.allow_new ?? 0);
+            roleDeny |= BigInt(ow.deny ?? ow.deny_new ?? 0);
+          } catch {}
+        }
+      }
+      perms &= ~roleDeny;
+      perms |= roleAllow;
+
+      if (userId) {
+        const owMember = overwrites.find(o => String(o.id) === String(userId));
+        if (owMember) {
+          try {
+            perms &= ~BigInt(owMember.deny ?? owMember.deny_new ?? 0);
+            perms |= BigInt(owMember.allow ?? owMember.allow_new ?? 0);
+          } catch {}
+        }
+      }
+    }
+
+    return (perms & VIEW_CHANNEL) === VIEW_CHANNEL;
+  }
+
+  buildCategorizedChannels(guildId) {
+    const entry = this.guildChannels.get(guildId);
+    if (!entry) return [];
+    const { sections, uncategorized, bySection } = entry;
+    const rows = [];
+
+    for (const ch of uncategorized) {
+      rows.push(ch);
+    }
+
+    for (const sec of sections) {
+      const children = bySection.get(sec.id) || [];
+      if (children.length === 0) continue; // Only show sections that contain accessible channels
+      const isCollapsed = this.collapsedSections.has(sec.id);
+      const secTitle = sanitizeAscii(sec.rawName || 'SECTION', 25).toUpperCase() || 'SECTION';
+      rows.push({
+        id: sec.id,
+        name: `${isCollapsed ? '[+]' : '[v]'} ${secTitle}`,
+        isSection: true,
+        isCollapsed,
+        position: sec.position,
+        raw: sec.raw
+      });
+      if (!isCollapsed) {
+        for (const ch of children) {
+          rows.push(ch);
+        }
+      }
+    }
+    return rows;
+  }
+
   async selectGuild(guildIdx) {
     if (guildIdx < 0 || guildIdx >= this.guilds.length) return;
     this.activeGuildIdx = guildIdx;
@@ -509,46 +615,145 @@ class S2DiscordClient {
     } else {
       if (!this.guildChannels.has(guild.id)) {
         try {
-          const chResp = await this.authorizedFetch(`/guilds/${guild.id}/channels`);
+          // Fetch guild channels, guild roles, and current user's member roles in parallel
+          // (matching DiscordGuild.prototype.load in discord-es5)
+          const [chResp, rolesResp, memberResp] = await Promise.all([
+            this.authorizedFetch(`/guilds/${guild.id}/channels`),
+            this.authorizedFetch(`/guilds/${guild.id}/roles`).catch(() => null),
+            this.user?.id
+              ? this.authorizedFetch(`/guilds/${guild.id}/members/${this.user.id}`).catch(() => null)
+              : Promise.resolve(null)
+          ]);
+
+          const roleMap = new Map();
+          if (rolesResp && rolesResp.ok) {
+            const rolesData = await rolesResp.json().catch(() => []);
+            if (Array.isArray(rolesData)) {
+              for (const r of rolesData) {
+                roleMap.set(String(r.id), r);
+              }
+            }
+          } else if (Array.isArray(guild.raw?.roles)) {
+            for (const r of guild.raw.roles) {
+              roleMap.set(String(r.id), r);
+            }
+          }
+
+          let memberRoles = [];
+          if (memberResp && memberResp.ok) {
+            const memData = await memberResp.json().catch(() => null);
+            if (memData && Array.isArray(memData.roles)) {
+              memberRoles = memData.roles.map(String);
+            }
+          } else if (this.readyData && Array.isArray(this.readyData.guilds)) {
+            const readyGuild = this.readyData.guilds.find(g => String(g.id) === String(guild.id));
+            const myMem = Array.isArray(readyGuild?.members)
+              ? readyGuild.members.find(m => String(m.user?.id || m.user_id) === String(this.user?.id))
+              : null;
+            if (myMem && Array.isArray(myMem.roles)) {
+              memberRoles = myMem.roles.map(String);
+            }
+          }
+
           if (chResp.ok) {
             const chData = await chResp.json();
             if (Array.isArray(chData)) {
-              const textChs = chData
-                .filter(c => c.type === 0 || c.type === 5)
-                .sort((a, b) => (a.position || 0) - (b.position || 0))
-                .map(c => ({
+              // 1. Extract Category Sections (type === 4) sorted by position
+              const rawSections = chData
+                .filter(c => c.type === 4)
+                .sort((a, b) => (a.position || 0) - (b.position || 0) || (BigInt(a.id) < BigInt(b.id) ? -1 : 1));
+
+              const sections = rawSections.map(s => ({
+                id: String(s.id),
+                rawName: s.name || 'Section',
+                position: s.position || 0,
+                raw: s
+              }));
+              const sectionIds = new Set(sections.map(s => s.id));
+
+              // 2. Filter text/announcement channels (type 0, 5) to ONLY those the user can access
+              const accessibleTextChs = chData
+                .filter(c => (c.type === 0 || c.type === 5) && this.canAccessChannel(c, guild, memberRoles, roleMap, this.user?.id))
+                .sort((a, b) => (a.position || 0) - (b.position || 0) || (BigInt(a.id) < BigInt(b.id) ? -1 : 1));
+
+              const uncategorized = [];
+              const bySection = new Map();
+              for (const s of sections) bySection.set(s.id, []);
+
+              for (const c of accessibleTextChs) {
+                const parentId = c.parent_id ? String(c.parent_id) : null;
+                const formatted = {
                   id: String(c.id),
-                  name: '#' + (sanitizeAscii(c.name || 'channel', 28) || 'channel'),
+                  name: ' #' + (sanitizeAscii(c.name || 'channel', 27) || 'channel'),
+                  cleanName: '#' + (sanitizeAscii(c.name || 'channel', 28) || 'channel'),
+                  parentId,
                   position: c.position || 0,
                   type: c.type,
+                  isSection: false,
                   raw: c
-                }));
-              this.guildChannels.set(guild.id, textChs);
+                };
+                if (parentId && sectionIds.has(parentId)) {
+                  bySection.get(parentId).push(formatted);
+                } else {
+                  uncategorized.push(formatted);
+                }
+              }
+
+              this.guildChannels.set(guild.id, { sections, uncategorized, bySection });
             }
           }
         } catch (err) {
           console.error('[DISCORD] Failed to load guild channels:', err.message);
         }
       }
-      this.activeChannels = this.guildChannels.get(guild.id) || [];
+      this.activeChannels = this.buildCategorizedChannels(guild.id);
     }
 
-    if (this.activeChannels.length > 0) {
-      await this.selectChannel(0);
+    const firstRealIdx = this.activeChannels.findIndex(c => !c.isSection);
+    if (firstRealIdx !== -1) {
+      await this.selectChannel(firstRealIdx);
+    } else if (this.activeChannels.length > 0) {
+      this.activeChannelIdx = 0;
     }
   }
 
   async selectChannel(channelIdx) {
-    if (channelIdx < 0 || channelIdx >= this.activeChannels.length) return;
+    if (channelIdx < 0 || channelIdx >= this.activeChannels.length) return false;
+    const item = this.activeChannels[channelIdx];
+    if (!item) return false;
+
+    // If user clicked a Section Header row, toggle collapse/expand for that section!
+    if (item.isSection) {
+      const guild = this.guilds[this.activeGuildIdx];
+      if (guild && !guild.isDm) {
+        const currentSelectedId = this.activeChannels[this.activeChannelIdx]?.id;
+        if (this.collapsedSections.has(item.id)) {
+          this.collapsedSections.delete(item.id);
+        } else {
+          this.collapsedSections.add(item.id);
+        }
+        this.activeChannels = this.buildCategorizedChannels(guild.id);
+        const restoredIdx = this.activeChannels.findIndex(c => c.id === currentSelectedId && !c.isSection);
+        const secIdx = this.activeChannels.findIndex(c => c.id === item.id && c.isSection);
+        if (restoredIdx !== -1) {
+          this.activeChannelIdx = restoredIdx;
+        } else if (secIdx !== -1) {
+          this.activeChannelIdx = secIdx;
+        }
+        if (this.channelWindowOffset >= this.activeChannels.length) {
+          this.channelWindowOffset = Math.max(0, this.activeChannels.length - 14);
+        }
+      }
+      return false; // Did not open a chat channel (only toggled section)
+    }
+
     this.activeChannelIdx = channelIdx;
     if (channelIdx < this.channelWindowOffset) this.channelWindowOffset = channelIdx;
     if (channelIdx >= this.channelWindowOffset + 14) this.channelWindowOffset = channelIdx - 13;
     this.messageScrollOffset = 0;
 
-    const channel = this.activeChannels[channelIdx];
-    if (channel) {
-      await this.loadMessages(channel.id);
-    }
+    await this.loadMessages(item.id);
+    return true; // Opened a real chat channel
   }
 
   async loadMessages(channelId, limit = 25) {
@@ -757,14 +962,20 @@ class S2DiscordClient {
 
     // Channels (14 * 32 = 448 bytes at offset 448)
     for (let i = 0; i < visChannels.length; i++) {
-      buf.write(visChannels[i].name.slice(0, 31), 448 + i * 32, 32, 'utf8');
+      const chItem = visChannels[i];
+      buf.write(chItem.name.slice(0, 30), 448 + i * 32, 30, 'utf8');
+      let chFlags = 0;
+      if (chItem.isSection) {
+        chFlags = 1 | (chItem.isCollapsed ? 2 : 0);
+      }
+      buf[448 + i * 32 + 31] = chFlags;
     }
 
     // Active Header Banner (64 bytes at offset 896)
     let banner = this.statusDetail;
     if (this.status === 2) {
       const gName = this.guilds[this.activeGuildIdx]?.name || 'Discord';
-      const cName = channel?.name || '(no channel)';
+      const cName = (channel?.cleanName || channel?.name || '(no channel)').trim();
       const gwStr = this.gatewayState === 1 ? 'LIVE' : 'REST';
       banner = `${gName}  >  ${cName}  [${gwStr}]`;
     }

@@ -236,7 +236,10 @@ uint hbDiscordGuildByte(uint guildIdx, uint charIdx){
  return (guildIdx < 12u && charIdx < 32u) ? hbDiscordByte(64u + guildIdx * 32u + charIdx) : 0u;
 }
 uint hbDiscordChannelByte(uint chIdx, uint charIdx){
- return (chIdx < 14u && charIdx < 32u) ? hbDiscordByte(448u + chIdx * 32u + charIdx) : 0u;
+ return (chIdx < 14u && charIdx < 31u) ? hbDiscordByte(448u + chIdx * 32u + charIdx) : 0u;
+}
+uint hbDiscordChannelFlags(uint chIdx){
+ return chIdx < 14u ? hbDiscordByte(448u + chIdx * 32u + 31u) : 0u;
 }
 uint hbDiscordBannerByte(uint charIdx){
  return charIdx < 64u ? hbDiscordByte(896u + charIdx) : 0u;

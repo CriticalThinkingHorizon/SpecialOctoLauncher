@@ -254,15 +254,24 @@ void main(){
    float rowY = 160.0 + float(i) * 58.0;
    if (abs(p.y - rowY) > 28.0) continue;
 
-   bool isAct = (i == activeC);
+   uint chFlags = hbDiscordChannelFlags(i);
+   bool isSec = (chFlags & 1u) != 0u;
+   bool isSecCollapsed = (chFlags & 2u) != 0u;
+   bool isAct = (!isSec && i == activeC);
    bool isCur = (activePane == 1u && i == cursorC);
 
    vec2 rCenter = vec2(chCenter.x, rowY);
-   float rBox = fill(box(p, rCenter, vec2(170.0, 24.0), 6.0));
-   float rLine = line(box(p, rCenter, vec2(170.0, 24.0), 6.0), 2.0);
+   float rBox = fill(box(p, rCenter, vec2(170.0, isSec ? 21.0 : 24.0), 6.0));
+   float rLine = line(box(p, rCenter, vec2(170.0, isSec ? 21.0 : 24.0), 6.0), 2.0);
 
-   if (isAct) {
+   if (isSec) {
+    color = mix(color, isCur ? vec3(0.21, 0.225, 0.27) : vec3(0.135, 0.142, 0.158), rBox);
+    float secBar = fill(box(p, vec2(chCenter.x, rowY + 21.0), vec2(166.0, 1.0), 0.5));
+    color = mix(color, vec3(0.28, 0.31, 0.38), secBar);
+   } else if (isAct) {
     color = mix(color, vec3(0.25, 0.265, 0.30), rBox);
+    float actPill = fill(box(p, vec2(chMinX + 18.0, rowY), vec2(3.0, 14.0), 1.5));
+    color = mix(color, colBlurple, actPill);
    } else if (isCur) {
     color = mix(color, vec3(0.22, 0.23, 0.26), rBox);
    }
@@ -271,12 +280,18 @@ void main(){
    }
 
    float cInk = 0.0;
+   float textStartX = isSec ? (chMinX + 20.0) : (chMinX + 26.0);
    for (uint cIdx = 0u; cIdx < 18u; cIdx++) {
     uint ch = hbDiscordChannelByte(i, cIdx);
     if (ch == 0u) break;
-    cInk = max(cInk, drawChar(p, vec2(chMinX + 24.0 + float(cIdx) * gw, rowY - 14.0), ch));
+    cInk = max(cInk, drawChar(p, vec2(textStartX + float(cIdx) * gw, rowY - 14.0), ch));
    }
-   vec3 cCol = isAct ? vec3(1.0) : (isCur ? vec3(0.92, 0.94, 0.98) : vec3(0.62, 0.65, 0.70));
+   vec3 cCol;
+   if (isSec) {
+    cCol = isCur ? vec3(0.95, 0.85, 0.45) : (isSecCollapsed ? vec3(0.62, 0.66, 0.75) : vec3(0.55, 0.76, 1.0));
+   } else {
+    cCol = isAct ? vec3(1.0) : (isCur ? vec3(0.92, 0.94, 0.98) : vec3(0.62, 0.65, 0.70));
+   }
    color = mix(color, cCol, cInk);
   }
  }
