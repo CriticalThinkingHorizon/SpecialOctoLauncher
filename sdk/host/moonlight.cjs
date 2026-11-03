@@ -499,17 +499,35 @@ class S2MoonlightClient {
     }
 
     try {
-      // Query NVHTTP serverinfo over HTTP port 47989
-      const xml = await this.httpGet(`http://${this.hostIp}:47989/serverinfo`, 3500);
+      // 1. First test authenticated HTTPS serverinfo (port 47984).
+      // Sunshine ONLY sets PairStatus=1 when queried over HTTPS with mutual TLS and uniqueid!
+      let xml = '';
+      let isHttpsPaired = false;
+      if (this.clientCert && this.clientKey) {
+        try {
+          xml = await this.httpGet(`https://${this.hostIp}:47984/serverinfo?uniqueid=${this.uniqueId}`, 3000);
+          const ps = parseXmlTag(xml, 'PairStatus') || parseXmlTag(xml, 'paired');
+          if (ps === '1') {
+            isHttpsPaired = true;
+          }
+        } catch (httpsErr) {
+          // HTTPS fails when client is not authorized yet
+        }
+      }
+
+      // 2. Fall back to plain HTTP (port 47989) if HTTPS is not yet authorized
+      if (!xml) {
+        xml = await this.httpGet(`http://${this.hostIp}:47989/serverinfo`, 3500);
+      }
+
       const hostname = parseXmlTag(xml, 'hostname') || parseXmlTag(xml, 'host');
-      const pairStatus = parseXmlTag(xml, 'PairStatus') || parseXmlTag(xml, 'paired');
       const appversion = parseXmlTag(xml, 'appversion') || 'Sunshine';
 
       if (hostname) this.serverName = sanitizeAscii(hostname, 30);
-      
-      console.log(`[Moonlight S2] Host: ${this.serverName}, PairStatus: ${pairStatus}, Version: ${appversion}`);
 
-      if (pairStatus === '1') {
+      console.log(`[Moonlight S2] Host: ${this.serverName}, HTTPS Paired: ${isHttpsPaired}, Version: ${appversion}`);
+
+      if (isHttpsPaired) {
         this.isPaired = true;
         this.status = 2;
         this.pairingInProgress = false;
