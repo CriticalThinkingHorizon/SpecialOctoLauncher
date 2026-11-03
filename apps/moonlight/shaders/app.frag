@@ -159,9 +159,9 @@ void main(){
   streamColor = mix(streamColor, bX ? colTeal : vec3(0.25), fill(length(p - (abxyCenter + vec2(0, -16))) - 5.0));
   streamColor = mix(streamColor, bY ? colTeal : vec3(0.25), fill(length(p - (abxyCenter + vec2(-16, 0))) - 5.0));
 
-  // Left & Right Joysticks
-  vec2 stickPosL = padCluster + vec2(-60.0, 0.0) + stickL * 14.0;
-  vec2 stickPosR = padCluster + vec2(-15.0, 0.0) + stickR * 14.0;
+  // Left & Right Joysticks (Invert Y so stick UP moves visualizer UP on screen)
+  vec2 stickPosL = padCluster + vec2(-60.0, 0.0) + vec2(stickL.x, -stickL.y) * 14.0;
+  vec2 stickPosR = padCluster + vec2(-15.0, 0.0) + vec2(stickR.x, -stickR.y) * 14.0;
   streamColor = mix(streamColor, colCyan, fill(length(p - stickPosL) - 7.0));
   streamColor = mix(streamColor, colCyan, fill(length(p - stickPosR) - 7.0));
 
