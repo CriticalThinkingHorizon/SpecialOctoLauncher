@@ -46,10 +46,16 @@ const uint FOOT_CHARS[76] = uint[76](
  45u,58u,32u,69u,120u,105u,116u
 );
 
-// Stream Active Strings:
-const uint STR_LIVE_ACT[22] = uint[22](76u,73u,86u,69u,32u,80u,67u,32u,83u,69u,83u,83u,73u,79u,78u,32u,65u,67u,84u,73u,86u,69u);
-const uint STR_LIVE_SUB[38] = uint[38](49u,50u,56u,48u,120u,55u,50u,48u,32u,54u,48u,70u,80u,83u,32u,124u,32u,83u,50u,32u,76u,79u,87u,45u,76u,65u,84u,69u,78u,67u,89u,32u,73u,78u,80u,85u,84u,32u);
+// Stream Active Strings (input-only prototype):
+// "INPUT-ONLY TEST MODE  " (22 chars)
+const uint STR_LIVE_ACT[22] = uint[22](73u,78u,80u,85u,84u,45u,79u,78u,76u,89u,32u,84u,69u,83u,84u,32u,77u,79u,68u,69u,32u,32u);
+// "VIDEO STREAMING IS NOT IMPLEMENTED YET" (38 chars)
+const uint STR_LIVE_SUB[38] = uint[38](86u,73u,68u,69u,79u,32u,83u,84u,82u,69u,65u,77u,73u,78u,71u,32u,73u,83u,32u,78u,79u,84u,32u,73u,77u,80u,76u,69u,77u,69u,78u,84u,69u,68u,32u,89u,69u,84u);
 const uint STR_LIVE_PAD[33] = uint[33](67u,79u,78u,84u,82u,79u,76u,76u,69u,82u,32u,73u,78u,80u,85u,84u,83u,32u,83u,84u,82u,69u,65u,77u,73u,78u,71u,32u,84u,79u,32u,80u,67u);
+
+// Menu warning:
+// "INPUT-ONLY BUILD: VIDEO STREAMING IS NOT IMPLEMENTED" (52 chars)
+const uint WARN_CHARS[52] = uint[52](73u,78u,80u,85u,84u,45u,79u,78u,76u,89u,32u,66u,85u,73u,76u,68u,58u,32u,86u,73u,68u,69u,79u,32u,83u,84u,82u,69u,65u,77u,73u,78u,71u,32u,73u,83u,32u,78u,79u,84u,32u,73u,77u,80u,76u,69u,77u,69u,78u,84u,69u,68u);
 
 // Stream Overlay Footer:
 // "HOLD (-) + (+) FOR 1s TO DISCONNECT  |  TAP (-) TO TOGGLE HUD" (59 chars)
@@ -109,14 +115,14 @@ void main(){
    // Glowing Status Dot in Header
    float pulse = 0.8 + 0.2 * sin(c.motion.x * 5.0);
    float statusDot = fill(length(p - vec2(430.0, 220.0)) - 8.0);
-   streamColor = mix(streamColor, colGreen * pulse, statusDot);
+   streamColor = mix(streamColor, colYellow * pulse, statusDot);
 
-   // "LIVE PC SESSION ACTIVE" Header
+   // "INPUT-ONLY TEST MODE" Header
    float actInk = 0.0;
    for (uint i = 0u; i < 22u; i++) {
     actInk = max(actInk, drawChar(p, vec2(450.0 + float(i) * gw, 206.0), STR_LIVE_ACT[i]));
    }
-   streamColor = mix(streamColor, colGreen, actInk);
+   streamColor = mix(streamColor, colYellow, actInk);
 
    // Active Game Title (Large & Prominent)
    float gameInk = 0.0;
@@ -127,12 +133,12 @@ void main(){
    }
    streamColor = mix(streamColor, colCyan, gameInk);
 
-   // Specs / Subtitle: "1280x720 60FPS | S2 LOW-LATENCY INPUT"
+   // Warning Subtitle: "VIDEO STREAMING IS NOT IMPLEMENTED YET"
    float subInk = 0.0;
    for (uint i = 0u; i < 38u; i++) {
     subInk = max(subInk, drawChar(p, vec2(430.0 + float(i) * gw, 290.0), STR_LIVE_SUB[i]));
    }
-   streamColor = mix(streamColor, colTeal, subInk);
+   streamColor = mix(streamColor, colRed, subInk);
 
    // --- Large Center Gamepad Visualizer ---
    uint held = hbButtons();
@@ -215,13 +221,13 @@ void main(){
     }
     streamColor = mix(streamColor, colCyan, hudInk);
 
-    // Live specs: 1280x720 60FPS
+    // Input-only channel label
     float specsInk = 0.0;
-    const uint SPEC_CHARS[18] = uint[18](124u,32u,49u,50u,56u,48u,120u,55u,50u,48u,32u,54u,48u,70u,80u,83u,32u,124u);
+    const uint SPEC_CHARS[18] = uint[18](73u,78u,80u,85u,84u,32u,67u,72u,65u,78u,78u,69u,76u,32u,79u,78u,76u,89u);
     for (uint i = 0u; i < 18u; i++) {
      specsInk = max(specsInk, drawChar(p, vec2(780.0 + float(i) * gw, 28.0), SPEC_CHARS[i]));
     }
-    streamColor = mix(streamColor, colTeal, specsInk);
+    streamColor = mix(streamColor, colYellow, specsInk);
 
     // Render Host IP
     float ipInk = 0.0;
@@ -325,14 +331,14 @@ void main(){
    color = mix(color, colTeal, ipInk);
   }
 
-  // Right Header: Port & 60 FPS
+  // Right Header: input-only notice
   if (p.x >= 1650.0 && p.x <= 1860.0) {
    float tagInk = 0.0;
-   const uint GS_TAG[11] = uint[11](54u,48u,70u,80u,83u,32u,85u,68u,80u,52u,55u);
+   const uint GS_TAG[11] = uint[11](73u,78u,80u,85u,84u,32u,79u,78u,76u,89u,32u);
    for (uint i = 0u; i < 11u; i++) {
     tagInk = max(tagInk, drawChar(p, vec2(1660.0 + float(i) * gw, 29.0), GS_TAG[i]));
    }
-   color = mix(color, colCyan, tagInk);
+   color = mix(color, colYellow, tagInk);
   }
  }
 
@@ -540,35 +546,35 @@ void main(){
    color = mix(color, colCyan, shInk);
   }
 
-  // Spec Lines (Resolution, FPS, Bitrate, Network, Controller)
+  // Spec Lines (honest input-only status)
   if (p.x >= 1250.0 && p.x <= 1860.0) {
-   // Resolution: 1280x720 Native S2
+   // Video: not implemented
    if (p.y >= 180.0 && p.y <= 214.0) {
     float rInk = 0.0;
-    const uint R_LBL[23] = uint[23](82u,101u,115u,111u,108u,117u,116u,105u,111u,110u,58u,32u,49u,50u,56u,48u,120u,55u,50u,48u,32u,83u,50u);
+    const uint R_LBL[23] = uint[23](86u,105u,100u,101u,111u,58u,32u,110u,111u,116u,32u,105u,109u,112u,108u,101u,109u,101u,110u,116u,101u,100u,32u);
     for (uint i = 0u; i < 23u; i++) rInk = max(rInk, drawChar(p, vec2(1260.0 + float(i) * gw, 180.0), R_LBL[i]));
-    color = mix(color, colWhite, rInk);
+    color = mix(color, colRed, rInk);
    }
-   // Frame Rate: 60 FPS Low-Latency
+   // Audio: not implemented
    if (p.y >= 240.0 && p.y <= 274.0) {
     float fInk = 0.0;
-    const uint F_LBL[23] = uint[23](70u,114u,97u,109u,101u,32u,82u,97u,116u,101u,58u,32u,54u,48u,32u,70u,80u,83u,32u,70u,117u,108u,108u);
+    const uint F_LBL[23] = uint[23](65u,117u,100u,105u,111u,58u,32u,110u,111u,116u,32u,105u,109u,112u,108u,101u,109u,101u,110u,116u,101u,100u,32u);
     for (uint i = 0u; i < 23u; i++) fInk = max(fInk, drawChar(p, vec2(1260.0 + float(i) * gw, 240.0), F_LBL[i]));
-    color = mix(color, colTeal, fInk);
+    color = mix(color, colRed, fInk);
    }
-   // Bitrate: 15.0 Mbps
+   // Video bitrate: none
    if (p.y >= 300.0 && p.y <= 334.0) {
     float bInk = 0.0;
-    const uint B_LBL[22] = uint[22](66u,105u,116u,114u,97u,116u,101u,58u,32u,49u,53u,46u,48u,32u,77u,98u,112u,115u,32u,67u,66u,82u);
+    const uint B_LBL[22] = uint[22](86u,105u,100u,101u,111u,32u,98u,105u,116u,114u,97u,116u,101u,58u,32u,110u,111u,110u,101u,32u,32u,32u);
     for (uint i = 0u; i < 22u; i++) bInk = max(bInk, drawChar(p, vec2(1260.0 + float(i) * gw, 300.0), B_LBL[i]));
-    color = mix(color, colCyan, bInk);
+    color = mix(color, vec3(0.70, 0.75, 0.82), bInk);
    }
-   // Protocol: GameStream RTSP + UDP
+   // Protocol: input only
    if (p.y >= 360.0 && p.y <= 394.0) {
     float pInk = 0.0;
-    const uint P_LBL[24] = uint[24](80u,114u,111u,116u,111u,99u,111u,108u,58u,32u,82u,84u,83u,80u,32u,43u,32u,85u,68u,80u,32u,52u,55u,57u);
+    const uint P_LBL[24] = uint[24](80u,114u,111u,116u,111u,99u,111u,108u,58u,32u,105u,110u,112u,117u,116u,32u,111u,110u,108u,121u,32u,32u,32u,32u);
     for (uint i = 0u; i < 24u; i++) pInk = max(pInk, drawChar(p, vec2(1260.0 + float(i) * gw, 360.0), P_LBL[i]));
-    color = mix(color, vec3(0.80), pInk);
+    color = mix(color, colYellow, pInk);
    }
    // Controller: Emulated Xbox 360
    if (p.y >= 420.0 && p.y <= 454.0) {
@@ -590,6 +596,15 @@ void main(){
    }
    color = mix(color, vec3(0.04, 0.07, 0.10), lBtnInk);
   }
+ }
+
+ // --- Input-only Warning Line (y = 982..1014) ---
+ if (p.y >= 980.0 && p.y <= 1014.0 && p.x >= 500.0 && p.x <= 1420.0) {
+  float warnInk = 0.0;
+  for (uint i = 0u; i < 52u; i++) {
+   warnInk = max(warnInk, drawChar(p, vec2(518.0 + float(i) * gw, 982.0), WARN_CHARS[i]));
+  }
+  color = mix(color, colYellow, warnInk);
  }
 
  // --- Bottom Footer Bar (y = 1010..1066) ---

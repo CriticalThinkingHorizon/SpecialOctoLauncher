@@ -1,5 +1,8 @@
 # Moonlight S2 (Sunshine Game Streaming Client)
 
+> [!WARNING]
+> **This app does not work yet.** It currently only streams S2 controller input to a Sunshine/GameStream host. **Video and audio streaming are not implemented**, so no PC image or sound reaches the console. Pairing and the app list are test scaffolding; do not expect a playable stream.
+
 Native game streaming client for the S2 console, connecting to Sunshine / NVIDIA GameStream hosts. Streams PC games with low-latency controller input, app selection, and PIN pairing.
 
 ## Features

@@ -4,7 +4,7 @@
   "id": "moonlight",
   "name": "Moonlight S2",
   "version": "1.0.0",
-  "description": "Sunshine & GameStream PC client with Pairing, App List & S2 Controller Input",
+  "description": "Input-only Sunshine test client (video streaming is not implemented)",
   "icon": "assets/icon.png",
   "initialState": "assets/state.bin",
   "data": "assets/text.bin",
