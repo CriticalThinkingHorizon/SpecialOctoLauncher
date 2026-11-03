@@ -133,19 +133,16 @@ void main(){
 
   uint status = hbMoonlightStatus();
 
-  // Periodic poll only when ready (every 6s) or searching (every 4s)
-  // When pairing (status == 3), do NOT poll to prevent resetting the PIN!
-  if (status != 3u) {
-   c.piece.y++;
-   int pollTarget = (status == 2u) ? 360 : 240;
-   if (c.piece.y >= pollTarget) {
-    c.piece.y = 0;
-    if (hbMoonlightAction(0u, 0u)) {
-     c.game.x = 1u;
-     c.piece.z = 0;
-     hbEndFrame();
-     return;
-    }
+  // Periodic poll: every 1s during pairing (status == 3), 6s when ready (status == 2), 4s when searching
+  c.piece.y++;
+  int pollTarget = (status == 3u) ? 60 : ((status == 2u) ? 360 : 240);
+  if (c.piece.y >= pollTarget) {
+   c.piece.y = 0;
+   if (hbMoonlightAction(0u, 0u)) {
+    c.game.x = 1u;
+    c.piece.z = 0;
+    hbEndFrame();
+    return;
    }
   }
 
