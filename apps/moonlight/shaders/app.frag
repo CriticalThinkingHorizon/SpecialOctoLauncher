@@ -139,23 +139,23 @@ void main(){
    vec2 sL = hbStick(false);
    vec2 sR = hbStick(true);
 
-   // Left Analog Stick (Push UP moves UP on screen with +sL.y)
+   // Left Analog Stick (Push UP moves UP on screen with -sL.y)
    vec2 leftStickBase = vec2(600.0, 520.0);
    float lRing = fill(length(p - leftStickBase) - 48.0) - fill(length(p - leftStickBase) - 44.0);
    float lCrossH = fill(box(p, leftStickBase, vec2(40.0, 1.0), 0.0));
    float lCrossV = fill(box(p, leftStickBase, vec2(1.0, 40.0), 0.0));
    streamColor = mix(streamColor, vec3(0.35, 0.45, 0.55), (lRing + lCrossH + lCrossV));
-   vec2 lPuck = leftStickBase + vec2(sL.x, sL.y) * 32.0;
+   vec2 lPuck = leftStickBase + vec2(sL.x, -sL.y) * 32.0;
    float lDot = fill(length(p - lPuck) - 16.0);
    streamColor = mix(streamColor, colCyan, lDot);
 
-   // Right Analog Stick (Push UP moves UP on screen with +sR.y)
+   // Right Analog Stick (Push UP moves UP on screen with -sR.y)
    vec2 rightStickBase = vec2(1320.0, 520.0);
    float rRing = fill(length(p - rightStickBase) - 48.0) - fill(length(p - rightStickBase) - 44.0);
    float rCrossH = fill(box(p, rightStickBase, vec2(40.0, 1.0), 0.0));
    float rCrossV = fill(box(p, rightStickBase, vec2(1.0, 40.0), 0.0));
    streamColor = mix(streamColor, vec3(0.35, 0.45, 0.55), (rRing + rCrossH + rCrossV));
-   vec2 rPuck = rightStickBase + vec2(sR.x, sR.y) * 32.0;
+   vec2 rPuck = rightStickBase + vec2(sR.x, -sR.y) * 32.0;
    float rDot = fill(length(p - rPuck) - 16.0);
    streamColor = mix(streamColor, colCyan, rDot);
 

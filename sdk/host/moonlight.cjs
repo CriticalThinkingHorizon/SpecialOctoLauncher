@@ -167,10 +167,19 @@ class S2MoonlightClient {
     this.lastFileMtime = 0;
     this.portalServer = null;
 
-    // ENet control stream state
+    // ENet control stream state & cryptographic session
     this.enetConnected = false;
     this.enetServerPeerId = 0;
     this.enetConnectId = 0;
+    this.enetClientReliableSeq = 1;
+    this.enetConnectData = 0;
+    this.videoPingPayload = '';
+    this.audioPingPayload = '';
+    this.udpPingTimer = null;
+    this.currentRikey = '';
+    this.currentRikeyId = 0;
+    this.rikeyBuf = null;
+    this.currentAesIv = null;
 
     this.startPortalServer();
     this.initUdpSocket();
@@ -198,8 +207,7 @@ class S2MoonlightClient {
 
   handleUdpMessage(msg, rinfo) {
     if (msg.length < 4) return;
-    console.log(`[Moonlight UDP] Received ${msg.length} bytes from ${rinfo.address}:${rinfo.port}`);
-    const peerId = msg.readUInt16BE(0);
+    const headerPeerId = msg.readUInt16BE(0) & 0x0FFF;
     const sentTime = msg.readUInt16BE(2);
     let offset = 4;
 
@@ -218,38 +226,49 @@ class S2MoonlightClient {
         this.enetConnected = true;
         console.log(`[Moonlight ENet] Connection verified by Sunshine! Server Peer ID: ${serverPeerId}`);
 
-        // Send ACK for VERIFY_CONNECT
-        this.sendEnetAck(serverPeerId, relSeq, sentTime);
+        if (needsAck) {
+          this.sendEnetAck(serverPeerId, relSeq, sentTime, channelId);
+        }
 
-        // Announce controller arrival on channel 0x10 so Sunshine attaches virtual gamepad
-        this.sendControllerArrival();
+        // Send initial handshake commands (START A, START B, RFI) to activate pipeline
+        setTimeout(() => {
+          this.sendEnetReliable(0x0305, Buffer.from([0, 0]), 0); // START A
+          this.sendEnetReliable(0x0307, Buffer.from([0]), 0);    // START B
+          this.sendEnetReliable(0x0301, Buffer.alloc(24), 0);    // RFI
+          this.sendControllerArrival();
+        }, 80);
         offset += 44;
+      } else if (command === 10) { // BANDWIDTH_LIMIT (0x0A / 0x44)
+        if (needsAck) {
+          this.sendEnetAck(this.enetServerPeerId || headerPeerId, relSeq, sentTime, channelId);
+        }
+        offset += 12;
       } else if (command === 4) { // DISCONNECT
         console.log('[Moonlight ENet] Disconnect command from host.');
         this.enetConnected = false;
         offset += 8;
       } else if (command === 5) { // PING
         if (needsAck) {
-          this.sendEnetAck(this.enetServerPeerId || 0, relSeq, sentTime);
+          this.sendEnetAck(this.enetServerPeerId || headerPeerId, relSeq, sentTime, channelId);
         }
         offset += 4;
       } else {
         if (needsAck) {
-          this.sendEnetAck(this.enetServerPeerId || 0, relSeq, sentTime);
+          this.sendEnetAck(this.enetServerPeerId || headerPeerId, relSeq, sentTime, channelId);
         }
         break;
       }
     }
   }
 
-  sendEnetAck(serverPeerId, seqNum, sentTime) {
+  sendEnetAck(serverPeerId, seqNum, sentTime, channelId = 0xFF) {
     if (!this.udpSocket || !this.hostIp) return;
     const ackPkt = Buffer.alloc(12);
-    ackPkt.writeUInt16BE(serverPeerId, 0); // Peer ID
+    ackPkt.writeUInt16BE((serverPeerId & 0x0FFF) | 0x8000, 0); // Peer ID with sent time flag
     ackPkt.writeUInt16BE(Date.now() & 0xFFFF, 2);
     ackPkt.writeUInt8(0x01, 4); // Command: ACKNOWLEDGE (1)
-    ackPkt.writeUInt8(0xFF, 5); // Channel 0xFF
-    ackPkt.writeUInt16BE(0, 6);  // relSeq
+    ackPkt.writeUInt8(channelId, 5); // Channel
+    ackPkt.writeUInt16BE(seqNum, 6);  // relSeq
     ackPkt.writeUInt16BE(seqNum, 8); // receivedReliableSequenceNumber
     ackPkt.writeUInt16BE(sentTime, 10); // receivedSentTime
     try {
@@ -257,26 +276,39 @@ class S2MoonlightClient {
     } catch {}
   }
 
+  sendEnetReliable(typeLe16, payloadBuf, channel = 0) {
+    if (!this.udpSocket || !this.hostIp) return;
+    const dataLen = 2 + payloadBuf.length;
+    const pkt = Buffer.alloc(10 + dataLen);
+    pkt.writeUInt16BE((this.enetServerPeerId & 0x0FFF) | 0x8000, 0);
+    pkt.writeUInt16BE(Date.now() & 0xFFFF, 2);
+    pkt.writeUInt8(0x86, 4); // SEND_RELIABLE | FLAG_ACKNOWLEDGE
+    pkt.writeUInt8(channel, 5);
+    pkt.writeUInt16BE(this.enetClientReliableSeq++, 6);
+    pkt.writeUInt16BE(dataLen, 8);
+    pkt.writeUInt16LE(typeLe16, 10);
+    payloadBuf.copy(pkt, 12);
+    try {
+      this.udpSocket.send(pkt, 47999, this.hostIp);
+    } catch {}
+  }
+
   connectEnet() {
     if (!this.udpSocket || !this.hostIp) return;
     this.enetConnected = false;
     this.enetServerPeerId = 0;
+    this.enetClientReliableSeq = 1;
     this.enetConnectId = Math.floor(Math.random() * 0x7FFFFFFF);
 
-    console.log(`[Moonlight ENet] Sending ENet CONNECT to ${this.hostIp}:47999...`);
+    console.log(`[Moonlight ENet] Sending ENet CONNECT to ${this.hostIp}:47999 (cData=${this.enetConnectData})...`);
 
     // Build standard 52-byte ENet CONNECT packet
     const pkt = Buffer.alloc(52);
-    // Header (4 bytes)
-    pkt.writeUInt16BE(0xFFFF, 0); // peerID = 0xFFFF
-    pkt.writeUInt16BE(Date.now() & 0xFFFF, 2); // sentTime
-
-    // Command Header (4 bytes)
+    pkt.writeUInt16BE(0x8FFF, 0); // peerID = 0x0FFF | ENET_PROTOCOL_HEADER_FLAG_SENT_TIME
+    pkt.writeUInt16BE(Date.now() & 0xFFFF, 2);
     pkt.writeUInt8(0x82, 4); // command: CONNECT (2) | ACK (0x80)
     pkt.writeUInt8(0xFF, 5); // channelID: 0xFF
     pkt.writeUInt16BE(1, 6);  // reliableSequenceNumber: 1
-
-    // Connect Body (44 bytes)
     pkt.writeUInt16BE(0, 8);                   // outgoingPeerID: 0
     pkt.writeUInt8(0xFF, 10);                  // incomingSessionID: 0xFF
     pkt.writeUInt8(0xFF, 11);                  // outgoingSessionID: 0xFF
@@ -289,16 +321,16 @@ class S2MoonlightClient {
     pkt.writeUInt32BE(2, 36);                  // packetThrottleAcceleration: 2
     pkt.writeUInt32BE(2, 40);                  // packetThrottleDeceleration: 2
     pkt.writeUInt32BE(this.enetConnectId, 44); // connectID
-    pkt.writeUInt32BE(0, 48);                  // data: 0
+    pkt.writeUInt32BE(this.enetConnectData >>> 0, 48); // data: cData from X-SS-Connect-Data
 
     try {
       this.udpSocket.send(pkt, 47999, this.hostIp);
     } catch {}
 
-    // Retry connection up to 5 times if needed
+    // Retry connection up to 6 times if needed
     let attempts = 0;
     const retryTimer = setInterval(() => {
-      if (this.enetConnected || this.streamState !== 1 || attempts++ >= 5) {
+      if (this.enetConnected || this.streamState !== 1 || attempts++ >= 6) {
         clearInterval(retryTimer);
         return;
       }
@@ -307,12 +339,40 @@ class S2MoonlightClient {
           this.udpSocket.send(pkt, 47999, this.hostIp);
         } catch {}
       }
-    }, 450);
+    }, 400);
+  }
+
+  makePingPacket(asciiPayload) {
+    const buf = Buffer.alloc(20);
+    if (asciiPayload && asciiPayload.length >= 16) {
+      buf.write(asciiPayload.slice(0, 16), 0, 16, 'ascii');
+    } else {
+      buf.write('PING', 0, 4, 'ascii');
+    }
+    buf.writeUInt32BE(0, 16);
+    return buf;
+  }
+
+  startUdpPings() {
+    if (this.udpPingTimer) clearInterval(this.udpPingTimer);
+    const vPingBuf = this.makePingPacket(this.videoPingPayload);
+    const aPingBuf = this.makePingPacket(this.audioPingPayload);
+
+    const sendPings = () => {
+      if (this.streamState !== 1 || !this.hostIp || !this.udpSocket) return;
+      try {
+        this.udpSocket.send(vPingBuf, 47998, this.hostIp);
+        this.udpSocket.send(aPingBuf, 48000, this.hostIp);
+      } catch {}
+    };
+
+    sendPings();
+    this.udpPingTimer = setInterval(sendPings, 100);
   }
 
   sendControllerArrival() {
     console.log(`[Moonlight ENet] Announcing S2 Controller Arrival (Controller Slot 0)...`);
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       this.sendControllerInput({
         buttonFlags: 0,
         lt: 0,
@@ -970,7 +1030,7 @@ class S2MoonlightClient {
 
     this.activeGameTitle = app.title;
     this.status = 4;
-    this.statusMessage = `Streaming: ${app.title} (1280x720 @ 60 FPS)`;
+    this.statusMessage = `Streaming: ${app.title} (1920x1080 @ 60 FPS)`;
 
     try {
       console.log(`[Moonlight S2] Launching App ID: ${app.id} (${app.title})...`);
@@ -979,11 +1039,15 @@ class S2MoonlightClient {
       const rikeyId = Math.floor(100000 + Math.random() * 900000);
       this.currentRikey = rikey;
       this.currentRikeyId = rikeyId;
+      this.rikeyBuf = Buffer.from(rikey, 'hex');
+      this.currentAesIv = Buffer.alloc(16);
+      this.currentAesIv.writeUInt32BE(rikeyId, 0);
+      this.enetClientReliableSeq = 1;
 
       const launchParams = new URLSearchParams({
         uniqueid: this.uniqueId,
         appid: String(app.id),
-        mode: '1280x720x60',
+        mode: '1920x1080x60',
         additionalflags: '0',
         rikey: rikey,
         rikeyid: String(rikeyId),
@@ -1011,7 +1075,7 @@ class S2MoonlightClient {
 
         if (!res || res.includes('already running') || res.includes('status_code="400"') || !res.includes('gamesession')) {
           console.log(`[Moonlight S2] Sending /cancel to clean host session...`);
-          await this.httpGet(`https://${this.hostIp}:47984/cancel?uniqueid=${this.uniqueId}`, 6000);
+          await this.httpGet(`https://${this.hostIp}:47984/cancel?uniqueid=${this.uniqueId}`, 6000).catch(()=>{});
           await new Promise(r => setTimeout(r, 600));
           res = await this.httpGet(launchUrl, 10000);
         }
@@ -1023,6 +1087,9 @@ class S2MoonlightClient {
       this.streamStartTime = Date.now();
       this.streamPackets = 0;
       this.streamFrames = 0;
+
+      // Start periodic UDP Pings to Video (47998) & Audio (48000) so Sunshine starts broadcasting
+      this.startUdpPings();
 
       // Initiate ENet handshake on port 47999 for low-latency gamepad streaming
       this.connectEnet();
@@ -1072,27 +1139,69 @@ class S2MoonlightClient {
     await new Promise(r => setTimeout(r, 40));
 
     // 3. SETUP Audio (Port 48000)
-    res = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=audio/0/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\nTransport: unicast;X-GS-ClientPort=48000-48001\r\n\r\n`);
-    if (!res.includes('200 OK')) throw new Error('SETUP audio failed: ' + res.slice(0, 100));
-    const sessMatch = res.match(/Session:\s*([^\r\n;]+)/i);
+    let aRes = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=audio/0/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\nTransport: unicast;X-GS-ClientPort=48000-48001\r\n\r\n`);
+    if (!aRes.includes('200 OK')) throw new Error('SETUP audio failed: ' + aRes.slice(0, 100));
+    const sessMatch = aRes.match(/Session:\s*([^\r\n;]+)/i);
     this.rtspSessionId = sessMatch ? sessMatch[1].trim() : '';
     console.log(`[Moonlight S2] RTSP Session ID: ${this.rtspSessionId}`);
     const sessHeader = this.rtspSessionId ? `Session: ${this.rtspSessionId}\r\n` : '';
+    this.audioPingPayload = aRes.match(/X-SS-Ping-Payload:\s*([^\r\n;]+)/i)?.[1]?.trim() || '';
     await new Promise(r => setTimeout(r, 40));
 
     // 4. SETUP Video (Port 47998)
-    res = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=video/0/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}Transport: unicast;X-GS-ClientPort=47998-47999\r\n\r\n`);
-    if (!res.includes('200 OK')) throw new Error('SETUP video failed: ' + res.slice(0, 100));
+    let vRes = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=video/0/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}Transport: unicast;X-GS-ClientPort=47998-47999\r\n\r\n`);
+    if (!vRes.includes('200 OK')) throw new Error('SETUP video failed: ' + vRes.slice(0, 100));
+    this.videoPingPayload = vRes.match(/X-SS-Ping-Payload:\s*([^\r\n;]+)/i)?.[1]?.trim() || '';
     await new Promise(r => setTimeout(r, 40));
 
-    // 5. SETUP Control (Port 47999) - Pass actual client UDP port
-    res = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=control/13/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}Transport: unicast;X-GS-ClientPort=${clientUdpPort}-${clientUdpPort + 1}\r\n\r\n`);
-    if (!res.includes('200 OK')) throw new Error('SETUP control failed: ' + res.slice(0, 100));
+    // 5. SETUP Control (Port 47999) - Request unencrypted protocol 1 on streamid=control/1/0
+    let cRes = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=control/1/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}Transport: unicast;X-GS-ClientPort=${clientUdpPort}-${clientUdpPort + 1}\r\n\r\n`);
+    if (!cRes.includes('200 OK')) throw new Error('SETUP control failed: ' + cRes.slice(0, 100));
+    this.enetConnectData = Number(cRes.match(/X-SS-Connect-Data:\s*(\d+)/i)?.[1] || 0);
     await new Promise(r => setTimeout(r, 40));
 
-    // 6. PLAY Video
-    res = await this.sendRtspMessage(`PLAY rtsp://${this.hostIp}:48010/streamid=video/0/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}\r\n`);
-    if (!res.includes('200 OK')) throw new Error('PLAY failed: ' + res.slice(0, 100));
+    // 6. ANNOUNCE with 25 mandatory SDP keys required by Sunshine cmd_announce
+    const sdpLines = [
+      'v=0',
+      `o=android 0 11 IN IPv4 ${this.hostIp}`,
+      's=NVIDIA Streaming Client',
+      'a=x-nv-audio.surround.numChannels:2',
+      'a=x-nv-audio.surround.channelMask:3',
+      'a=x-nv-aqos.packetDuration:5',
+      'a=x-nv-audio.surround.AudioQuality:0',
+      'a=x-nv-general.useReliableUdp:1',
+      'a=x-nv-video[0].packetSize:1024',
+      'a=x-nv-vqos[0].fec.minRequiredFecPackets:0',
+      'a=x-ml-general.featureFlags:3',
+      'a=x-nv-aqos.qosTrafficType:4',
+      'a=x-nv-vqos[0].qosTrafficType:5',
+      'a=x-ss-general.encryptionEnabled:0',
+      'a=x-nv-general.featureFlags:7',
+      'a=x-nv-video[0].clientViewportHt:1080',
+      'a=x-nv-video[0].clientViewportWd:1920',
+      'a=x-nv-video[0].maxFPS:60',
+      'a=x-nv-video[0].clientRefreshRateX100:6000',
+      'a=x-nv-vqos[0].bw.maximumBitrateKbps:10000',
+      'a=x-nv-video[0].videoEncoderSlicesPerFrame:1',
+      'a=x-nv-video[0].maxNumReferenceFrames:1',
+      'a=x-nv-video[0].encoderCscMode:0',
+      'a=x-nv-vqos[0].bitStreamFormat:0',
+      'a=x-nv-video[0].dynamicRangeMode:0',
+      'a=x-ss-video[0].chromaSamplingType:0',
+      'a=x-ss-video[0].intraRefresh:0',
+      'a=x-ml-video.configuredBitrateKbps:10000',
+      't=0 0',
+      'm=video 47998  '
+    ];
+    const sdpPayload = sdpLines.map(l => l + ' \r\n').join('');
+    const annReq = `ANNOUNCE rtsp://${this.hostIp}:48010/streamid=control/1/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}X-GS-ClientVersion: 11\r\nContent-type: application/sdp\r\nContent-length: ${Buffer.byteLength(sdpPayload)}\r\n\r\n${sdpPayload}`;
+    let annRes = await this.sendRtspMessage(annReq);
+    if (!annRes.includes('200 OK')) throw new Error('ANNOUNCE failed: ' + annRes.slice(0, 100));
+    await new Promise(r => setTimeout(r, 40));
+
+    // 7. PLAY
+    let playRes = await this.sendRtspMessage(`PLAY rtsp://${this.hostIp}:48010/ RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}\r\n`);
+    if (!playRes.includes('200 OK')) throw new Error('PLAY failed: ' + playRes.slice(0, 100));
 
     this.rtspCSeq = cseq;
     console.log(`[Moonlight S2] RTSP session active! Video/Audio/Input streaming pipeline established.`);
@@ -1111,52 +1220,57 @@ class S2MoonlightClient {
   }
 
   sendControllerInput({ buttonFlags = 0, lt = 0, rt = 0, lsX = 0, lsY = 0, rsX = 0, rsY = 0 }) {
-    if (!this.udpSocket || !this.hostIp || this.streamState !== 1) return;
+    if (!this.udpSocket || !this.hostIp || this.streamState !== 1 || !this.rikeyBuf || !this.currentAesIv) return;
 
-    // Standard 24-byte controller event in Big-Endian network byte order
-    const inputPayload = Buffer.alloc(24);
-    inputPayload.writeUInt32BE(0x0000000A, 0); // Controller event header magic (0x0A)
-    inputPayload.writeInt16BE(0, 4);           // Controller slot 0
-    inputPayload.writeInt16BE(1, 6);           // Active gamepad mask = 1 (pad 0 active)
-    inputPayload.writeUInt32BE(buttonFlags >>> 0, 8); // Gamepad button bitmask
-    inputPayload.writeUInt8(Math.max(0, Math.min(255, lt)), 12);
-    inputPayload.writeUInt8(Math.max(0, Math.min(255, rt)), 13);
-    inputPayload.writeInt16BE(Math.max(-32768, Math.min(32767, lsX)), 14);
-    inputPayload.writeInt16BE(Math.max(-32768, Math.min(32767, lsY)), 16);
-    inputPayload.writeInt16BE(Math.max(-32768, Math.min(32767, rsX)), 18);
-    inputPayload.writeInt16BE(Math.max(-32768, Math.min(32767, rsY)), 20);
-    inputPayload.writeUInt16BE(0, 22);
+    // Build standard NV_MULTI_CONTROLLER_PACKET (34 bytes)
+    const pkt = Buffer.alloc(34);
+    pkt.writeUInt32BE(30, 0); // header.size = sizeof(NV_MULTI_CONTROLLER_PACKET) - 4
+    pkt.writeUInt32LE(0x0000000C, 4); // header.magic = MULTI_CONTROLLER_MAGIC_GEN5
+    pkt.writeInt16LE(0x001A, 8); // headerB
+    pkt.writeInt16LE(0, 10); // controllerNumber: 0
+    pkt.writeInt16LE(1, 12); // activeGamepadMask: 1
+    pkt.writeInt16LE(0x0014, 14); // midB
+    pkt.writeInt16LE(buttonFlags & 0xFFFF, 16); // buttonFlags lower 16
+    pkt.writeUInt8(Math.max(0, Math.min(255, lt)), 18);
+    pkt.writeUInt8(Math.max(0, Math.min(255, rt)), 19);
+    pkt.writeInt16LE(Math.max(-32768, Math.min(32767, lsX)), 20);
+    pkt.writeInt16LE(Math.max(-32768, Math.min(32767, lsY)), 22);
+    pkt.writeInt16LE(Math.max(-32768, Math.min(32767, rsX)), 24);
+    pkt.writeInt16LE(Math.max(-32768, Math.min(32767, rsY)), 26);
+    pkt.writeInt16LE(0x009C, 28); // tailA
+    pkt.writeInt16LE((buttonFlags >> 16) & 0xFFFF, 30); // buttonFlags2 (Sunshine extension)
+    pkt.writeInt16LE(0x0055, 32); // tailB
 
-    if (this.enetConnected) {
-      // Send as ENet SEND_UNSEQUENCED (9) on Gamepad Channel 0x10
-      const enetPkt = Buffer.alloc(12 + inputPayload.length);
-      enetPkt.writeUInt16BE(this.enetServerPeerId || 0, 0); // Peer ID
-      enetPkt.writeUInt16BE(Date.now() & 0xFFFF, 2);        // sentTime
-      enetPkt.writeUInt8(0x09, 4);                          // Command: SEND_UNSEQUENCED (9)
-      enetPkt.writeUInt8(0x10, 5);                          // Channel: 0x10 (CTRL_CHANNEL_GAMEPAD_BASE)
-      enetPkt.writeUInt16BE(0, 6);                          // reliableSequenceNumber: 0
-      enetPkt.writeUInt16BE(0, 8);                          // unsequencedGroup: 0
-      enetPkt.writeUInt16BE(inputPayload.length, 10);       // dataLength
-      inputPayload.copy(enetPkt, 12);
-      try {
-        this.udpSocket.send(enetPkt, 47999, this.hostIp);
-        this.streamPackets++;
-        this.streamFrames++;
-      } catch (e) {
-        console.warn('[Moonlight ENet] Send error:', e.message);
-      }
-    } else {
-      try {
-        this.udpSocket.send(inputPayload, 47999, this.hostIp);
-        this.streamPackets++;
-        this.streamFrames++;
-      } catch {}
+    try {
+      // Encrypt with AES-128-GCM using session rikey and chaining IV
+      const cipher = crypto.createCipheriv('aes-128-gcm', this.rikeyBuf, this.currentAesIv);
+      const enc = Buffer.concat([cipher.update(pkt), cipher.final()]);
+      const tag = cipher.getAuthTag();
+      const taggedCipher = Buffer.concat([tag, enc]); // 16 bytes tag + 34 bytes enc = 50 bytes
+
+      const inputDataPayload = Buffer.alloc(4 + taggedCipher.length);
+      inputDataPayload.writeUInt32BE(taggedCipher.length, 0);
+      taggedCipher.copy(inputDataPayload, 4);
+
+      // Chaining IV: update currentAesIv to last 16 bytes of inputDataPayload
+      inputDataPayload.copy(this.currentAesIv, 0, inputDataPayload.length - 16, inputDataPayload.length);
+
+      // Send as ENet Reliable (0x86) on channel 0
+      this.sendEnetReliable(0x0206, inputDataPayload, 0);
+      this.streamPackets++;
+      this.streamFrames++;
+    } catch (e) {
+      console.warn('[Moonlight Input] Error sending gamepad packet:', e.message);
     }
   }
 
   async quitSession() {
     this.streamState = 0;
     this.enetConnected = false;
+    if (this.udpPingTimer) {
+      clearInterval(this.udpPingTimer);
+      this.udpPingTimer = null;
+    }
     if (this.rtspKeepAliveTimer) {
       clearInterval(this.rtspKeepAliveTimer);
       this.rtspKeepAliveTimer = null;
@@ -1169,7 +1283,7 @@ class S2MoonlightClient {
     }
     if (this.hostIp) {
       try {
-        await this.httpGet(`https://${this.hostIp}:47984/cancel?uniqueid=${this.uniqueId}`, 4000);
+        await this.httpGet(`https://${this.hostIp}:47984/cancel?uniqueid=${this.uniqueId}`, 4000).catch(()=>{});
       } catch {}
     }
     this.status = 2;
