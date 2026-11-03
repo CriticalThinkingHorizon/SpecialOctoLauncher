@@ -377,7 +377,15 @@ class S2MoonlightClient {
     // 2. Check S2 persistent save:/hbstorage/moonlight.json
     if (fsService) {
       try {
-        const data = await fsService.readFile(S2_SAVE_CONFIG_PATH);
+        let data = null;
+        if (typeof fsService.readFile === 'function') {
+          data = await fsService.readFile(S2_SAVE_CONFIG_PATH);
+        } else if (typeof fsService.readRawFile === 'function') {
+          const res = await fsService.readRawFile(S2_SAVE_CONFIG_PATH, 16384);
+          if (res && res.result === 0 && res.buffer && res.buffer.length > 0) {
+            data = res.buffer;
+          }
+        }
         if (data && data.length > 4) {
           const cfg = JSON.parse(data.toString('utf8'));
           if (cfg.hostIp && !this.hostIp) this.hostIp = cfg.hostIp;
@@ -458,7 +466,9 @@ class S2MoonlightClient {
   async saveConfiguration(fsService) {
     if (!fsService) return;
     try {
-      await fsService.ensureDir(S2_SAVE_STORAGE_DIR);
+      if (typeof fsService.ensureDir === 'function') {
+        await fsService.ensureDir(S2_SAVE_STORAGE_DIR);
+      }
       const json = JSON.stringify({
         hostIp: this.hostIp,
         uniqueId: this.uniqueId,
@@ -466,7 +476,16 @@ class S2MoonlightClient {
         clientKey: this.clientKey,
         isPaired: this.isPaired
       }, null, 2);
-      await fsService.writeFile(S2_SAVE_CONFIG_PATH, Buffer.from(json, 'utf8'));
+      const buf = Buffer.from(json, 'utf8');
+      if (typeof fsService.writeFile === 'function') {
+        await fsService.writeFile(S2_SAVE_CONFIG_PATH, buf);
+      } else if (typeof fsService.writeBytesAt === 'function') {
+        await fsService.writeBytesAt(S2_SAVE_CONFIG_PATH, 0, buf);
+        if (typeof fsService.commitMount === 'function') {
+          await fsService.commitMount('save');
+        }
+      }
+      console.log(`[Moonlight S2] Configuration saved to S2 storage (${S2_SAVE_CONFIG_PATH})`);
     } catch (e) {
       console.warn('[Moonlight S2] Failed to save config to S2 storage:', e.message);
     }
@@ -495,6 +514,9 @@ class S2MoonlightClient {
         this.status = 2;
         this.pairingInProgress = false;
         this.statusMessage = `Ready - Connected to ${this.serverName}`;
+        if (this.savedFsService) {
+          await this.saveConfiguration(this.savedFsService);
+        }
         await this.fetchAppList();
       } else {
         this.isPaired = false;
