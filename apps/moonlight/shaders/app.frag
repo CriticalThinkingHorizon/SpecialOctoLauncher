@@ -88,6 +88,30 @@ void main(){
  // 1. STREAMING MODE RENDERER
  // =========================================================================
  if (mode == 2u) {
+  // Host-decoded video frame: RGB565 at c.atlas[65536], 640x360, scaled to 1080p.
+  if (c.flow.z > 0.5) {
+   int vw = 640;
+   int vh = 360;
+   int px = clamp(int(p.x * float(vw) / 1920.0), 0, vw - 1);
+   int py = clamp(int(p.y * float(vh) / 1080.0), 0, vh - 1);
+   uint idx = uint(py * vw + px);
+   uint word = c.atlas[65536u + (idx >> 1u)];
+   uint rgb = ((idx & 1u) == 0u) ? (word & 65535u) : (word >> 16u);
+   vec3 videoColor = vec3(
+    float((rgb >> 11u) & 31u) / 31.0,
+    float((rgb >> 5u) & 63u) / 63.0,
+    float(rgb & 31u) / 31.0
+   );
+   if (c.game.w == 1u) {
+    float hud = fill(box(p, vec2(960.0, 40.0), vec2(700.0, 22.0), 8.0));
+    videoColor = mix(videoColor, vec3(0.06, 0.08, 0.12), hud * 0.75);
+    float foot = fill(box(p, vec2(960.0, 1045.0), vec2(560.0, 20.0), 8.0));
+    videoColor = mix(videoColor, vec3(0.06, 0.08, 0.12), foot * 0.75);
+   }
+   outColor = vec4(videoColor * (1.0 - c.transition.x), 1.0);
+   return;
+  }
+
   // Deep Gaming Backdrop with subtle scanline / CRT vignette
   float vig = 1.0 - 0.25 * length((p - vec2(960.0, 540.0)) / vec2(960.0, 540.0));
   vec3 streamColor = vec3(0.04, 0.05, 0.07) * vig;

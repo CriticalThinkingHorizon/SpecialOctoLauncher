@@ -9,6 +9,7 @@ const https = require('node:https');
 const dgram = require('node:dgram');
 const net = require('node:net');
 const crypto = require('node:crypto');
+const {spawn} = require('node:child_process');
 
 const S2_SAVE_STORAGE_DIR = 'save:/hbstorage';
 const S2_SAVE_CONFIG_PATH = 'save:/hbstorage/moonlight.json';
@@ -129,6 +130,16 @@ function getX509DerHex(certPem) {
   return x509.raw.toString('hex');
 }
 
+function rgb24To565(source, width, height) {
+  const target = Buffer.alloc(width * height * 2);
+  for (let i = 0, o = 0; i < source.length; i += 3, o += 2) {
+    const r = source[i], g = source[i + 1], b = source[i + 2];
+    target[o] = ((g & 0x1c) << 3) | (b >>> 3);
+    target[o + 1] = (r & 0xf8) | (g >>> 5);
+  }
+  return target;
+}
+
 class S2MoonlightClient {
   constructor() {
     this.hostIp = '';
@@ -155,6 +166,22 @@ class S2MoonlightClient {
     this.streamPackets = 0;
     this.streamFrames = 0;
     this.serverPort = 47989;
+
+    // Host-side video path (Route A): the console has no H.264 decoder in its
+    // SDK, so the PC receives Sunshine's RTP, decodes it with ffmpeg and writes
+    // RGB565 frames into the app's GPU storage buffer.
+    this.videoRpc = null;
+    this.videoMapped = 0;
+    this.videoDirectory = '';
+    this.videoProcess = null;
+    this.videoBusy = false;
+    this.videoFrames = 0;
+    this.videoPending = Buffer.alloc(0);
+    this.videoWidth = 640;
+    this.videoHeight = 360;
+    this.videoSourceBytes = this.videoWidth * this.videoHeight * 3;
+    this.videoFrameBytes = this.videoWidth * this.videoHeight * 2;
+    this.videoTargetOffset = 1024 + 262144;
 
     // Networking handles
     this.udpSocket = null;
@@ -1027,6 +1054,7 @@ class S2MoonlightClient {
     }
     const app = this.apps[appIndex] || this.apps[0];
     if (!app) return;
+    this.stopVideo();
 
     this.activeGameTitle = app.title;
     this.status = 4;
@@ -1094,6 +1122,7 @@ class S2MoonlightClient {
       // Initiate ENet handshake on port 47999 for low-latency gamepad streaming
       this.connectEnet();
     } catch (err) {
+      this.stopVideo();
       console.warn(`[Moonlight S2] Launch failed:`, err.message);
       this.status = 2;
       this.statusMessage = `Launch error: ${err.message}`;
@@ -1155,6 +1184,8 @@ class S2MoonlightClient {
     let vRes = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=video/0/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}Transport: unicast;X-GS-ClientPort=47998-47999\r\n\r\n`);
     if (!vRes.includes('200 OK')) throw new Error('SETUP video failed: ' + vRes.slice(0, 100));
     this.videoPingPayload = vRes.match(/X-SS-Ping-Payload:\s*([^\r\n;]+)/i)?.[1]?.trim() || '';
+    // Bind the RTP port and start the host-side H.264 decoder before PLAY.
+    this.startVideo();
     await new Promise(r => setTimeout(r, 40));
 
     // 5. SETUP Control (Port 47999) - Request unencrypted protocol 1 on streamid=control/1/0
@@ -1267,7 +1298,106 @@ class S2MoonlightClient {
     }
   }
 
+  // The runtime attaches the app's mapped GPU buffer when Moonlight becomes the
+  // active app. Frames are written at the same atlas offset used by wolv-view.
+  attachVideo({rpc, mapped, directory}) {
+    if (!rpc || !Number.isSafeInteger(mapped) || mapped <= 0) return;
+    if (this.videoRpc === rpc && this.videoMapped === mapped) return;
+    this.videoRpc = rpc;
+    this.videoMapped = mapped;
+    if (directory) this.videoDirectory = directory;
+  }
+
+  startVideo() {
+    if (this.videoProcess) return;
+    if (!this.videoRpc || !this.videoMapped) {
+      console.warn('[Moonlight Video] no GPU frame target attached; video disabled.');
+      return;
+    }
+    const sdp = [
+      'v=0',
+      'o=- 0 0 IN IP4 127.0.0.1',
+      's=Moonlight S2',
+      'c=IN IP4 0.0.0.0',
+      't=0 0',
+      'm=video 47998 RTP/AVP 96',
+      'a=rtpmap:96 H264/90000',
+      ''
+    ].join('\r\n');
+    const sdpPath = path.join(this.videoDirectory || os.tmpdir(), 'moonlight-video.sdp');
+    try {
+      fs.writeFileSync(sdpPath, sdp);
+    } catch (error) {
+      console.warn('[Moonlight Video] SDP write failed:', error.message);
+      return;
+    }
+    const args = [
+      '-hide_banner', '-loglevel', 'warning',
+      '-protocol_whitelist', 'file,udp,rtp',
+      '-i', sdpPath,
+      '-vf', `fps=30,scale=${this.videoWidth}:${this.videoHeight}:flags=fast_bilinear`,
+      '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'
+    ];
+    const child = spawn('ffmpeg', args, {stdio: ['ignore', 'pipe', 'pipe']});
+    this.videoProcess = child;
+    this.videoPending = Buffer.alloc(0);
+    this.videoFrames = 0;
+    this.videoBusy = false;
+    child.stdout.on('data', chunk => {
+      this.videoPending = this.videoPending.length
+        ? Buffer.concat([this.videoPending, chunk]) : chunk;
+      while (this.videoPending.length >= this.videoSourceBytes) {
+        const frame = this.videoPending.subarray(0, this.videoSourceBytes);
+        this.videoPending = this.videoPending.subarray(this.videoSourceBytes);
+        this.pushVideoFrame(rgb24To565(frame, this.videoWidth, this.videoHeight));
+      }
+    });
+    child.stderr.on('data', chunk => {
+      const line = chunk.toString().trim();
+      if (line) console.warn('[Moonlight Video]', line);
+    });
+    child.on('error', error => {
+      console.warn('[Moonlight Video] ffmpeg failed:', error.message);
+      this.videoProcess = null;
+    });
+    child.on('close', code => {
+      if (code && code !== 0) console.warn('[Moonlight Video] ffmpeg exited with', code);
+      this.videoProcess = null;
+    });
+    console.log(`[Moonlight Video] ffmpeg receiving RTP 47998 -> ${this.videoWidth}x${this.videoHeight} RGB565`);
+  }
+
+  pushVideoFrame(frame) {
+    if (!this.videoRpc || !this.videoMapped || this.videoBusy) return;
+    this.videoBusy = true;
+    const counter = this.videoFrames++ >>> 0;
+    const state = Buffer.alloc(8);
+    state.writeUInt32LE(counter, 0); // c.flow.y: frame counter
+    state.writeUInt32LE(1, 4);       // c.flow.z: frame ready
+    this.videoRpc.write(this.videoMapped + this.videoTargetOffset, frame)
+      .then(() => this.videoRpc.write(this.videoMapped + 820, state))
+      .catch(error => {
+        if (!/closed|disconnected|timed out/i.test(error.message))
+          console.warn('[Moonlight Video] frame upload failed:', error.message);
+      })
+      .finally(() => { this.videoBusy = false; });
+  }
+
+  stopVideo() {
+    if (this.videoProcess) {
+      try { this.videoProcess.kill('SIGTERM'); } catch {}
+      this.videoProcess = null;
+    }
+    this.videoPending = Buffer.alloc(0);
+    this.videoFrames = 0;
+    if (this.videoRpc && this.videoMapped) {
+      const zero = Buffer.alloc(4);
+      this.videoRpc.write(this.videoMapped + 824, zero).catch(() => {});
+    }
+  }
+
   async quitSession() {
+    this.stopVideo();
     this.streamState = 0;
     this.enetConnected = false;
     if (this.udpPingTimer) {

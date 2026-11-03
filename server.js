@@ -7,14 +7,20 @@ const {NativeClient} = require('./rpc/native.cjs');
 const {qualify} = require('./rpc/qualify.cjs');
 const {serve} = require('./rpc/bridge.cjs');
 
-async function runScript(scriptPath, args = []) {
+async function runScript(scriptPath, args = [], timeout = 0) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [scriptPath, ...args], {
       stdio: 'inherit',
       cwd: __dirname
     });
+    let timer = null;
+    if (timeout) timer = setTimeout(() => {
+      try { child.kill('SIGTERM'); } catch (_) {}
+      reject(Error(`Script timed out after ${timeout}ms: ${scriptPath}`));
+    }, timeout);
     child.once('error', reject);
     child.once('close', code => {
+      if (timer) clearTimeout(timer);
       if (code === 0) resolve();
       else reject(Error(`Script exited with code ${code}: ${scriptPath}`));
     });
@@ -58,7 +64,8 @@ async function mirrorToLatest(sessionDir) {
     await fs.mkdir(latestDir, {recursive: true});
 
     // Copy essential connection and display metadata
-    const filesToCopy = ['connection.json', 'display-inspection.json', 'compatibility-module.json', 'vulkan-display.json'];
+    const filesToCopy = ['connection.json', 'display-inspection.json', 'compatibility-module.json', 'vulkan-display.json',
+      'codec-probe.json', 'codec-probe-progress.json', 'codec-symbols.json', 'sm-symbols.json'];
     for (const file of filesToCopy) {
       const src = path.join(sessionDir, file);
       const dst = path.join(latestDir, file);
@@ -76,12 +83,18 @@ async function mirrorToLatest(sessionDir) {
 async function main() {
   const verbose = process.argv.includes('--verbose') || process.argv.includes('--debug');
   const fullInspect = process.argv.includes('--full-inspect') || process.argv.includes('--probe');
+  const probeCodec = process.argv.includes('--probe-codec');
   global.VERBOSE = verbose;
 
   console.log('[SETUP] Verifying Python and Pillow dependencies...');
   ensurePythonAndPillow();
 
-  const host = await chooseHost(process.argv.slice(2));
+  const hostArgs = process.argv.slice(2).filter((arg, i, all) => {
+    if (arg.startsWith('-')) return false;
+    const previous = all[i - 1];
+    return previous !== '--pairingCode' && previous !== '-p';
+  });
+  const host = await chooseHost(hostArgs);
   const token = pairingCode(process.argv.slice(2));
 
   console.log('========================================================================');
@@ -90,6 +103,7 @@ async function main() {
   console.log('========================================================================');
   console.log(`Host IP: ${host}`);
   console.log(`Port:    39380`);
+  if (probeCodec) console.log('Codec probe: enabled (runs during setup, before the native worker)');
   console.log('\nManual Connection Command for SmileBASIC on S2:');
   console.log(connectCommand(host, token));
   console.log('========================================================================\n');
@@ -116,7 +130,7 @@ async function main() {
   process.on('SIGTERM', onSignal);
 
   const argApp = process.argv.slice(2).find(a => a.startsWith('--app='))?.split('=')[1]
-    || process.argv.slice(3).find(a => !a.startsWith('-'));
+    || hostArgs.filter(value => value !== host)[0];
   const targetApp = argApp || 'launcher';
 
   // Handler for an individual S2 console session
@@ -222,6 +236,14 @@ async function main() {
 
       console.log(`[SESSION #${sessionNum}] [3/4] Inspecting Input & Controller State...`);
       await runScript(path.join(__dirname, 'inspection/inspect-input.cjs'), [sessionDir]);
+
+      if (probeCodec) {
+        // Run before hello-runner starts the native worker: the probe allocates
+        // through the SDK and opens service handles, which must not race the
+        // launcher's autonomous frame loop.
+        console.log(`[SESSION #${sessionNum}] [PROBE] Inspecting codec/image symbols (pre-worker)...`);
+        await runScript(path.join(__dirname, 'inspection/codec-probe.cjs'), [sessionDir, '--symbols-only'], 120000);
+      }
 
       console.log(`[SESSION #${sessionNum}] [4/4] Setting Up Vulkan Display Resources...`);
       await runScript(path.join(__dirname, 'inspection/vulkan-copy.cjs'), [sessionDir, 'display']);

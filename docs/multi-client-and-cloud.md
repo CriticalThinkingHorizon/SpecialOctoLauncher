@@ -87,6 +87,9 @@ node server.js --app=audio-lab
 # Run deep exploratory filesystem and applet inspections on boot
 node server.js --full-inspect
 
+# Probe codec/JPEG service access during setup, before the native worker starts
+node server.js --probe-codec
+
 # Custom pairing code
 node server.js --pairingCode 1234,5678,9012,3456
 
