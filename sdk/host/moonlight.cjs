@@ -180,6 +180,13 @@ class S2MoonlightClient {
     this.videoPending = Buffer.alloc(0);
     this.videoWidth = 640;
     this.videoHeight = 360;
+    this.videoPort = 50000;
+    this.videoSocket = null;
+    this.videoPackets = 0;
+    this.videoParityPackets = 0;
+    this.videoStreams = 0;
+    this.videoFrameIndex = -1;
+    this.videoFrameChunks = [];
     this.videoSourceBytes = this.videoWidth * this.videoHeight * 3;
     this.videoFrameBytes = this.videoWidth * this.videoHeight * 2;
     this.videoTargetOffset = 1024 + 262144;
@@ -370,27 +377,36 @@ class S2MoonlightClient {
     }, 400);
   }
 
-  makePingPacket(asciiPayload) {
+  makePingPacket(asciiPayload, sequence = 0) {
     const buf = Buffer.alloc(20);
     if (asciiPayload && asciiPayload.length >= 16) {
       buf.write(asciiPayload.slice(0, 16), 0, 16, 'ascii');
     } else {
       buf.write('PING', 0, 4, 'ascii');
     }
-    buf.writeUInt32BE(0, 16);
+    buf.writeUInt32BE(sequence >>> 0, 16);
     return buf;
   }
 
   startUdpPings() {
     if (this.udpPingTimer) clearInterval(this.udpPingTimer);
-    const vPingBuf = this.makePingPacket(this.videoPingPayload);
-    const aPingBuf = this.makePingPacket(this.audioPingPayload);
+    let videoSequence = 0;
+    let audioSequence = 0;
 
     const sendPings = () => {
-      if (this.streamState !== 1 || !this.hostIp || !this.udpSocket) return;
+      if (this.streamState !== 1 || !this.hostIp) return;
+      const video = this.videoSocket || this.udpSocket;
+      if (!video) return;
       try {
-        this.udpSocket.send(vPingBuf, 47998, this.hostIp);
-        this.udpSocket.send(aPingBuf, 48000, this.hostIp);
+        const videoPing = this.makePingPacket(this.videoPingPayload, ++videoSequence);
+        video.send(videoPing, 47998, this.hostIp, error => {
+          if (error) console.warn('[Moonlight Video] video ping error:', error.message);
+        });
+        this.videoPings = (this.videoPings || 0) + 1;
+        if (this.videoPings <= 3)
+          console.log(`[Moonlight Video] video ping ${this.videoPings} to ${this.hostIp}:47998 ${videoPing.toString('hex')}`);
+        if (this.udpSocket)
+          this.udpSocket.send(this.makePingPacket(this.audioPingPayload, ++audioSequence), 48000, this.hostIp);
       } catch {}
     };
 
@@ -1141,7 +1157,7 @@ class S2MoonlightClient {
       s.on('data', d => {
         if (done) return;
         response += d.toString('utf8');
-        if (response.includes('\r\n\r\n') || response.includes('200 OK')) {
+        if (response.includes('\r\n\r\n')) {
           done = true;
           if (label !== 'keepalive')
             console.log(`[Moonlight RTSP] ${label}: ${response.split('\r\n')[0]}`);
@@ -1198,9 +1214,11 @@ class S2MoonlightClient {
     await new Promise(r => setTimeout(r, 40));
 
     // 4. SETUP Video (Port 47998)
-    let vRes = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=video/0/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}Transport: unicast;X-GS-ClientPort=47998-47999\r\n\r\n`, 'SETUP video');
+    let vRes = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=video/0/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}Transport: unicast;X-GS-ClientPort=${this.videoPort}-${this.videoPort + 1}\r\n\r\n`, 'SETUP video');
     if (!vRes.includes('200 OK')) throw new Error('SETUP video failed: ' + vRes.slice(0, 100));
+    console.log(`[Moonlight Video] SETUP video response: ${vRes.replace(/\r\n/g, ' | ').slice(0, 500)}`);
     this.videoPingPayload = vRes.match(/X-SS-Ping-Payload:\s*([^\r\n;]+)/i)?.[1]?.trim() || '';
+    console.log(`[Moonlight Video] video ping payload: ${this.videoPingPayload || '(none)'}`);
     // Bind the RTP port and start the host-side H.264 decoder before PLAY.
     this.startVideo();
     await new Promise(r => setTimeout(r, 40));
@@ -1239,7 +1257,7 @@ class S2MoonlightClient {
       'a=x-nv-aqos.qosTrafficType:4',
       'a=x-nv-general.featureFlags:135',
       'a=x-nv-general.useReliableUdp:13',
-      'a=x-nv-vqos[0].fec.minRequiredFecPackets:2',
+      'a=x-nv-vqos[0].fec.minRequiredFecPackets:0',
       'a=x-nv-vqos[0].bllFec.enable:0',
       'a=x-nv-vqos[0].drc.enable:0',
       'a=x-nv-general.enableRecoveryMode:0',
@@ -1268,7 +1286,7 @@ class S2MoonlightClient {
     const sdpPayload = sdpHeader +
       sdpAttributes.map(line => line + ' \r\n').join('') +
       't=0 0\r\n' +
-      'm=video 47998  \r\n';
+      `m=video ${this.videoPort}  \r\n`;
     const annReq = `ANNOUNCE rtsp://${this.hostIp}:48010/${announceTarget} RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}X-GS-ClientVersion: 11\r\nContent-type: application/sdp\r\nContent-length: ${Buffer.byteLength(sdpPayload)}\r\n\r\n${sdpPayload}`;
     let annRes = await this.sendRtspMessage(annReq, 'ANNOUNCE');
     if (!annRes.includes('200 OK')) throw new Error('ANNOUNCE failed: ' + annRes.slice(0, 100));
@@ -1355,35 +1373,46 @@ class S2MoonlightClient {
       console.warn('[Moonlight Video] no GPU frame target attached; video disabled.');
       return;
     }
-    const sdp = [
-      'v=0',
-      'o=- 0 0 IN IP4 127.0.0.1',
-      's=Moonlight S2',
-      'c=IN IP4 0.0.0.0',
-      't=0 0',
-      'm=video 47998 RTP/AVP 96',
-      'a=rtpmap:96 H264/90000',
-      ''
-    ].join('\r\n');
-    const sdpPath = path.join(this.videoDirectory || os.tmpdir(), 'moonlight-video.sdp');
-    try {
-      fs.writeFileSync(sdpPath, sdp);
-    } catch (error) {
-      console.warn('[Moonlight Video] SDP write failed:', error.message);
-      return;
+    if (this.videoSocket) {
+      try { this.videoSocket.close(); } catch {}
+      this.videoSocket = null;
     }
+    // GameStream video is not plain RTP: each datagram is
+    //   12-byte RTP header + 4-byte extension + 16-byte NV_VIDEO_PACKET
+    // followed by H.264 Annex B payload. The first packet of a frame carries
+    // an extra Sunshine frame header. Reassemble the Annex B stream in Node
+    // and feed it to ffmpeg over stdin; ffmpeg cannot parse these datagrams
+    // as standard RTP.
+    this.videoSocket = dgram.createSocket('udp4');
+    this.videoSocket.on('error', error => {
+      console.warn('[Moonlight Video] video socket error:', error.message);
+    });
+    this.videoSocket.on('message', message => this.handleVideoPacket(message));
+    this.videoSocket.bind(this.videoPort, '0.0.0.0', () => {
+      console.log(`[Moonlight Video] video socket on ${this.videoPort}`);
+    });
+
     const args = [
       '-hide_banner', '-loglevel', 'warning',
-      '-protocol_whitelist', 'file,udp,rtp',
-      '-i', sdpPath,
-      '-vf', `fps=30,scale=${this.videoWidth}:${this.videoHeight}:flags=fast_bilinear`,
+      '-flags', 'low_delay',
+      '-f', 'h264', '-i', 'pipe:0',
+      '-vf', `scale=${this.videoWidth}:${this.videoHeight}:flags=fast_bilinear`,
       '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'
     ];
-    const child = spawn('ffmpeg', args, {stdio: ['ignore', 'pipe', 'pipe']});
+    const child = spawn('ffmpeg', args, {stdio: ['pipe', 'pipe', 'pipe']});
     this.videoProcess = child;
     this.videoPending = Buffer.alloc(0);
     this.videoFrames = 0;
+    this.videoPackets = 0;
+    this.videoParityPackets = 0;
+    this.videoStreams = 0;
+    this.videoPings = 0;
+    this.videoPayloadTypes = {};
+    this.videoFrameIndex = -1;
+    this.videoFrameChunks = [];
+    this.videoFrameClosed = true;
     this.videoBusy = false;
+    child.stdin.on('error', () => {});
     child.stdout.on('data', chunk => {
       this.videoPending = this.videoPending.length
         ? Buffer.concat([this.videoPending, chunk]) : chunk;
@@ -1405,7 +1434,93 @@ class S2MoonlightClient {
       if (code && code !== 0) console.warn('[Moonlight Video] ffmpeg exited with', code);
       this.videoProcess = null;
     });
-    console.log(`[Moonlight Video] ffmpeg receiving RTP 47998 -> ${this.videoWidth}x${this.videoHeight} RGB565`);
+    console.log(`[Moonlight Video] depacketizer on ${this.videoPort} -> ffmpeg -> ${this.videoWidth}x${this.videoHeight} RGB565`);
+  }
+
+  // Parse a Sunshine/GameStream video datagram and accumulate the H.264
+  // Annex B payload for the current frame.
+  handleVideoPacket(message) {
+    if (message.length < 32 || (message[0] >> 6) !== 2) return;
+    this.videoPackets = (this.videoPackets || 0) + 1;
+
+    const payloadType = message[1] & 0x7f;
+    this.videoPayloadTypes ??= {};
+    this.videoPayloadTypes[payloadType] = (this.videoPayloadTypes[payloadType] || 0) + 1;
+
+    // RTP (12) + extension (4) = 16, then NV_VIDEO_PACKET (little endian).
+    const streamPacketIndex = message.readUInt32LE(16) >>> 8;
+    const frameIndex = message.readUInt32LE(20);
+    const flags = message[24];
+    const multiFecBlocks = message[27];
+    const fecInfo = message.readUInt32LE(28);
+    const shardIndex = (fecInfo & 0x3FF000) >>> 12;
+    const dataShards = (fecInfo & 0xFFC00000) >>> 22;
+    const block = (multiFecBlocks >> 4) & 0x3;
+    const lastBlock = (multiFecBlocks >> 6) & 0x3;
+
+    if (this.videoPackets === 1) {
+      console.log(`[Moonlight Video] stream header: frame ${frameIndex}, shard ${shardIndex}/${dataShards}, ` +
+        `flags 0x${flags.toString(16)}`);
+    }
+
+    // FEC parity shards carry no video data and are dropped. On a healthy LAN
+    // every data shard arrives, so no erasure recovery is required.
+    if (dataShards > 0 && shardIndex >= dataShards) {
+      this.videoParityPackets++;
+      return;
+    }
+
+    if (frameIndex !== this.videoFrameIndex) {
+      // A new frame started. Flush any frame that never received its EOF flag.
+      if (this.videoFrameChunks.length) this.flushVideoFrame();
+      this.videoFrameIndex = frameIndex;
+      this.videoFrameChunks = [];
+      this.videoFrameClosed = false;
+    }
+    if (this.videoFrameClosed) return;
+
+    this.videoFrameChunks.push({index: streamPacketIndex, data: message.subarray(32)});
+
+    // FLAG_EOF is set on the last packet of the last FEC block of a frame.
+    if ((flags & 0x2) && block === lastBlock) this.flushVideoFrame();
+  }
+
+  // The first packet of a frame carries an extra Sunshine header whose size
+  // changed across host versions. Keep this version-aware so retail, demo and
+  // newer Sunshine hosts all feed the same Annex B stream to ffmpeg.
+  videoFrameHeaderSize(payload) {
+    const parts = String(this.serverVersion || '').split('.');
+    const v = [Number(parts[0]) || 0, Number(parts[1]) || 0, Number(parts[2]) || 0];
+    if (!v[0]) return payload[0] === 0x81 ? 24 : 8;
+    const atLeast = (a, b, c) => v[0] > a || (v[0] === a && (v[1] > b || (v[1] === b && v[2] >= c)));
+    if (atLeast(7, 1, 415) && payload[0] !== 0x01 && payload[0] !== 0x81)
+      return 0; // first shard was lost, so there is no header to strip
+    if (atLeast(7, 1, 450)) return payload[0] === 0x81 ? 44 : 8;
+    if (atLeast(7, 1, 446)) return payload[0] === 0x81 ? 41 : 8;
+    if (atLeast(7, 1, 415)) return payload[0] === 0x81 ? 24 : 8;
+    if (atLeast(7, 1, 320)) return 12;
+    if (atLeast(5, 0, 0)) return 8;
+    return 0;
+  }
+
+  flushVideoFrame() {
+    const chunks = this.videoFrameChunks;
+    this.videoFrameChunks = [];
+    this.videoFrameClosed = true;
+    if (!chunks.length) return;
+    chunks.sort((a, b) => a.index - b.index);
+
+    let payload = Buffer.concat(chunks.map(chunk => chunk.data));
+    const headerSize = payload.length ? this.videoFrameHeaderSize(payload) : 0;
+    if (payload.length > headerSize) payload = payload.subarray(headerSize);
+    else return;
+
+    this.videoStreams = (this.videoStreams || 0) + 1;
+    if (this.videoStreams === 1)
+      console.log(`[Moonlight Video] first frame: ${payload.length} bytes from ${chunks.length} shards`);
+
+    if (this.videoProcess && this.videoProcess.stdin.writable)
+      this.videoProcess.stdin.write(payload);
   }
 
   pushVideoFrame(frame) {
@@ -1429,8 +1544,19 @@ class S2MoonlightClient {
       try { this.videoProcess.kill('SIGTERM'); } catch {}
       this.videoProcess = null;
     }
+    if (this.videoSocket) {
+      try { this.videoSocket.close(); } catch {}
+      this.videoSocket = null;
+    }
     this.videoPending = Buffer.alloc(0);
     this.videoFrames = 0;
+    this.videoPackets = 0;
+    this.videoParityPackets = 0;
+    this.videoStreams = 0;
+    this.videoPings = 0;
+    this.videoFrameIndex = -1;
+    this.videoFrameChunks = [];
+    this.videoFrameClosed = true;
     if (this.videoRpc && this.videoMapped) {
       const zero = Buffer.alloc(4);
       this.videoRpc.write(this.videoMapped + 824, zero).catch(() => {});
