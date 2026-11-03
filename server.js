@@ -246,13 +246,13 @@ async function main() {
       console.log(`\n[SESSION #${sessionNum}] Setting up S2 Vulkan display pipeline...`);
 
       console.log(`[SESSION #${sessionNum}] [1/4] Inspecting Display Imports (VI & NVN Bootstrap)...`);
-      await runScript(path.join(__dirname, 'inspection/inspect-display.cjs'), [sessionDir]);
+      await runScript(path.join(__dirname, 'inspection/inspect-display.cjs'), [sessionDir], 180000);
 
       console.log(`[SESSION #${sessionNum}] [2/4] Inspecting Driver Compatibility Module...`);
-      await runScript(path.join(__dirname, 'inspection/inspect-compatibility.cjs'), [sessionDir]);
+      await runScript(path.join(__dirname, 'inspection/inspect-compatibility.cjs'), [sessionDir], 180000);
 
       console.log(`[SESSION #${sessionNum}] [3/4] Inspecting Input & Controller State...`);
-      await runScript(path.join(__dirname, 'inspection/inspect-input.cjs'), [sessionDir]);
+      await runScript(path.join(__dirname, 'inspection/inspect-input.cjs'), [sessionDir], 120000);
 
       if (probeCodec) {
         // Run before hello-runner starts the native worker: the probe allocates
@@ -263,7 +263,9 @@ async function main() {
       }
 
       console.log(`[SESSION #${sessionNum}] [4/4] Setting Up Vulkan Display Resources...`);
-      await runScript(path.join(__dirname, 'inspection/vulkan-copy.cjs'), [sessionDir, 'display']);
+      console.log(`[SESSION #${sessionNum}] Each native call is logged as [Vulkan] <name>. ` +
+        `If this step stalls, send ${path.join(sessionDir, 'vulkan-display.json')} (the last operation is the one that hung).`);
+      await runScript(path.join(__dirname, 'inspection/vulkan-copy.cjs'), [sessionDir, 'display'], 300000);
       console.log(`✔ [SESSION #${sessionNum}] Vulkan display pipeline ready.`);
 
       // Optional deep probes (enabled with --full-inspect)

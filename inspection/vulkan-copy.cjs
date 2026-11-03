@@ -25,7 +25,13 @@ async function main(directory,mode='copy',attempt){
   const s=module.symbols.find(s=>s.name===name&&s.section&&s.type===2);check(s,'Missing '+name);
   return functions[name]=module.base+s.offset;
  }
- const call=async(name,...args)=>{const address=await resolve(name);return tracked(name,args,async()=>(await rpc.callAddress(address,args)).result);};
+ const CALL_TIMEOUT=60000; // report which call a slow/hung demo build stops on
+ const show=value=>typeof value==='bigint'?'0x'+value.toString(16):String(value);
+ const call=async(name,...args)=>{
+  const address=await resolve(name);
+  console.log(`[Vulkan] ${name}(${args.map(show).join(', ')})`);
+  return tracked(name,args,async()=>(await rpc.callAddress(address,args,{timeout:CALL_TIMEOUT})).result);
+ };
  const ok=async(name,...args)=>{const r=Number(BigInt.asIntN(32,await call(name,...args)));check(r===0,`${name}: VkResult ${r}`);};
  const p=rpc.a.scratch+0x10000,saved=await rpc.read(p,0x10000);
  const put=(offset,b)=>rpc.write(p+offset,b);
@@ -34,7 +40,10 @@ async function main(directory,mode='copy',attempt){
  let layer=0,display=0n,layerOpened=false,surface=0n,swapchain=0n,acquireSemaphore=0n,presentSemaphore=0n,imageIndex=0;
  let retainDisplayResources=false;
  const sdk=require('../rpc/sdk-functions.json');
- const sdkCall=(name,...args)=>tracked('sdk.'+name,args,async()=>(await rpc.call(sdk[name].offset,args)).result);
+ const sdkCall=(name,...args)=>{
+  console.log(`[Vulkan] sdk.${name}(${args.map(show).join(', ')})`);
+  return tracked('sdk.'+name,args,async()=>(await rpc.call(sdk[name].offset,args,{timeout:CALL_TIMEOUT})).result);
+ };
  const buffers=[],memories=[];
  try{
   await put(0,Buffer.alloc(0x10000));
@@ -43,8 +52,11 @@ async function main(directory,mode='copy',attempt){
    check(await sdkCall('allocate',p,4096,0x2000)===0n,'Layer allocation failed');layer=Number(await pointer(0));
    check(Number.isSafeInteger(layer)&&layer%4096===0,'Invalid layer allocation');await sdkCall('memset',layer,0,0x2000);
    check(await call('_ZN2nn2vi18OpenDefaultDisplayEPPNS0_7DisplayE',p+8)===0n,'Display reference failed');display=await pointer(8);
+   const layerName=process.env.S2_LAYER_NAME||'default';
+   check(/^[A-Za-z0-9_.-]{1,63}$/.test(layerName),'Invalid S2_LAYER_NAME');
+   console.log(`[Vulkan] opening layer "${layerName}"`);
    await call('_ZN2nn2vi5LayerC1Ev',layer);await call('_ZN2nn2vi21LayerCreationSettingsC1Eii',layer+0x1000,1920,1080);
-   await rpc.write(layer+0x1100,Buffer.from('default\0'));
+   await rpc.write(layer+0x1100,Buffer.from(layerName+'\0'));
    check(await call('_ZN2nn2vi5Layer4OpenEPKNS0_21LayerCreationSettingsEPNS0_7DisplayEPKc',layer,layer+0x1000,display,layer+0x1100)===0n,'Independent layer failed');layerOpened=true;report.displayTouched=true;
   }
   if(wsi){

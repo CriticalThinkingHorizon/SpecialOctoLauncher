@@ -2,7 +2,7 @@ const http = require('node:http');
 const path = require('node:path');
 const {port, token, addresses} = require('../connection.json');
 
-function request(body) {
+function request(body, timeout = 600000) {
   if (global.VERBOSE && body.command !== 'read' && body.command !== 'write') {
     console.log(`[RPC CALL] command: ${body.command}${body.address !== undefined ? `, address: 0x${Number(body.address).toString(16)}` : ''}`);
   }
@@ -20,25 +20,25 @@ function request(body) {
         } catch (error) {reject(error);}
       });
     });
-    req.setTimeout(600000, () => req.destroy(Error('Native request timed out; it was not replayed')));
+    req.setTimeout(timeout, () => req.destroy(Error(`Native request timed out after ${timeout}ms; it was not replayed`)));
     req.on('error', reject);
     req.end(JSON.stringify(body, (_, value) => typeof value === 'bigint' ? value.toString() : value));
   });
 }
 
-async function call(offset, args) {
-  const reply = await request({command: 'call', offset, args});
+async function call(offset, args, options = {}) {
+  const reply = await request({command: 'call', offset, args}, options.timeout);
   return {result: BigInt(reply.result), output: Buffer.from(reply.output, 'base64')};
 }
 async function pair(calls) {
   const reply = await request({command: 'pair', calls});
   return {results: reply.results.map(BigInt), output: Buffer.from(reply.output, 'base64')};
 }
-async function callAddress(address, args) {
-  const reply = await request({command: 'call-address', address, args});
+async function callAddress(address, args, options = {}) {
+  const reply = await request({command: 'call-address', address, args}, options.timeout);
   return {result: BigInt(reply.result), output: Buffer.from(reply.output, 'base64')};
 }
-async function read(address, length) {
+async function read(address, length, options = {}) {
   if (!Number.isSafeInteger(address) || !Number.isInteger(length) || length < 0 || length > 0x4000000)
     throw Error('Invalid memory transfer');
   if (global.VERBOSE) console.log(`[RPC READ START] Address: 0x${address.toString(16)}, Length: ${length} bytes`);
@@ -46,7 +46,7 @@ async function read(address, length) {
   let transferred = 0;
   for (let offset = 0; offset < length; offset += 0x80000) {
     const size = Math.min(0x80000, length - offset);
-    const res = await request({command: 'read', address: address + offset, length: size});
+    const res = await request({command: 'read', address: address + offset, length: size}, options.timeout);
     const bytes = Buffer.from(res.data, 'base64');
     if (bytes.length !== size) throw Error('Memory read was truncated');
     parts.push(bytes);

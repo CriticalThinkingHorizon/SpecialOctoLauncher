@@ -91,7 +91,17 @@ node server.js --full-inspect
 node server.js --probe-codec
 
 # Capture the demo build's display import/PLT/GOT layout (read-only)
-node server.js --display-diagnostic
+node server.js --display-diagnostic <host-ip>
+# writes runs/<session>/diagnostic/: resolved slots, thunk decisions,
+# a 32 KiB PLT window and a 512 KiB GOT window. Keep this folder private.
+#
+# If Vulkan display setup stalls, the last operation in
+# runs/<session>/vulkan-display.json is persisted before the call and keeps
+# status "pending"; it names the native call that never returned.
+#
+# If the stall is on Layer::Open, try an independent layer name
+# (default is "default"; the demo app may already own that name):
+S2_LAYER_NAME=s2launcher node server.js <host-ip>
 
 # Custom pairing code
 node server.js --pairingCode 1234,5678,9012,3456

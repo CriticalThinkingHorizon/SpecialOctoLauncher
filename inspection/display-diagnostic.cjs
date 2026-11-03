@@ -4,9 +4,11 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const {contains, decodePltThunk, mainCodeRegion} = require('../rpc/main-module.cjs');
+const {decodePltThunk, mainCodeRegion} = require('../rpc/main-module.cjs');
+const {ImportResolver, isResolverStub} = require('./imports.cjs');
 const displayImports = require('./display-imports.json');
 const inputImports = require('./input-imports.json');
+const {KNOWN_SDK_OFFSETS} = require('./inspect-input.cjs');
 
 async function readValue(rpc, address) {
   try {
@@ -26,6 +28,7 @@ async function describeTarget(rpc, value) {
       const code = await rpc.read(value, 64);
       result.code64 = code.toString('hex');
       result.codeHash = crypto.createHash('sha256').update(code).digest('hex');
+      result.resolverStub = isResolverStub(code);
     }
     return result;
   } catch (error) {
@@ -33,28 +36,27 @@ async function describeTarget(rpc, value) {
   }
 }
 
-async function displayEntry(rpc, name, entry, code, folder) {
+async function displayEntry(rpc, resolver, name, entry, folder, deltas) {
   const result = {recorded: {slot: entry.slot, plt: entry.plt, bytes: entry.bytes,
     targetSignature: entry.targetSignature || null}, candidates: []};
   const thunkAddress = rpc.a.main + entry.plt;
-  if (contains(code, thunkAddress) && thunkAddress + 16 <= code.address + code.size) {
-    const thunk = await rpc.read(thunkAddress, 16);
-    result.thunkAddress = thunkAddress;
-    result.thunkHex = thunk.toString('hex');
-    result.thunkMatches = thunk.toString('hex') === entry.bytes;
-    result.decodedSlot = decodePltThunk(thunk, thunkAddress);
-    result.decodedSlotOffset = result.decodedSlot === null ? null : result.decodedSlot - rpc.a.main;
-  }
-  const candidates = [];
-  if (result.decodedSlot !== null && result.decodedSlot !== undefined) candidates.push(result.decodedSlot);
-  const hardcoded = rpc.a.main + entry.slot;
-  if (!candidates.includes(hardcoded)) candidates.push(hardcoded);
-  for (const address of candidates) {
+  const thunk = await resolver.thunkAt(thunkAddress);
+  result.thunkAddress = thunkAddress;
+  result.thunkHex = thunk ? thunk.toString('hex') : null;
+  result.thunkMatches = thunk !== null && thunk.toString('hex') === entry.bytes;
+  const thunks = await resolver.thunkSlots(entry.plt);
+  result.thunks = thunks.slice(0, 64).map(item => ({slot: item.slotOffset, distance: item.distance}));
+
+  const candidates = [...new Set([entry.slot,
+    ...deltas.map(delta => entry.slot + delta),
+    ...thunks.map(item => item.slotOffset)])].slice(0, 64);
+  for (const slotOffset of candidates) {
+    const address = rpc.a.main + slotOffset;
     const value = await readValue(rpc, address);
     const described = value === null ? null : await describeTarget(rpc, value);
-    const row = {slotAddress: address, slotOffset: address - rpc.a.main, value, target: described};
+    const row = {slotAddress: address, slotOffset, value, target: described};
     if (described?.executable && described.code64) {
-      const file = name.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 120) + '-' + row.slotOffset + '.bin';
+      const file = name.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 120) + '-' + slotOffset + '.bin';
       await fs.writeFile(path.join(folder, file), Buffer.from(described.code64, 'hex'), {mode: 0o600});
       row.codeFile = file;
     }
@@ -62,20 +64,29 @@ async function displayEntry(rpc, name, entry, code, folder) {
       row.signatureMatches = described.codeHash === entry.targetSignature;
     result.candidates.push(row);
   }
+
+  const resolved = await resolver.resolve(entry, {
+    signature: entry.targetSignature || null,
+    deltaHints: [...new Set(deltas)]
+  });
+  result.resolution = resolved ? {slot: resolved.slotOffset, source: resolved.slotSource,
+    target: resolved.target, unresolved: resolved.unresolved || isResolverStub(resolved.code)} : null;
+  if (resolved && entry.targetSignature && !result.resolution.unresolved)
+    deltas.push(resolved.slotOffset - entry.slot);
   return result;
 }
 
-async function inputEntry(rpc, name, entry, folder) {
-  const address = rpc.a.main + entry.slot;
-  const value = await readValue(rpc, address);
-  const described = value === null ? null : await describeTarget(rpc, value);
-  const row = {recorded: {slot: entry.slot}, slotAddress: address, value, target: described};
-  if (described?.executable && described.code64) {
-    const file = 'input-' + name.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 120) + '.bin';
-    await fs.writeFile(path.join(folder, file), Buffer.from(described.code64, 'hex'), {mode: 0o600});
-    row.codeFile = file;
+async function inputEntry(rpc, name, entry, gotWindow) {
+  const expected = rpc.a.sdk + KNOWN_SDK_OFFSETS[name];
+  const hits = [];
+  if (gotWindow) {
+    for (let at = 0; at + 8 <= gotWindow.bytes.length; at += 8)
+      if (Number(gotWindow.bytes.readBigUInt64LE(at)) === expected)
+        hits.push(gotWindow.start + at - rpc.a.main);
   }
-  return row;
+  const value = await readValue(rpc, rpc.a.main + entry.slot);
+  return {recorded: {slot: entry.slot}, expected, hits,
+    slotAddress: rpc.a.main + entry.slot, value, target: value === null ? null : await describeTarget(rpc, value)};
 }
 
 async function dumpWindow(rpc, folder, name, anchor, span) {
@@ -95,6 +106,7 @@ async function dumpWindow(rpc, folder, name, anchor, span) {
 async function main(directory) {
   directory = path.resolve(directory);
   const rpc = require(path.join(directory, 'shared/rpc.cjs'));
+  const resolver = new ImportResolver(rpc);
   const folder = path.join(directory, 'diagnostic');
   await fs.mkdir(folder, {recursive: true, mode: 0o700});
   const report = {
@@ -121,6 +133,8 @@ async function main(directory) {
     await fs.writeFile(path.join(folder, 'main-code.bin'), mainCode, {mode: 0o600});
     report.mainCode = {address: code.address, size: mainCode.length};
 
+    // Decode every thunk inside the main mapping. The demo build's PLT can live
+    // in a separate executable mapping, so displayEntry decodes its own window.
     console.log('Indexing PLT thunks...');
     const thunkIndex = {};
     for (let at = 0; at + 16 <= mainCode.length; at += 16) {
@@ -131,14 +145,21 @@ async function main(directory) {
     await fs.writeFile(path.join(folder, 'thunk-index.json'),
       JSON.stringify(thunkIndex, null, 2), {mode: 0o600});
 
-    report.windows.got = await dumpWindow(rpc, folder, 'got-window', rpc.a.got, 0x20000);
+    report.windows.got = await dumpWindow(rpc, folder, 'got-window', rpc.a.got, 0x40000);
     report.windows.memmove = await dumpWindow(rpc, folder, 'memmove-window', rpc.a.memmove, 0x2000);
     report.windows.main = await dumpWindow(rpc, folder, 'main-code-window', rpc.a.main, 0x2000);
+    const firstImport = Object.values(displayImports)[0];
+    report.windows.plt = await dumpWindow(rpc, folder, 'plt-window',
+      rpc.a.main + firstImport.plt, 0x4000);
+    const gotWindow = report.windows.got.file
+      ? {start: report.windows.got.address, bytes: await fs.readFile(path.join(folder, report.windows.got.file))}
+      : null;
 
     console.log('Inspecting display imports...');
+    const deltas = [];
     for (const [name, entry] of Object.entries(displayImports)) {
       try {
-        report.display[name] = await displayEntry(rpc, name, entry, code, folder);
+        report.display[name] = await displayEntry(rpc, resolver, name, entry, folder, deltas);
       } catch (error) {
         report.display[name] = {error: error.message};
       }
@@ -148,7 +169,7 @@ async function main(directory) {
     console.log('Inspecting input imports...');
     for (const [name, entry] of Object.entries(inputImports)) {
       try {
-        report.input[name] = await inputEntry(rpc, name, entry, folder);
+        report.input[name] = await inputEntry(rpc, name, entry, gotWindow);
       } catch (error) {
         report.input[name] = {error: error.message};
       }
@@ -166,6 +187,7 @@ async function main(directory) {
       '  got-window.bin',
       '  memmove-window.bin',
       '  main-code-window.bin',
+      '  plt-window.bin',
       '  main-header.bin',
       '  *.bin target captures',
       '',

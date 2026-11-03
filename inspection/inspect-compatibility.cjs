@@ -1,5 +1,6 @@
 const fs=require('node:fs/promises'),path=require('node:path');
 const {contains,mainCodeRegion}=require('../rpc/main-module.cjs');
+const {isResolverStub}=require('./imports.cjs');
 const {inspectModule}=require('./inspect.cjs');
 async function main(directory){
  directory=path.resolve(directory);const rpc=require(path.join(directory,'shared/rpc.cjs'));
@@ -7,9 +8,11 @@ async function main(directory){
  if(imports.session!==rpc.a.session)throw Error('Display inspection belongs to another session');
  const target=imports.imports.nvnBootstrapLoader.target;
  const code=await mainCodeRegion(rpc);
- if(contains(code,target))throw Error('NVN bootstrap import is unresolved for this application build');
+ if(!target||contains(code,target)||isResolverStub(await rpc.read(target,8)))
+  throw Error('NVN bootstrap import is unresolved for this application build');
  const region=await rpc.query(target);
  if(region.permissions!==5||region.ipcReferences)throw Error('Driver mapping changed');
+ console.log(`[Compatibility] NVN bootstrap module ${region.address.toString(16)}+${region.size.toString(16)}`);
  await rpc.request({command:'allow-range',address:region.address,size:region.size});
  const module=await inspectModule(rpc,region.address,0x10000000);
  const vulkanExports=module.symbols.filter(s=>s.section&&s.name.startsWith('vk')).length;
