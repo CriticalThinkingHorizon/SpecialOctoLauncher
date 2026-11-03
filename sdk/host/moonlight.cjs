@@ -520,7 +520,7 @@ class S2MoonlightClient {
     <div class="info">
       <div><strong>Host PC:</strong> ${this.serverName} (${this.hostIp || 'Not configured'})</div>
       <div><strong>Status:</strong> ${this.statusMessage}</div>
-      ${this.streamState === 1 ? `<div><strong>Active Stream:</strong> ${this.activeGameTitle} | 60 FPS | Packets: ${this.streamPackets}</div>` : ''}
+      ${this.streamState === 1 ? `<div><strong>Active Session:</strong> ${this.activeGameTitle} | Input only (no video) | Input packets: ${this.streamPackets}</div>` : ''}
     </div>
 
     ${this.status === 3 ? `
@@ -1139,6 +1139,9 @@ class S2MoonlightClient {
     await new Promise(r => setTimeout(r, 40));
 
     // 3. SETUP Audio (Port 48000)
+    // NOTE: Audio/video are negotiated so Sunshine starts a normal session, but
+    // this client never binds 47998/48000 or implements RTP reception, H.264
+    // decode or frame presentation. Only the control/input stream is processed.
     let aRes = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=audio/0/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\nTransport: unicast;X-GS-ClientPort=48000-48001\r\n\r\n`);
     if (!aRes.includes('200 OK')) throw new Error('SETUP audio failed: ' + aRes.slice(0, 100));
     const sessMatch = aRes.match(/Session:\s*([^\r\n;]+)/i);
@@ -1204,7 +1207,7 @@ class S2MoonlightClient {
     if (!playRes.includes('200 OK')) throw new Error('PLAY failed: ' + playRes.slice(0, 100));
 
     this.rtspCSeq = cseq;
-    console.log(`[Moonlight S2] RTSP session active! Video/Audio/Input streaming pipeline established.`);
+    console.log(`[Moonlight S2] RTSP session active (control/input only; video and audio are not implemented).`);
 
     // Start RTSP keepalive ping timer (every 6 seconds)
     if (this.rtspKeepAliveTimer) clearInterval(this.rtspKeepAliveTimer);
@@ -1230,7 +1233,7 @@ class S2MoonlightClient {
     pkt.writeInt16LE(0, 10); // controllerNumber: 0
     pkt.writeInt16LE(1, 12); // activeGamepadMask: 1
     pkt.writeInt16LE(0x0014, 14); // midB
-    pkt.writeInt16LE(buttonFlags & 0xFFFF, 16); // buttonFlags lower 16
+    pkt.writeUInt16LE(buttonFlags & 0xFFFF, 16); // buttonFlags lower 16 (unsigned bitfield)
     pkt.writeUInt8(Math.max(0, Math.min(255, lt)), 18);
     pkt.writeUInt8(Math.max(0, Math.min(255, rt)), 19);
     pkt.writeInt16LE(Math.max(-32768, Math.min(32767, lsX)), 20);
@@ -1238,7 +1241,7 @@ class S2MoonlightClient {
     pkt.writeInt16LE(Math.max(-32768, Math.min(32767, rsX)), 24);
     pkt.writeInt16LE(Math.max(-32768, Math.min(32767, rsY)), 26);
     pkt.writeInt16LE(0x009C, 28); // tailA
-    pkt.writeInt16LE((buttonFlags >> 16) & 0xFFFF, 30); // buttonFlags2 (Sunshine extension)
+    pkt.writeUInt16LE((buttonFlags >>> 16) & 0xFFFF, 30); // buttonFlags2 (Sunshine extension, unsigned)
     pkt.writeInt16LE(0x0055, 32); // tailB
 
     try {
@@ -1257,8 +1260,8 @@ class S2MoonlightClient {
 
       // Send as ENet Reliable (0x86) on channel 0
       this.sendEnetReliable(0x0206, inputDataPayload, 0);
+      // Counts sent controller packets. No video frames are received or decoded.
       this.streamPackets++;
-      this.streamFrames++;
     } catch (e) {
       console.warn('[Moonlight Input] Error sending gamepad packet:', e.message);
     }
