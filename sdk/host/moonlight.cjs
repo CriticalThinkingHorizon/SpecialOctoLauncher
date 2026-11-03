@@ -1137,9 +1137,12 @@ class S2MoonlightClient {
         s.write(msg);
       });
       let response = '';
+      let done = false;
       s.on('data', d => {
+        if (done) return;
         response += d.toString('utf8');
         if (response.includes('\r\n\r\n') || response.includes('200 OK')) {
+          done = true;
           if (label !== 'keepalive')
             console.log(`[Moonlight RTSP] ${label}: ${response.split('\r\n')[0]}`);
           s.end();
@@ -1208,40 +1211,64 @@ class S2MoonlightClient {
     this.enetConnectData = Number(cRes.match(/X-SS-Connect-Data:\s*(\d+)/i)?.[1] || 0);
     await new Promise(r => setTimeout(r, 40));
 
-    // 6. ANNOUNCE with 25 mandatory SDP keys required by Sunshine cmd_announce
-    const sdpLines = [
+    // 6. ANNOUNCE with the SDP layout used by moonlight-common-c for 7.1.431.
+    const sdpHeader = [
       'v=0',
       `o=android 0 11 IN IPv4 ${this.hostIp}`,
-      's=NVIDIA Streaming Client',
-      'a=x-nv-audio.surround.numChannels:2',
-      'a=x-nv-audio.surround.channelMask:3',
-      'a=x-nv-aqos.packetDuration:5',
-      'a=x-nv-audio.surround.AudioQuality:0',
-      'a=x-nv-general.useReliableUdp:1',
-      'a=x-nv-video[0].packetSize:1024',
-      'a=x-nv-vqos[0].fec.minRequiredFecPackets:0',
+      's=NVIDIA Streaming Client'
+    ].map(line => line + '\r\n').join('');
+    const sdpAttributes = [
       'a=x-ml-general.featureFlags:3',
-      'a=x-nv-aqos.qosTrafficType:4',
-      'a=x-nv-vqos[0].qosTrafficType:5',
       'a=x-ss-general.encryptionEnabled:0',
-      'a=x-nv-general.featureFlags:7',
-      'a=x-nv-video[0].clientViewportHt:1080',
+      'a=x-ss-video[0].chromaSamplingType:0',
       'a=x-nv-video[0].clientViewportWd:1920',
+      'a=x-nv-video[0].clientViewportHt:1080',
       'a=x-nv-video[0].maxFPS:60',
-      'a=x-nv-video[0].clientRefreshRateX100:6000',
-      'a=x-nv-vqos[0].bw.maximumBitrateKbps:10000',
+      'a=x-nv-video[0].packetSize:1024',
+      'a=x-nv-video[0].rateControlMode:4',
+      'a=x-nv-video[0].timeoutLengthMs:7000',
+      'a=x-nv-video[0].framesWithInvalidRefThreshold:0',
+      'a=x-nv-video[0].initialBitrateKbps:8000',
+      'a=x-nv-video[0].initialPeakBitrateKbps:8000',
+      'a=x-nv-vqos[0].bw.minimumBitrateKbps:8000',
+      'a=x-nv-vqos[0].bw.maximumBitrateKbps:8000',
+      'a=x-ml-video.configuredBitrateKbps:10000',
+      'a=x-nv-vqos[0].fec.enable:1',
+      'a=x-nv-vqos[0].videoQualityScoreUpdateTime:5000',
+      'a=x-nv-vqos[0].qosTrafficType:5',
+      'a=x-nv-aqos.qosTrafficType:4',
+      'a=x-nv-general.featureFlags:135',
+      'a=x-nv-general.useReliableUdp:13',
+      'a=x-nv-vqos[0].fec.minRequiredFecPackets:2',
+      'a=x-nv-vqos[0].bllFec.enable:0',
+      'a=x-nv-vqos[0].drc.enable:0',
+      'a=x-nv-general.enableRecoveryMode:0',
       'a=x-nv-video[0].videoEncoderSlicesPerFrame:1',
-      'a=x-nv-video[0].maxNumReferenceFrames:1',
-      'a=x-nv-video[0].encoderCscMode:0',
+      'a=x-nv-clientSupportHevc:0',
       'a=x-nv-vqos[0].bitStreamFormat:0',
       'a=x-nv-video[0].dynamicRangeMode:0',
-      'a=x-ss-video[0].chromaSamplingType:0',
-      'a=x-ss-video[0].intraRefresh:0',
-      'a=x-ml-video.configuredBitrateKbps:10000',
-      't=0 0',
-      'm=video 47998  '
+      'a=x-nv-video[0].maxNumReferenceFrames:1',
+      'a=x-nv-video[0].clientRefreshRateX100:6000',
+      'a=x-nv-video[0].encoderCscMode:0',
+      'a=x-nv-audio.surround.numChannels:2',
+      'a=x-nv-audio.surround.channelMask:3',
+      'a=x-nv-audio.surround.enable:0',
+      'a=x-nv-audio.surround.AudioQuality:0',
+      'a=x-nv-aqos.packetDuration:5'
     ];
-    const sdpPayload = sdpLines.map(l => l + ' \r\n').join('');
+    if (!modernControl) {
+      sdpAttributes.splice(sdpAttributes.indexOf('a=x-nv-general.featureFlags:135'), 6,
+        'a=x-nv-general.featureFlags:7',
+        'a=x-nv-general.useReliableUdp:1',
+        'a=x-nv-ri.useControlChannel:1',
+        'a=x-nv-vqos[0].fec.repairPercent:20',
+        'a=x-nv-vqos[0].drc.enable:0',
+        'a=x-nv-general.enableRecoveryMode:0');
+    }
+    const sdpPayload = sdpHeader +
+      sdpAttributes.map(line => line + ' \r\n').join('') +
+      't=0 0\r\n' +
+      'm=video 47998  \r\n';
     const annReq = `ANNOUNCE rtsp://${this.hostIp}:48010/${announceTarget} RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}X-GS-ClientVersion: 11\r\nContent-type: application/sdp\r\nContent-length: ${Buffer.byteLength(sdpPayload)}\r\n\r\n${sdpPayload}`;
     let annRes = await this.sendRtspMessage(annReq, 'ANNOUNCE');
     if (!annRes.includes('200 OK')) throw new Error('ANNOUNCE failed: ' + annRes.slice(0, 100));
