@@ -634,7 +634,7 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
        rsY: (sticksR >> 16)
      };
      if(action===4){
-      moonlight.client.sendControllerInput(extInput);
+      moonlight.sendControllerInput(extInput);
       payload=Buffer.alloc(16);
      }else{
       const gpuBuf=await moonlight.handleAction({action,arg,extInput,fsService,swkbdService});
