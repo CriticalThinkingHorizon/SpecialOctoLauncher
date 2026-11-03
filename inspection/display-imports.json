@@ -2,17 +2,20 @@
   "_ZN2nn2vi10InitializeEv": {
     "slot": 10262384,
     "plt": 2736624,
-    "bytes": "703900b011ba43f910c21d9120021fd6"
+    "bytes": "703900b011ba43f910c21d9120021fd6",
+    "targetSignature": "a7b1c9b51f4dbf518929061b419ac898203d027a3a43ec4adcca3a1f420f2023"
   },
   "_ZN2nn2vi18OpenDefaultDisplayEPPNS0_7DisplayE": {
     "slot": 10262392,
     "plt": 2736640,
-    "bytes": "703900b011be43f910e21d9120021fd6"
+    "bytes": "703900b011be43f910e21d9120021fd6",
+    "targetSignature": "e38cf253f54384d59b3340fb6102ae31ece47a503ec66cfcfb6bf3a0e45136f8"
   },
   "_ZN2nn2vi11CreateLayerEPPNS0_5LayerEPNS0_7DisplayE": {
     "slot": 10262400,
     "plt": 2736656,
-    "bytes": "703900b011c243f910021e9120021fd6"
+    "bytes": "703900b011c243f910021e9120021fd6",
+    "targetSignature": "edf1066e79622339c510a0666a8afcb39eff8b4a472cd1746e72bd10fe84f844"
   },
   "_ZN2nn2vi12DestroyLayerEPNS0_5LayerE": {
     "slot": 10262408,
@@ -32,11 +35,13 @@
   "_ZN2nn2vi15GetNativeWindowEPPvPNS0_5LayerE": {
     "slot": 10265920,
     "plt": 2743696,
-    "bytes": "703900b011a242f91002159120021fd6"
+    "bytes": "703900b011a242f91002159120021fd6",
+    "targetSignature": "ad3a1b6291ab0c1d6ea099f109f078cabc6ee2dacb652445164918aa91a98024"
   },
   "nvnBootstrapLoader": {
     "slot": 10265928,
     "plt": 2743712,
-    "bytes": "703900b011a642f91022159120021fd6"
+    "bytes": "703900b011a642f91022159120021fd6",
+    "targetSignature": "7f081b01de945589ce795efc104dc6dfb7c57c7f7c1f83f4e87266705075e53f"
   }
 }

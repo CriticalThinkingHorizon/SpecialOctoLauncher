@@ -22,7 +22,7 @@ We (Main developer and contributors) are not responsible for any damage to your 
 ## Overview & Architecture
 
 - **Supported Environment:** Proven and validated exclusively on **HOS 23.0.1** and **SmileBASIC 4.4.9**.
-- **Demo Build:** The SmileBASIC demo (with a demo-capable `bootstrap.bas`) shares the application import GOT but has a different `.text` layout. The host resolves imports through the shared GOT, reports `applicationSignature: "different"`, and prints a warning instead of rejecting the session. Retail 4.4.9 still matches the qualified PLT signature exactly.
+- **Demo Build:** The SmileBASIC demo (with a demo-capable `bootstrap.bas`) shares the application import table but may have a different `.text`/GOT layout. The host derives each import slot from its PLT thunk, falls back to target-code signatures when the GOT has shifted, reports `applicationSignature: "different"`, and prints a warning instead of rejecting the session. Retail 4.4.9 still matches the qualified PLT signature exactly.
 - **Platform Compatibility:** Developed on **Windows**, with cross-platform support for **macOS** and **Linux**.
 - **System Architecture:**
   - **Console-Side Autonomous 60 FPS Loop:** Runs an independent `nn::vi::Layer` + Vulkan 1.4 swapchain (`1920×1080`) driven by a native `pthread` executing a repeating call frame on the S2. Gamepad, Pro Controller, and touch polling (`nn::hid`) alongside compute and fragment shader rendering run at full 60 FPS directly on hardware.
