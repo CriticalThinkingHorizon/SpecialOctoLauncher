@@ -46,6 +46,11 @@ const uint FOOT_CHARS[76] = uint[76](
  45u,58u,32u,69u,120u,105u,116u
 );
 
+// Stream Active Strings:
+const uint STR_LIVE_ACT[22] = uint[22](76u,73u,86u,69u,32u,80u,67u,32u,83u,69u,83u,83u,73u,79u,78u,32u,65u,67u,84u,73u,86u,69u);
+const uint STR_LIVE_SUB[38] = uint[38](49u,50u,56u,48u,120u,55u,50u,48u,32u,54u,48u,70u,80u,83u,32u,124u,32u,83u,50u,32u,76u,79u,87u,45u,76u,65u,84u,69u,78u,67u,89u,32u,73u,78u,80u,85u,84u,32u);
+const uint STR_LIVE_PAD[33] = uint[33](67u,79u,78u,84u,82u,79u,76u,76u,69u,82u,32u,73u,78u,80u,85u,84u,83u,32u,83u,84u,82u,69u,65u,77u,73u,78u,71u,32u,84u,79u,32u,80u,67u);
+
 // Stream Overlay Footer:
 // "HOLD (-) + (+) FOR 1s TO DISCONNECT  |  TAP (-) TO TOGGLE HUD" (59 chars)
 const uint STREAM_HUD_TXT[61] = uint[61](
@@ -92,8 +97,110 @@ void main(){
    streamColor += vec3(0.02, 0.06, 0.10) + vec3(scan);
   }
 
-  // Live Stream HUD Overlay (if enabled)
-  if (c.game.w == 1u || c.flow.w < 180.0) {
+  // --- Central Live Stream Dashboard Card ---
+  vec2 cardCenter = vec2(960.0, 520.0);
+  float cardOuter = fill(box(p, cardCenter, vec2(580.0, 360.0), 16.0));
+  float cardInner = fill(box(p, cardCenter, vec2(576.0, 356.0), 14.0));
+  streamColor = mix(streamColor, colCardBg, cardInner * 0.92);
+  streamColor = mix(streamColor, colCyan, (cardOuter - cardInner) * 0.85);
+
+  // Central Card Content
+  if (p.x >= 400.0 && p.x <= 1520.0 && p.y >= 180.0 && p.y <= 860.0) {
+   // Glowing Status Dot in Header
+   float pulse = 0.8 + 0.2 * sin(c.motion.x * 5.0);
+   float statusDot = fill(length(p - vec2(430.0, 220.0)) - 8.0);
+   streamColor = mix(streamColor, colGreen * pulse, statusDot);
+
+   // "LIVE PC SESSION ACTIVE" Header
+   float actInk = 0.0;
+   for (uint i = 0u; i < 22u; i++) {
+    actInk = max(actInk, drawChar(p, vec2(450.0 + float(i) * gw, 206.0), STR_LIVE_ACT[i]));
+   }
+   streamColor = mix(streamColor, colGreen, actInk);
+
+   // Active Game Title (Large & Prominent)
+   float gameInk = 0.0;
+   for (uint i = 0u; i < 28u; i++) {
+    uint ch = hbMoonlightActiveGameByte(i);
+    if (ch == 0u) break;
+    gameInk = max(gameInk, drawChar(p, vec2(430.0 + float(i) * gw, 250.0), ch));
+   }
+   streamColor = mix(streamColor, colCyan, gameInk);
+
+   // Specs / Subtitle: "1280x720 60FPS | S2 LOW-LATENCY INPUT"
+   float subInk = 0.0;
+   for (uint i = 0u; i < 38u; i++) {
+    subInk = max(subInk, drawChar(p, vec2(430.0 + float(i) * gw, 290.0), STR_LIVE_SUB[i]));
+   }
+   streamColor = mix(streamColor, colTeal, subInk);
+
+   // --- Large Center Gamepad Visualizer ---
+   uint held = hbButtons();
+   vec2 sL = hbStick(false);
+   vec2 sR = hbStick(true);
+
+   // Left Analog Stick (Push UP moves UP on screen with +sL.y)
+   vec2 leftStickBase = vec2(600.0, 520.0);
+   float lRing = fill(length(p - leftStickBase) - 48.0) - fill(length(p - leftStickBase) - 44.0);
+   float lCrossH = fill(box(p, leftStickBase, vec2(40.0, 1.0), 0.0));
+   float lCrossV = fill(box(p, leftStickBase, vec2(1.0, 40.0), 0.0));
+   streamColor = mix(streamColor, vec3(0.35, 0.45, 0.55), (lRing + lCrossH + lCrossV));
+   vec2 lPuck = leftStickBase + vec2(sL.x, sL.y) * 32.0;
+   float lDot = fill(length(p - lPuck) - 16.0);
+   streamColor = mix(streamColor, colCyan, lDot);
+
+   // Right Analog Stick (Push UP moves UP on screen with +sR.y)
+   vec2 rightStickBase = vec2(1320.0, 520.0);
+   float rRing = fill(length(p - rightStickBase) - 48.0) - fill(length(p - rightStickBase) - 44.0);
+   float rCrossH = fill(box(p, rightStickBase, vec2(40.0, 1.0), 0.0));
+   float rCrossV = fill(box(p, rightStickBase, vec2(1.0, 40.0), 0.0));
+   streamColor = mix(streamColor, vec3(0.35, 0.45, 0.55), (rRing + rCrossH + rCrossV));
+   vec2 rPuck = rightStickBase + vec2(sR.x, sR.y) * 32.0;
+   float rDot = fill(length(p - rPuck) - 16.0);
+   streamColor = mix(streamColor, colCyan, rDot);
+
+   // D-Pad Cluster (Center-Left)
+   vec2 dpadCenter = vec2(820.0, 520.0);
+   bool dU = (held & HB_UP) != 0u;
+   bool dD = (held & HB_DOWN) != 0u;
+   bool dL = (held & HB_LEFT) != 0u;
+   bool dR = (held & HB_RIGHT) != 0u;
+   streamColor = mix(streamColor, dU ? colTeal : vec3(0.20), fill(box(p, dpadCenter + vec2(0.0, -28.0), vec2(12.0, 14.0), 4.0)));
+   streamColor = mix(streamColor, dD ? colTeal : vec3(0.20), fill(box(p, dpadCenter + vec2(0.0, 28.0), vec2(12.0, 14.0), 4.0)));
+   streamColor = mix(streamColor, dL ? colTeal : vec3(0.20), fill(box(p, dpadCenter + vec2(-28.0, 0.0), vec2(14.0, 12.0), 4.0)));
+   streamColor = mix(streamColor, dR ? colTeal : vec3(0.20), fill(box(p, dpadCenter + vec2(28.0, 0.0), vec2(14.0, 12.0), 4.0)));
+
+   // ABXY Face Buttons Cluster (Center-Right)
+   vec2 abxyCenter = vec2(1100.0, 520.0);
+   bool bA = (held & HB_A) != 0u;
+   bool bB = (held & HB_B) != 0u;
+   bool bX = (held & HB_X) != 0u;
+   bool bY = (held & HB_Y) != 0u;
+   streamColor = mix(streamColor, bX ? colTeal : vec3(0.20), fill(length(p - (abxyCenter + vec2(0.0, -28.0))) - 14.0));
+   streamColor = mix(streamColor, bB ? colTeal : vec3(0.20), fill(length(p - (abxyCenter + vec2(0.0, 28.0))) - 14.0));
+   streamColor = mix(streamColor, bY ? colTeal : vec3(0.20), fill(length(p - (abxyCenter + vec2(-28.0, 0.0))) - 14.0));
+   streamColor = mix(streamColor, bA ? colTeal : vec3(0.20), fill(length(p - (abxyCenter + vec2(28.0, 0.0))) - 14.0));
+
+   // Shoulder Bumpers (L / R / ZL / ZR)
+   bool bL = (held & HB_L) != 0u;
+   bool bR = (held & HB_R) != 0u;
+   bool bZL = (held & 256u) != 0u;
+   bool bZR = (held & 512u) != 0u;
+   streamColor = mix(streamColor, bL ? colCyan : vec3(0.20), fill(box(p, vec2(700.0, 420.0), vec2(50.0, 10.0), 4.0)));
+   streamColor = mix(streamColor, bR ? colCyan : vec3(0.20), fill(box(p, vec2(1220.0, 420.0), vec2(50.0, 10.0), 4.0)));
+   streamColor = mix(streamColor, bZL ? colTeal : vec3(0.16), fill(box(p, vec2(700.0, 396.0), vec2(40.0, 8.0), 3.0)));
+   streamColor = mix(streamColor, bZR ? colTeal : vec3(0.16), fill(box(p, vec2(1220.0, 396.0), vec2(40.0, 8.0), 3.0)));
+
+   // Controller Status Label in Card
+   float padTxtInk = 0.0;
+   for (uint i = 0u; i < 33u; i++) {
+    padTxtInk = max(padTxtInk, drawChar(p, vec2(430.0 + float(i) * gw, 660.0), STR_LIVE_PAD[i]));
+   }
+   streamColor = mix(streamColor, colYellow, padTxtInk);
+  }
+
+  // Live Stream HUD Banner (if enabled)
+  if (c.game.w == 1u || c.flow.w < 300.0) {
    // Top Stream Info Banner
    float hudBar = fill(box(p, vec2(960.0, 40.0), vec2(700.0, 22.0), 8.0));
    streamColor = mix(streamColor, vec3(0.06, 0.08, 0.12), hudBar * 0.90);
@@ -144,7 +251,7 @@ void main(){
   vec2 stickR = hbStick(true);
   vec2 padCluster = vec2(1740.0, 960.0);
 
-  // Joy-Con / Pad Mini-Panel
+  // Pad Mini-Panel
   float padPanel = fill(box(p, padCluster, vec2(110.0, 48.0), 10.0));
   streamColor = mix(streamColor, vec3(0.06, 0.08, 0.12), padPanel * 0.75);
 
@@ -159,9 +266,9 @@ void main(){
   streamColor = mix(streamColor, bX ? colTeal : vec3(0.25), fill(length(p - (abxyCenter + vec2(0, -16))) - 5.0));
   streamColor = mix(streamColor, bY ? colTeal : vec3(0.25), fill(length(p - (abxyCenter + vec2(-16, 0))) - 5.0));
 
-  // Left & Right Joysticks (Invert Y so stick UP moves visualizer UP on screen)
-  vec2 stickPosL = padCluster + vec2(-60.0, 0.0) + vec2(stickL.x, -stickL.y) * 14.0;
-  vec2 stickPosR = padCluster + vec2(-15.0, 0.0) + vec2(stickR.x, -stickR.y) * 14.0;
+  // Left & Right Joysticks (Invert Y so stick UP moves visualizer UP on screen with +stick.y)
+  vec2 stickPosL = padCluster + vec2(-60.0, 0.0) + vec2(stickL.x, stickL.y) * 14.0;
+  vec2 stickPosR = padCluster + vec2(-15.0, 0.0) + vec2(stickR.x, stickR.y) * 14.0;
   streamColor = mix(streamColor, colCyan, fill(length(p - stickPosL) - 7.0));
   streamColor = mix(streamColor, colCyan, fill(length(p - stickPosR) - 7.0));
 

@@ -633,13 +633,18 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
        rsX: (sticksR << 16) >> 16,
        rsY: (sticksR >> 16)
      };
-     const gpuBuf=await moonlight.handleAction({action,arg,extInput,fsService,swkbdService});
-     await rpc.write(mapped+1024+74000*4,gpuBuf);
-     payload=Buffer.alloc(16);
-     payload.writeUInt32LE(gpuBuf.readUInt32LE(0),0);
-     payload.writeUInt32LE(gpuBuf.readUInt32LE(4),4);
-     payload.writeUInt32LE(gpuBuf.readUInt32LE(8),8);
-     payload.writeUInt32LE(gpuBuf.readUInt32LE(12),12);
+     if(action===4){
+      moonlight.client.sendControllerInput(extInput);
+      payload=Buffer.alloc(16);
+     }else{
+      const gpuBuf=await moonlight.handleAction({action,arg,extInput,fsService,swkbdService});
+      await rpc.write(mapped+1024+74000*4,gpuBuf);
+      payload=Buffer.alloc(16);
+      payload.writeUInt32LE(gpuBuf.readUInt32LE(0),0);
+      payload.writeUInt32LE(gpuBuf.readUInt32LE(4),4);
+      payload.writeUInt32LE(gpuBuf.readUInt32LE(8),8);
+      payload.writeUInt32LE(gpuBuf.readUInt32LE(12),12);
+     }
     }else{
      status=L.STATUS.invalid;
     }

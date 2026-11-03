@@ -35,6 +35,9 @@ void main(){
  // 2. Handle RPC completion
  if (c.game.x == 1u && !hbBusy()) {
   c.game.x = (hbMoonlightStreamState() == 1u) ? 2u : 0u;
+  if (c.game.x == 2u) {
+   c.game.w = 1u; // Enable HUD overlay by default on launch
+  }
   uint appCount = hbMoonlightAppCount();
   if (appCount > 0u && c.game.z >= appCount) {
    c.game.z = appCount - 1u;
