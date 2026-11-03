@@ -414,7 +414,7 @@ class S2MoonlightClient {
 
     const probeIp = (ip) => {
       return new Promise(resolve => {
-        const req = http.get(`http://${ip}:47989/serverinfo`, { timeout: 800 }, res => {
+        const req = http.get(`http://${ip}:47989/serverinfo`, { timeout: 800, agent: false, headers: { 'Connection': 'close' } }, res => {
           let body = '';
           res.on('data', chunk => body += chunk);
           res.on('end', () => {
@@ -525,9 +525,13 @@ class S2MoonlightClient {
         port: u.port || (isHttps ? 443 : 80),
         path: u.pathname + u.search,
         method: 'GET',
+        agent: false,
         rejectUnauthorized: false,
         timeout: timeoutMs,
-        headers: { 'User-Agent': 'Moonlight-S2/1.0' }
+        headers: {
+          'User-Agent': 'Moonlight-S2/1.0',
+          'Connection': 'close'
+        }
       };
 
       if (isHttps && this.clientCert && this.clientKey) {
@@ -595,8 +599,12 @@ class S2MoonlightClient {
       port: u.port || 80,
       path: u.pathname + u.search,
       method: 'GET',
+      agent: false,
       timeout: 300000, // 5 minutes timeout for user to enter PIN
-      headers: { 'User-Agent': 'Moonlight-S2/1.0' }
+      headers: {
+        'User-Agent': 'Moonlight-S2/1.0',
+        'Connection': 'close'
+      }
     }, res => {
       let data = '';
       res.on('data', chunk => { data += chunk; });
@@ -617,6 +625,8 @@ class S2MoonlightClient {
             .update(Buffer.from(this.pairingPin, 'ascii'))
             .digest()
             .subarray(0, 16);
+
+          await new Promise(r => setTimeout(r, 100));
 
           // Step 2: clientchallenge
           const clientChallenge = crypto.randomBytes(16);
@@ -640,6 +650,8 @@ class S2MoonlightClient {
           // Server challenge is the last 16 bytes of the decrypted block (preceded by 32-byte server hash)
           const serverChallenge = decryptedChallengeRes.subarray(decryptedChallengeRes.length - 16);
 
+          await new Promise(r => setTimeout(r, 100));
+
           // Step 3: serverchallengeresp
           const clientSecret = crypto.randomBytes(16);
           const clientCertSig = getX509Signature(this.clientCert);
@@ -656,6 +668,8 @@ class S2MoonlightClient {
           const respRes = await this.httpGet(respUrl, 10000);
           console.log('[Moonlight S2] serverchallengeresp response:', respRes.slice(0, 160));
 
+          await new Promise(r => setTimeout(r, 100));
+
           // Step 4: clientpairingsecret
           // Sign clientSecret with client RSA private key (RSA-SHA256)
           const signer = crypto.createSign('RSA-SHA256');
@@ -668,6 +682,8 @@ class S2MoonlightClient {
           const secretUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=clientpairingsecret&clientpairingsecret=${pairingSecretHex}`;
           const secretRes = await this.httpGet(secretUrl, 10000);
           console.log('[Moonlight S2] clientpairingsecret response:', secretRes.slice(0, 160));
+
+          await new Promise(r => setTimeout(r, 150));
 
           // Step 5: Finalize over HTTPS with mutual TLS (mTLS)
           const finalUrl = `https://${this.hostIp}:47984/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=pairchallenge`;
