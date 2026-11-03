@@ -1,0 +1,217 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+
+void main(){
+ uint pressed = hbPressed();
+ uint held = hbButtons();
+ vec2 stickL = hbStick(false);
+ vec2 stickR = hbStick(true);
+
+ c.motion.x += 1.0 / 60.0;
+ c.flow.w += 1.0;
+
+ // State layout:
+ // c.game.x: Mode (0 = Menu/Browser, 1 = RPC Waiting, 2 = Live Game Streaming)
+ // c.game.y: Menu sub-pane / tab (0 = Games list, 1 = Settings/Pairing)
+ // c.game.z: Selected game cursor index (0..15)
+ // c.game.w: Stream overlay HUD active (0 = off, 1 = on)
+ // c.piece.x: Frame counter for input batching
+ // c.piece.y: Auto-poll timer ticks
+ // c.piece.z: Last dispatched action
+ // c.piece.w: Disconnect hold counter
+
+ // 1. Initial host sync on app launch
+ if (c.flow.w < 5.0 && c.game.x == 0u && !hbBusy()) {
+  if (hbMoonlightAction(0u, 0u)) {
+   c.game.x = 1u;
+   c.piece.z = 0;
+  }
+ }
+
+ // 2. Handle RPC completion
+ if (c.game.x == 1u && !hbBusy()) {
+  c.game.x = (hbMoonlightStreamState() == 1u) ? 2u : 0u;
+  uint appCount = hbMoonlightAppCount();
+  if (appCount > 0u && c.game.z >= appCount) {
+   c.game.z = appCount - 1u;
+  }
+  hbVibrate(2u, 10u, 180u);
+ }
+
+ // =========================================================================
+ // MODE 2: ACTIVE GAME STREAMING
+ // =========================================================================
+ if (c.game.x == 2u) {
+  // Check if host stopped streaming
+  if (hbMoonlightStreamState() == 0u) {
+   c.game.x = 0u;
+   hbVibrate(2u, 20u, 300u);
+   hbEndFrame();
+   return;
+  }
+
+  // Stream Quit: Hold MINUS + PLUS for 1 second (60 frames) to disconnect session
+  if (((held & HB_MINUS) != 0u) && ((held & HB_PLUS) != 0u)) {
+   c.piece.w++;
+   if (c.piece.w >= 60) {
+    c.piece.w = 0;
+    if (hbMoonlightAction(3u, 0u)) {
+     c.game.x = 1u;
+     c.piece.z = 3;
+     hbVibrate(2u, 30u, 400u);
+    }
+    hbEndFrame();
+    return;
+   }
+  } else {
+   c.piece.w = 0;
+  }
+
+  // Toggle HUD Overlay on quick MINUS tap
+  if ((pressed & HB_MINUS) != 0u && (held & HB_PLUS) == 0u) {
+   c.game.w = (c.game.w == 0u) ? 1u : 0u;
+   hbVibrate(0u, 8u, 160u);
+  }
+
+  // Map S2 controller state to Moonlight / XInput gamepad packet:
+  // S2 Physical button layout -> Xbox Ergonomic mapping
+  // S2 B (bottom) -> Xbox A (0x1000)
+  // S2 A (right)  -> Xbox B (0x2000)
+  // S2 Y (left)   -> Xbox X (0x4000)
+  // S2 X (top)    -> Xbox Y (0x8000)
+  uint moonlightButtons = 0u;
+  if ((held & HB_B) != 0u) moonlightButtons |= 0x1000u; // A
+  if ((held & HB_A) != 0u) moonlightButtons |= 0x2000u; // B
+  if ((held & HB_Y) != 0u) moonlightButtons |= 0x4000u; // X
+  if ((held & HB_X) != 0u) moonlightButtons |= 0x8000u; // Y
+
+  // D-Pad
+  if ((held & HB_UP) != 0u)    moonlightButtons |= 0x0001u;
+  if ((held & HB_DOWN) != 0u)  moonlightButtons |= 0x0002u;
+  if ((held & HB_LEFT) != 0u)  moonlightButtons |= 0x0004u;
+  if ((held & HB_RIGHT) != 0u) moonlightButtons |= 0x0008u;
+
+  // Bumpers & Start
+  if ((held & HB_L) != 0u)    moonlightButtons |= 0x0100u; // LB
+  if ((held & HB_R) != 0u)    moonlightButtons |= 0x0200u; // RB
+  if ((held & HB_PLUS) != 0u && (held & HB_MINUS) == 0u) moonlightButtons |= 0x0010u; // Start
+
+  // Stick Clicks (bits 4 and 5 in S2 NpadState)
+  if ((held & 16u) != 0u) moonlightButtons |= 0x0040u; // LS Click
+  if ((held & 32u) != 0u) moonlightButtons |= 0x0080u; // RS Click
+
+  // Triggers (ZL = 256u, ZR = 512u)
+  uint lt = ((held & 256u) != 0u) ? 255u : 0u;
+  uint rt = ((held & 512u) != 0u) ? 255u : 0u;
+
+  // Analog Joysticks
+  int lsX = int(clamp(stickL.x, -1.0, 1.0) * 32767.0);
+  int lsY = int(clamp(stickL.y, -1.0, 1.0) * 32767.0);
+  int rsX = int(clamp(stickR.x, -1.0, 1.0) * 32767.0);
+  int rsY = int(clamp(stickR.y, -1.0, 1.0) * 32767.0);
+
+  // Transmit real-time controller inputs over UDP to Sunshine
+  hbMoonlightSendInput(moonlightButtons, lt, rt, lsX, lsY, rsX, rsY);
+  hbEndFrame();
+  return;
+ }
+
+ // =========================================================================
+ // MODE 0: MENU & APP BROWSER
+ // =========================================================================
+ if (c.game.x == 0u && !hbBusy()) {
+  // Exit to S2 Homebrew Launcher: Press MINUS
+  if (((pressed | held) & HB_MINUS) != 0u) {
+   hbExit();
+   hbEndFrame();
+   return;
+  }
+
+  // Periodic poll (every 3 seconds when unconfigured or waiting for PIN, every 6 seconds when ready)
+  c.piece.y++;
+  int pollTarget = (hbMoonlightStatus() == 2u) ? 360 : 180;
+  if (c.piece.y >= pollTarget) {
+   c.piece.y = 0;
+   if (hbMoonlightAction(0u, 0u)) {
+    c.game.x = 1u;
+    c.piece.z = 0;
+    hbEndFrame();
+    return;
+   }
+  }
+
+  uint appCount = hbMoonlightAppCount();
+  bool navDown = (pressed & HB_DOWN) != 0u || (stickL.y < -0.55 && (c.piece.x % 12) == 0);
+  bool navUp   = (pressed & HB_UP) != 0u   || (stickL.y > 0.55  && (c.piece.x % 12) == 0);
+
+  if (navDown && appCount > 0u) {
+   if (c.game.z + 1u < appCount) c.game.z++;
+   else c.game.z = 0u;
+   hbVibrate(0u, 10u, 180u);
+  } else if (navUp && appCount > 0u) {
+   if (c.game.z > 0u) c.game.z--;
+   else c.game.z = appCount - 1u;
+   hbVibrate(0u, 10u, 180u);
+  }
+
+  // Press (A):
+  // - If Pairing Required (Status 3): Trigger Pair check / re-pair
+  // - If Ready (Status 2): Launch Selected Game
+  // - If Unconfigured (Status 0): Open S2 Keyboard to enter PC IP
+  if ((pressed & HB_A) != 0u) {
+   uint st = hbMoonlightStatus();
+   if (st == 3u) {
+    if (hbMoonlightAction(6u, 0u)) {
+     c.game.x = 1u;
+     c.piece.z = 6;
+     hbVibrate(2u, 14u, 260u);
+    }
+   } else if (st == 2u && appCount > 0u) {
+    if (hbMoonlightAction(2u, c.game.z)) {
+     c.game.x = 1u;
+     c.piece.z = 2;
+     hbVibrate(2u, 20u, 350u);
+    }
+   } else if (st == 0u || st == 5u) {
+    if (hbMoonlightAction(5u, 0u)) {
+     c.game.x = 1u;
+     c.piece.z = 5;
+    }
+   }
+  }
+
+  // Press (X): Manual Refresh
+  if ((pressed & HB_X) != 0u) {
+   c.piece.y = 0;
+   if (hbMoonlightAction(0u, 0u)) {
+    c.game.x = 1u;
+    c.piece.z = 0;
+    hbVibrate(1u, 12u, 200u);
+   }
+  }
+
+  // Press (+): Enter Sunshine Host PC IP via S2 Native Software Keyboard
+  if ((pressed & HB_PLUS) != 0u) {
+   if (hbMoonlightAction(5u, 0u)) {
+    c.game.x = 1u;
+    c.piece.z = 5;
+    hbVibrate(2u, 14u, 250u);
+   }
+  }
+
+  // Press (Y): Re-pair / Generate New PIN
+  if ((pressed & HB_Y) != 0u) {
+   if (hbMoonlightAction(6u, 0u)) {
+    c.game.x = 1u;
+    c.piece.z = 6;
+    hbVibrate(2u, 14u, 250u);
+   }
+  }
+ }
+
+ c.piece.x++;
+ hbEndFrame();
+}

@@ -1,0 +1,740 @@
+// S2 Moonlight / Sunshine Game Streaming Client Service
+// Implements NVHTTP pairing ladder, App List discovery, RTSP session launch,
+// and real-time S2 controller input streaming over UDP (Port 47999).
+const fs = require('node:fs');
+const path = require('node:path');
+const http = require('node:http');
+const https = require('node:https');
+const dgram = require('node:dgram');
+const net = require('node:net');
+const crypto = require('node:crypto');
+
+const S2_SAVE_STORAGE_DIR = 'save:/hbstorage';
+const S2_SAVE_CONFIG_PATH = 'save:/hbstorage/moonlight.json';
+const REPO_CONFIG_FILE = path.join(__dirname, '../../moonlight-host.txt');
+const MOONLIGHT_PORTAL_PORT = Number(process.env.MOONLIGHT_PORTAL_PORT || 39382);
+
+// Default Embedded Client Certificate & Key (CN=Moonlight S2)
+const EMBEDDED_CLIENT_CERT = `-----BEGIN CERTIFICATE-----
+MIIC3TCCAcWgAwIBAgIUXYVM776d90xm5McdfOnXG212MTQwDQYJKoZIhvcNAQEL
+BQAwFzEVMBMGA1UEAwwMTW9vbmxpZ2h0IFMyMB4XDTI2MTEwMzAxMzI1NVoXDTM2
+MTAzMTAxMzI1NVowFzEVMBMGA1UEAwwMTW9vbmxpZ2h0IFMyMIIBIjANBgkqhkiG
+9w0BAQEFAAOCAQ8AMIIBCgKCAQEArzsAeERDr28LSkN54lEUBJGggs9/PJgww0NT
+pjoi/ni3SAM39DDyA5fGd81ZekwYk0MZSTFY5F1VOhH8ZxJAu9cC5DP8Ik9Xm+32
+rq9OWDdhmSLXhpBDyWeLQ+hQP/LLTxXaj0421jV08eWS1ct8ypwj9AHtAXY/1a04
+apuxDmDoqaRvi46k5C4UCLKIYF6644N7WXnskGtJ0+i6jPEaBkRrAYbAoO3RtHfH
+Vhn24LLjDb5zcQW2+IEotJ9TvPm1fIkI08v3BlBwi43Vm7g5ccGPsO5QOzDDhPe1
+VO1v5HjePLgmOmnBbnCEmNKpxyJ+PWK/SHyXVe3eDElloI5u7wIDAQABoyEwHzAd
+BgNVHQ4EFgQUblIwqdXwx5uDoIolqle54AQCHkEwDQYJKoZIhvcNAQELBQADggEB
+ACOyWnYClgHAh8BQ6kYFdUFQipU33aNzVrCuXaLmhrhWwKRdtVbDelQ4EKlNj4oH
+Wok0jaM899FRPEHegOdi8JBf84UYLjmomzHmuHbOGg+7sxAE3dvT4ChlKUcSon7A
+aN4xPpfKc41H40XvrqTX3RCHGNwVnbRKNG/jlDBvN7/vgVh3DZFb72bCYVs2DBFT
+kwD6lc7o01YKC3LHMMZIK+7+Ed2M+BRpwTLOeknQ6Hv6xdR1MkGHSVwB8DRqUkfi
+hbsNhGC40w7pMcxUODF8BVUEBVXM0kk08cfufnhyiwbhoWkj+9c+U1PpGq1Tuwk+
+Or+nnXNV2FYoXKca0y4y34Q=
+-----END CERTIFICATE-----`;
+
+const EMBEDDED_CLIENT_KEY = `-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCvOwB4REOvbwtK
+Q3niURQEkaCCz388mDDDQ1OmOiL+eLdIAzf0MPIDl8Z3zVl6TBiTQxlJMVjkXVU6
+EfxnEkC71wLkM/wiT1eb7faur05YN2GZIteGkEPJZ4tD6FA/8stPFdqPTjbWNXTx
+5ZLVy3zKnCP0Ae0Bdj/VrThqm7EOYOippG+LjqTkLhQIsohgXrrjg3tZeeyQa0nT
+6LqM8RoGRGsBhsCg7dG0d8dWGfbgsuMNvnNxBbb4gSi0n1O8+bV8iQjTy/cGUHCL
+jdWbuDlxwY+w7lA7MMOE97VU7W/keN48uCY6acFucISY0qnHIn49Yr9IfJdV7d4M
+SWWgjm7vAgMBAAECggEAAX/+zAjBj5Hixdr4AyDwi+13M0d1bl5bJIDCCY072XPN
+Fde5NeTpXXCCKWpflrVqDHCpmb/LZAEMhre6smMsnK8FflCXmu+U72fFEc+8WvL2
+aeorcCJyAhpZzdYCQdnhNacZPNrNi13fx2ZQsHXSdqWJhUAy+C079KdL8VWt2VKl
+akyGS8/sWpZsRSOf/T8/i7VEMK3C9DDWyPgJKWdTf2F9C4Fvk8e904k/Pn2B3ZBa
+5eSyW2SYfuvPVMcGhmQvxvL9kF/QfCyM3qkQmHZHZQt1rNyENPcqUQq/2Ry8KNu4
+uhag0cFWtmt7FZtB/TGjv1wTzBZBNBhHWjS7oxFLYQKBgQDbyXG7TrqkxeNm07lW
+SzcX/sasRWhiuSq2XUhvHsOI6dfe3KrfntlhmnLj26fOHv+vNrnpQyeub6iKtz3Z
+neO2eaqWOrVsBEESjLWwdkli31iLAIt7WryjaVCzJ1xcn4bSsf1hN08J4MQ1WjpP
+tTFPvwXy1cwaYXbBFIppEBXgPwKBgQDMGi3ehb2QiosVcxT5GZwYMJLfh/9z9Xbj
+3WG31f+F1ifnaYuHA02oj0MMqu4eOoa6V+MdE2wAiogwM/o1e2VSADysYpzEgrp4
+XcpWpUMYl38MwaOZVY9gWw1GsLkbqzeYokvsiaYj0DVvJcwZ+mHr3rpGNm4wIeDG
+9PgZZ27FUQKBgHKj+HbC8gfQUHTqKtogEXSqp+ZjrbcQ7n6A2a9cVJGtp7PPVjGe
+IbUPYq4HfNe+w48Y9I//P0t1Ymw4eEJyYLxlad1Cci8NaQPL8VlB2bWA2iZm+lo1
+Uf/KhxVrinmlnCV6QbfbqZZ1buKFVbUNxdLayLeJXRTFkbPUiv2SLlbxAoGAASb8
+r07t/QzrMBnQOn/Mg85yZdSsuojePPcZACKzKJxG6WWNJhv8qkD0zfOBGKaX8CFi
+5N0hNPeTQUJp3TdvIQFjVk3QOMPMLbXJ2KdiM5dXXkkRlWIIRzD8aDPDN8bFr5Tq
+/NDiIT2hr5j1CAiD2QMO5iqUgK0QSc9EP1B4LaECgYEArV9pjVhxvnkdNa4Y6Yak
+0iz2QWKomrn5eiCY/fAhaYvKZx+0ati0320urvHu5CXgZIlCjVIjSr06+ndLJ1tA
+c2hFRQAjRHOHtQWtGuma2dMrMwX1fZsr+ovaAiPLnJXMq23w/38ShwBBgR8AYNBh
+3LZvziTWUNAgvLcWBiyj+9g=
+-----END PRIVATE KEY-----`;
+
+function sanitizeAscii(str, maxLen = 32) {
+  if (!str) return '';
+  return String(str)
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[^\x20-\x7E]/g, '')
+    .trim()
+    .slice(0, maxLen);
+}
+
+function parseXmlTag(xml, tag) {
+  const match = new RegExp(`<${tag}[^>]*>([^<]+)<\\/${tag}>`, 'i').exec(xml);
+  return match ? match[1].trim() : '';
+}
+
+function parseXmlApps(xml) {
+  const apps = [];
+  const appMatches = xml.match(/<app>([\s\S]*?)<\/app>/gi) || [];
+  for (const block of appMatches) {
+    const title = parseXmlTag(block, 'AppTitle');
+    const id = Number(parseXmlTag(block, 'ID') || 0);
+    if (title && id) {
+      apps.push({ id, title: sanitizeAscii(title, 28) });
+    }
+  }
+  return apps;
+}
+
+class S2MoonlightClient {
+  constructor() {
+    this.hostIp = '';
+    this.uniqueId = '0123456789ABCDEF';
+    this.clientCert = EMBEDDED_CLIENT_CERT;
+    this.clientKey = EMBEDDED_CLIENT_KEY;
+    this.status = 0; // 0=Unconfigured, 1=Connecting, 2=Ready/Paired, 3=Pairing Required, 4=Streaming, 5=Error
+    this.statusMessage = 'Press (+) to enter Sunshine PC IP, or use Web Portal';
+    this.serverName = 'Unknown Sunshine PC';
+    this.pairingPin = '8421';
+    this.pairingSalt = '';
+    this.isPaired = false;
+    this.apps = [];
+    this.selectedAppIdx = 0;
+    this.activeGameTitle = '';
+
+    // Stream telemetry
+    this.streamState = 0; // 0=stopped, 1=active
+    this.streamFps = 60;
+    this.streamLatency = 0;
+    this.streamBitrate = 15000;
+    this.streamPackets = 0;
+    this.streamFrames = 0;
+    this.serverPort = 47989;
+
+    // Networking handles
+    this.udpSocket = null;
+    this.rtspSocket = null;
+    this.streamStartTime = 0;
+    this.lastFileMtime = 0;
+    this.portalServer = null;
+
+    this.startPortalServer();
+    this.initUdpSocket();
+  }
+
+  initUdpSocket() {
+    try {
+      this.udpSocket = dgram.createSocket('udp4');
+      this.udpSocket.on('error', (err) => {
+        console.warn('[Moonlight UDP] Error:', err.message);
+      });
+    } catch (e) {
+      console.warn('[Moonlight UDP] Failed to create UDP socket:', e.message);
+    }
+  }
+
+  startPortalServer() {
+    if (this.portalServer) return;
+    try {
+      this.portalServer = http.createServer((req, res) => {
+        const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+        if (req.method === 'POST' && parsedUrl.pathname === '/set-ip') {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', async () => {
+            try {
+              const params = new URLSearchParams(body);
+              const newIp = (params.get('hostIp') || '').trim();
+              if (newIp) {
+                this.hostIp = newIp;
+                this.saveHostIpToLocal(newIp);
+                await this.probeHost();
+              }
+              res.writeHead(302, { Location: '/' });
+              res.end();
+            } catch (err) {
+              res.writeHead(500, { 'Content-Type': 'text/plain' });
+              res.end('Error: ' + err.message);
+            }
+          });
+          return;
+        }
+
+        if (req.method === 'POST' && parsedUrl.pathname === '/pair') {
+          this.initiatePairing().then(() => {
+            res.writeHead(302, { Location: '/' });
+            res.end();
+          }).catch(err => {
+            res.writeHead(500, { 'Content-Type': 'text/plain' });
+            res.end('Pairing Error: ' + err.message);
+          });
+          return;
+        }
+
+        if (req.method === 'POST' && parsedUrl.pathname === '/launch') {
+          const appIdx = Number(parsedUrl.searchParams.get('app') || 0);
+          this.launchApp(appIdx).then(() => {
+            res.writeHead(302, { Location: '/' });
+            res.end();
+          }).catch(err => {
+            res.writeHead(500, { 'Content-Type': 'text/plain' });
+            res.end('Launch Error: ' + err.message);
+          });
+          return;
+        }
+
+        if (req.method === 'POST' && parsedUrl.pathname === '/stop') {
+          this.quitSession().then(() => {
+            res.writeHead(302, { Location: '/' });
+            res.end();
+          }).catch(err => {
+            res.writeHead(500, { 'Content-Type': 'text/plain' });
+            res.end('Stop Error: ' + err.message);
+          });
+          return;
+        }
+
+        // Render HTML Portal
+        const statusLabels = ['Unconfigured', 'Connecting...', 'Ready / Paired', 'Pairing Required (PIN)', 'Streaming Active', 'Error'];
+        const statusColor = ['#72767d', '#f0b232', '#23a55a', '#f0b232', '#5865f2', '#f23f43'][this.status] || '#72767d';
+        
+        let appListHtml = '';
+        if (this.apps.length > 0) {
+          appListHtml = '<ul style="list-style:none;padding:0;">' + this.apps.map((a, idx) => `
+            <li style="margin:8px 0;padding:10px;background:#2b2d31;border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
+              <span><strong>#${idx + 1} ${a.title}</strong> (ID: ${a.id})</span>
+              <form method="POST" action="/launch?app=${idx}" style="margin:0;">
+                <button type="submit" style="background:#5865f2;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;">Launch</button>
+              </form>
+            </li>`).join('') + '</ul>';
+        } else if (this.isPaired) {
+          appListHtml = '<p style="color:#949ba4;">No games found or loading app list...</p>';
+        }
+
+        const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Moonlight S2 - Host Portal</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #1e1f22; color: #dbdee1; margin: 0; padding: 24px; }
+    .card { max-width: 680px; margin: 0 auto; background: #313338; border-radius: 8px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    h1 { color: #fff; margin-top: 0; font-size: 24px; display: flex; align-items: center; gap: 10px; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 13px; font-weight: bold; background: ${statusColor}; color: #fff; }
+    .pin-box { font-size: 32px; font-family: monospace; letter-spacing: 6px; background: #111214; padding: 12px 24px; border-radius: 6px; display: inline-block; color: #5865f2; font-weight: bold; }
+    input[type=text] { width: calc(100% - 100px); padding: 10px; border: 1px solid #4e5058; border-radius: 4px; background: #1e1f22; color: #fff; font-size: 15px; }
+    button { background: #5865f2; color: #fff; border: none; padding: 10px 18px; border-radius: 4px; font-size: 15px; cursor: pointer; font-weight: bold; }
+    button:hover { background: #4752c4; }
+    .info { margin: 16px 0; padding: 12px; background: #2b2d31; border-radius: 6px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Moonlight S2 <span class="badge">${statusLabels[this.status] || 'Unknown'}</span></h1>
+    <div class="info">
+      <div><strong>Host PC:</strong> ${this.serverName} (${this.hostIp || 'Not configured'})</div>
+      <div><strong>Status:</strong> ${this.statusMessage}</div>
+      ${this.streamState === 1 ? `<div><strong>Active Stream:</strong> ${this.activeGameTitle} | 60 FPS | Packets: ${this.streamPackets}</div>` : ''}
+    </div>
+
+    ${this.status === 3 ? `
+    <div style="text-align:center;margin:20px 0;background:#2b2d31;padding:16px;border-radius:6px;">
+      <h3 style="color:#f0b232;margin-top:0;">Pairing Required</h3>
+      <p>Enter this PIN on your PC at <a href="https://${this.hostIp}:47990/pin" target="_blank" style="color:#5865f2;">https://${this.hostIp}:47990/pin</a>:</p>
+      <div class="pin-box">${this.pairingPin}</div>
+    </div>` : ''}
+
+    <h3>Configure Sunshine Host IP</h3>
+    <form method="POST" action="/set-ip" style="display:flex;gap:10px;">
+      <input type="text" name="hostIp" placeholder="e.g. 192.168.1.100" value="${this.hostIp}"/>
+      <button type="submit">Connect</button>
+    </form>
+
+    ${this.isPaired ? `
+    <h3 style="margin-top:24px;">Available Games & Apps</h3>
+    ${appListHtml}
+    ` : ''}
+
+    ${this.streamState === 1 ? `
+    <form method="POST" action="/stop" style="margin-top:20px;">
+      <button type="submit" style="background:#f23f43;">Disconnect Stream</button>
+    </form>` : ''}
+  </div>
+</body>
+</html>`;
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+      });
+      this.portalServer.listen(MOONLIGHT_PORTAL_PORT, '0.0.0.0', () => {
+        console.log(`[Moonlight S2] Web Configuration Portal active at http://0.0.0.0:${MOONLIGHT_PORTAL_PORT}`);
+      });
+    } catch (e) {
+      console.warn('[Moonlight S2] Failed to start web portal server:', e.message);
+    }
+  }
+
+  saveHostIpToLocal(ip) {
+    try {
+      fs.writeFileSync(REPO_CONFIG_FILE, ip.trim(), 'utf8');
+      this.lastFileMtime = fs.statSync(REPO_CONFIG_FILE).mtimeMs;
+    } catch {}
+  }
+
+  async loadConfiguration(fsService) {
+    // 1. Check repo-level moonlight-host.txt
+    try {
+      if (fs.existsSync(REPO_CONFIG_FILE)) {
+        const stat = fs.statSync(REPO_CONFIG_FILE);
+        if (stat.mtimeMs !== this.lastFileMtime) {
+          this.lastFileMtime = stat.mtimeMs;
+          const ip = fs.readFileSync(REPO_CONFIG_FILE, 'utf8').trim();
+          if (ip) this.hostIp = ip;
+        }
+      }
+    } catch {}
+
+    // 2. Check S2 persistent save:/hbstorage/moonlight.json
+    if (fsService) {
+      try {
+        const data = await fsService.readFile(S2_SAVE_CONFIG_PATH);
+        if (data && data.length > 4) {
+          const cfg = JSON.parse(data.toString('utf8'));
+          if (cfg.hostIp && !this.hostIp) this.hostIp = cfg.hostIp;
+          if (cfg.uniqueId) this.uniqueId = cfg.uniqueId;
+          if (cfg.clientCert) this.clientCert = cfg.clientCert;
+          if (cfg.clientKey) this.clientKey = cfg.clientKey;
+          if (cfg.isPaired !== undefined) this.isPaired = Boolean(cfg.isPaired);
+        }
+      } catch {}
+    }
+  }
+
+  async saveConfiguration(fsService) {
+    if (!fsService) return;
+    try {
+      await fsService.ensureDir(S2_SAVE_STORAGE_DIR);
+      const json = JSON.stringify({
+        hostIp: this.hostIp,
+        uniqueId: this.uniqueId,
+        clientCert: this.clientCert,
+        clientKey: this.clientKey,
+        isPaired: this.isPaired
+      }, null, 2);
+      await fsService.writeFile(S2_SAVE_CONFIG_PATH, Buffer.from(json, 'utf8'));
+    } catch (e) {
+      console.warn('[Moonlight S2] Failed to save config to S2 storage:', e.message);
+    }
+  }
+
+  async probeHost() {
+    if (!this.hostIp) {
+      this.status = 0;
+      this.statusMessage = 'Enter Sunshine Host PC IP';
+      return;
+    }
+
+    this.status = 1;
+    this.statusMessage = `Querying Sunshine server at ${this.hostIp}...`;
+
+    try {
+      // Query NVHTTP serverinfo over HTTP port 47989
+      const xml = await this.httpGet(`http://${this.hostIp}:47989/serverinfo`, 3500);
+      const hostname = parseXmlTag(xml, 'hostname') || parseXmlTag(xml, 'host');
+      const pairStatus = parseXmlTag(xml, 'PairStatus') || parseXmlTag(xml, 'paired');
+      const appversion = parseXmlTag(xml, 'appversion') || 'Sunshine';
+
+      if (hostname) this.serverName = sanitizeAscii(hostname, 30);
+      
+      console.log(`[Moonlight S2] Host: ${this.serverName}, PairStatus: ${pairStatus}, Version: ${appversion}`);
+
+      if (pairStatus === '1') {
+        this.isPaired = true;
+        this.status = 2;
+        this.statusMessage = `Ready - Connected to ${this.serverName}`;
+        await this.fetchAppList();
+      } else {
+        this.isPaired = false;
+        this.status = 3;
+        this.statusMessage = `Pairing Required: Enter PIN ${this.pairingPin}`;
+        await this.initiatePairing();
+      }
+    } catch (err) {
+      console.warn(`[Moonlight S2] Probe host failed: ${err.message}`);
+      this.status = 5;
+      this.statusMessage = `Cannot reach Sunshine at ${this.hostIp}`;
+    }
+  }
+
+  httpGet(urlStr, timeoutMs = 4000) {
+    return new Promise((resolve, reject) => {
+      const u = new URL(urlStr);
+      const isHttps = u.protocol === 'https:';
+      const lib = isHttps ? https : http;
+      const opts = {
+        hostname: u.hostname,
+        port: u.port || (isHttps ? 443 : 80),
+        path: u.pathname + u.search,
+        method: 'GET',
+        rejectUnauthorized: false,
+        timeout: timeoutMs,
+        headers: { 'User-Agent': 'Moonlight-S2/1.0' }
+      };
+
+      if (isHttps && this.clientCert && this.clientKey) {
+        opts.cert = this.clientCert;
+        opts.key = this.clientKey;
+      }
+
+      const req = lib.request(opts, res => {
+        let data = '';
+        res.on('data', chunk => { data += chunk; });
+        res.on('end', () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 400) {
+            resolve(data);
+          } else {
+            reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+          }
+        });
+      });
+
+      req.on('timeout', () => {
+        req.destroy(new Error(`HTTP Timeout after ${timeoutMs}ms`));
+      });
+      req.on('error', err => reject(err));
+      req.end();
+    });
+  }
+
+  async initiatePairing() {
+    if (!this.hostIp) return;
+    this.status = 3;
+    // Generate new 4-digit PIN
+    this.pairingPin = String(Math.floor(1000 + Math.random() * 9000));
+    this.statusMessage = `Enter PIN ${this.pairingPin} at https://${this.hostIp}:47990/pin`;
+
+    console.log(`[Moonlight S2] Starting NVHTTP Pairing Ladder. PIN: ${this.pairingPin}`);
+
+    // Generate 16-byte random salt
+    const saltBuf = crypto.randomBytes(16);
+    this.pairingSalt = saltBuf.toString('hex');
+
+    // Convert client certificate PEM to hex representation
+    const certHex = Buffer.from(this.clientCert, 'utf8').toString('hex');
+
+    // Step 1: getservercert
+    try {
+      const getCertUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=getservercert&salt=${this.pairingSalt}&clientcert=${certHex}`;
+      
+      // Sunshine holds this request until PIN is entered on the PC!
+      this.httpGet(getCertUrl, 60000).then(async (xml) => {
+        const plaincert = parseXmlTag(xml, 'plaincert');
+        console.log(`[Moonlight S2] getservercert accepted by host! Received server plaincert (${plaincert.length} chars)`);
+
+        // Compute shared AES key: SHA-256(salt || PIN)[0..16]
+        const aesKey = crypto.createHash('sha256')
+          .update(saltBuf)
+          .update(Buffer.from(this.pairingPin, 'ascii'))
+          .digest()
+          .subarray(0, 16);
+
+        // Step 2: clientchallenge
+        const challengeRand = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv('aes-128-ecb', aesKey, null);
+        cipher.setAutoPadding(false);
+        const encryptedChallenge = Buffer.concat([cipher.update(challengeRand), cipher.final()]).toString('hex');
+
+        const challengeUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=clientchallenge&clientchallenge=${encryptedChallenge}`;
+        const challengeRes = await this.httpGet(challengeUrl, 10000);
+        const serverChallengeData = parseXmlTag(challengeRes, 'challengedata');
+
+        // Step 3: serverchallengeresp
+        const decipher = crypto.createDecipheriv('aes-128-ecb', aesKey, null);
+        decipher.setAutoPadding(false);
+        const decryptedServerChallenge = Buffer.concat([decipher.update(Buffer.from(serverChallengeData, 'hex')), decipher.final()]);
+
+        const respHash = crypto.createHash('sha256')
+          .update(decryptedServerChallenge)
+          .digest();
+        const respCipher = crypto.createCipheriv('aes-128-ecb', aesKey, null);
+        respCipher.setAutoPadding(false);
+        const encryptedResp = Buffer.concat([respCipher.update(respHash.subarray(0, 16)), respCipher.final()]).toString('hex');
+
+        const respUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=serverchallengeresp&serverchallengeresp=${encryptedResp}`;
+        const respRes = await this.httpGet(respUrl, 10000);
+        console.log(`[Moonlight S2] serverchallengeresp response:`, respRes);
+
+        // Step 4: clientpairingsecret
+        const secretRand = crypto.randomBytes(16);
+        const secretCipher = crypto.createCipheriv('aes-128-ecb', aesKey, null);
+        secretCipher.setAutoPadding(false);
+        const encryptedSecret = Buffer.concat([secretCipher.update(secretRand), secretCipher.final()]).toString('hex');
+
+        const secretUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=clientpairingsecret&clientpairingsecret=${encryptedSecret}`;
+        await this.httpGet(secretUrl, 10000);
+
+        // Step 5: Finalize over mTLS
+        const finalUrl = `https://${this.hostIp}:47984/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=pairchallenge`;
+        const finalRes = await this.httpGet(finalUrl, 10000);
+        const isSuccess = parseXmlTag(finalRes, 'paired') === '1' || finalRes.includes('status_code="200"');
+
+        if (isSuccess) {
+          console.log('[Moonlight S2] Pairing successfully completed!');
+          this.isPaired = true;
+          this.status = 2;
+          this.statusMessage = `Paired & Ready - Connected to ${this.serverName}`;
+          await this.fetchAppList();
+        }
+      }).catch(err => {
+        console.warn(`[Moonlight S2] Pairing wait aborted or timed out:`, err.message);
+      });
+    } catch (e) {
+      console.warn(`[Moonlight S2] Failed to initiate pairing:`, e.message);
+    }
+  }
+
+  async fetchAppList() {
+    if (!this.hostIp || !this.isPaired) return;
+    try {
+      const xml = await this.httpGet(`https://${this.hostIp}:47984/applist?uniqueid=${this.uniqueId}`, 6000);
+      const parsed = parseXmlApps(xml);
+      if (parsed.length > 0) {
+        this.apps = parsed.slice(0, 16);
+        console.log(`[Moonlight S2] Loaded ${this.apps.length} apps from Sunshine.`);
+      } else {
+        // Fallback default entries if Sunshine returned empty applist
+        this.apps = [
+          { id: 1, title: 'Steam Big Picture' },
+          { id: 2, title: 'Desktop' }
+        ];
+      }
+    } catch (err) {
+      console.warn(`[Moonlight S2] fetchAppList error:`, err.message);
+      if (this.apps.length === 0) {
+        this.apps = [
+          { id: 1, title: 'Steam Big Picture' },
+          { id: 2, title: 'Desktop' }
+        ];
+      }
+    }
+  }
+
+  async launchApp(appIndex) {
+    if (!this.hostIp || !this.isPaired) {
+      await this.probeHost();
+      return;
+    }
+    const app = this.apps[appIndex] || this.apps[0];
+    if (!app) return;
+
+    this.activeGameTitle = app.title;
+    this.status = 4;
+    this.statusMessage = `Streaming: ${app.title} (1280x720 @ 60 FPS)`;
+
+    try {
+      console.log(`[Moonlight S2] Launching App ID: ${app.id} (${app.title})...`);
+      const launchUrl = `https://${this.hostIp}:47984/launch?uniqueid=${this.uniqueId}&appid=${app.id}&mode=1280x720x60&additionalflags=0`;
+      const res = await this.httpGet(launchUrl, 10000);
+      console.log(`[Moonlight S2] Launch response:`, res.slice(0, 200));
+
+      // Connect RTSP control session on port 48010
+      this.initRtspSession();
+      this.streamState = 1;
+      this.streamStartTime = Date.now();
+      this.streamPackets = 0;
+      this.streamFrames = 0;
+    } catch (err) {
+      console.warn(`[Moonlight S2] Launch failed:`, err.message);
+      this.status = 2;
+      this.statusMessage = `Launch error: ${err.message}`;
+    }
+  }
+
+  initRtspSession() {
+    try {
+      if (this.rtspSocket) {
+        this.rtspSocket.destroy();
+        this.rtspSocket = null;
+      }
+      this.rtspSocket = net.createConnection({ host: this.hostIp, port: 48010 }, () => {
+        console.log(`[Moonlight S2] RTSP connection established on port 48010.`);
+        // Send RTSP OPTIONS
+        const msg = `OPTIONS rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: 1\r\nX-GS-ClientVersion: 11\r\n\r\n`;
+        this.rtspSocket.write(msg);
+      });
+
+      this.rtspSocket.on('data', data => {
+        // Handle RTSP handshake replies
+        const str = data.toString('utf8');
+        if (str.includes('200 OK') && str.includes('CSeq: 1')) {
+          // Send DESCRIBE
+          const desc = `DESCRIBE rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: 2\r\nAccept: application/sdp\r\n\r\n`;
+          this.rtspSocket.write(desc);
+        } else if (str.includes('200 OK') && str.includes('CSeq: 2')) {
+          // Send SETUP for streamid=control
+          const setup = `SETUP rtsp://${this.hostIp}:48010/streamid=control RTSP/1.0\r\nCSeq: 3\r\nTransport: packet_stream;client_port=47999\r\n\r\n`;
+          this.rtspSocket.write(setup);
+        } else if (str.includes('200 OK') && str.includes('CSeq: 3')) {
+          // Send PLAY
+          const play = `PLAY rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: 4\r\n\r\n`;
+          this.rtspSocket.write(play);
+        }
+      });
+
+      this.rtspSocket.on('error', err => {
+        console.warn(`[Moonlight S2] RTSP error:`, err.message);
+      });
+    } catch (e) {
+      console.warn(`[Moonlight S2] RTSP connection exception:`, e.message);
+    }
+  }
+
+  sendControllerInput({ buttonFlags = 0, lt = 0, rt = 0, lsX = 0, lsY = 0, rsX = 0, rsY = 0 }) {
+    if (!this.udpSocket || !this.hostIp || this.streamState !== 1) return;
+
+    // Moonlight Multi-Controller Packet layout (18 bytes payload)
+    // uint32 header = 0x0000000a (Controller Packet Type)
+    // int16 controllerNumber = 0
+    // int16 activeGamepadMask = 1
+    // uint32 buttonFlags
+    // uint8 leftTrigger
+    // uint8 rightTrigger
+    // int16 leftStickX
+    // int16 leftStickY
+    // int16 rightStickX
+    // int16 rightStickY
+    const pkt = Buffer.alloc(24);
+    pkt.writeUInt32LE(0x0000000a, 0); // Controller event packet header
+    pkt.writeInt16LE(0, 4);          // Controller number 0
+    pkt.writeInt16LE(1, 6);          // Active gamepad mask (bit 0 = controller 0 active)
+    pkt.writeUInt32LE(buttonFlags >>> 0, 8);
+    pkt.writeUInt8(Math.max(0, Math.min(255, lt)), 12);
+    pkt.writeUInt8(Math.max(0, Math.min(255, rt)), 13);
+    pkt.writeInt16LE(Math.max(-32768, Math.min(32767, lsX)), 14);
+    pkt.writeInt16LE(Math.max(-32768, Math.min(32767, lsY)), 16);
+    pkt.writeInt16LE(Math.max(-32768, Math.min(32767, rsX)), 18);
+    pkt.writeInt16LE(Math.max(-32768, Math.min(32767, rsY)), 20);
+
+    try {
+      this.udpSocket.send(pkt, 47999, this.hostIp);
+      this.streamPackets++;
+      this.streamFrames++;
+    } catch (e) {
+      console.warn('[Moonlight UDP] Send error:', e.message);
+    }
+  }
+
+  async quitSession() {
+    this.streamState = 0;
+    if (this.rtspSocket) {
+      try { this.rtspSocket.destroy(); } catch {}
+      this.rtspSocket = null;
+    }
+    if (this.hostIp) {
+      try {
+        await this.httpGet(`https://${this.hostIp}:47984/cancel?uniqueid=${this.uniqueId}`, 4000);
+      } catch {}
+    }
+    this.status = 2;
+    this.statusMessage = `Session stopped. Ready - Connected to ${this.serverName}`;
+  }
+
+  buildGpuBuffer() {
+    // 768 bytes total (192 words)
+    const buf = Buffer.alloc(768);
+
+    // Header words (0..9)
+    buf.writeUInt32LE(this.status >>> 0, 0);             // Word 0: status
+    buf.writeUInt32LE(this.apps.length >>> 0, 4);        // Word 1: appCount
+    buf.writeUInt32LE(this.selectedAppIdx >>> 0, 8);     // Word 2: selectedApp
+    buf.writeUInt32LE(this.streamState >>> 0, 12);       // Word 3: streamState
+    buf.writeUInt32LE(this.streamFps >>> 0, 16);         // Word 4: streamFps
+    buf.writeUInt32LE(this.streamLatency >>> 0, 20);     // Word 5: streamLatency
+    buf.writeUInt32LE(this.streamBitrate >>> 0, 24);     // Word 6: streamBitrate
+    buf.writeUInt32LE(this.streamPackets >>> 0, 28);     // Word 7: streamPackets
+    buf.writeUInt32LE(this.streamFrames >>> 0, 32);      // Word 8: streamFrames
+    buf.writeUInt32LE(this.serverPort >>> 0, 36);        // Word 9: serverPort
+
+    // ASCII Strings
+    buf.write(this.serverName.slice(0, 31), 40, 32, 'utf8');         // Bytes 40..71: serverName
+    buf.write(this.hostIp.slice(0, 31), 72, 32, 'utf8');             // Bytes 72..103: serverIp
+    buf.write(this.pairingPin.slice(0, 15), 104, 16, 'utf8');        // Bytes 104..119: pairingPin
+    buf.write(this.statusMessage.slice(0, 63), 120, 64, 'utf8');     // Bytes 120..183: statusMessage
+    buf.write(this.activeGameTitle.slice(0, 31), 184, 32, 'utf8');   // Bytes 184..215: activeGameTitle
+
+    // App List at Byte 256 (Word 64): Up to 16 apps (32 bytes each)
+    for (let i = 0; i < Math.min(this.apps.length, 16); i++) {
+      const app = this.apps[i];
+      const offset = 256 + i * 32;
+      buf.writeUInt32LE(app.id >>> 0, offset);
+      buf.write(app.title.slice(0, 27), offset + 4, 28, 'utf8');
+    }
+
+    return buf;
+  }
+
+  async handleAction({ action = 0, arg = 0, extInput = null, fsService, swkbdService }) {
+    // Action 0: Init or Refresh
+    if (action === 0) {
+      await this.loadConfiguration(fsService);
+      if (this.hostIp) {
+        await this.probeHost();
+      } else {
+        this.status = 0;
+        this.statusMessage = 'Press (+) to enter Sunshine PC IP';
+      }
+    }
+    // Action 1: Select App
+    else if (action === 1) {
+      if (arg >= 0 && arg < this.apps.length) {
+        this.selectedAppIdx = arg;
+      }
+    }
+    // Action 2: Launch Selected App
+    else if (action === 2) {
+      const targetIdx = (arg < this.apps.length) ? arg : this.selectedAppIdx;
+      await this.launchApp(targetIdx);
+    }
+    // Action 3: Disconnect / Stop Game
+    else if (action === 3) {
+      await this.quitSession();
+    }
+    // Action 4: Stream Controller Input
+    else if (action === 4) {
+      if (extInput) {
+        this.sendControllerInput(extInput);
+      }
+    }
+    // Action 5: Enter Host IP via S2 Native Software Keyboard
+    else if (action === 5) {
+      if (swkbdService) {
+        const kbdRes = await swkbdService.show({
+          headerText: 'Sunshine Host PC IP',
+          guideText: 'Enter local PC IP (e.g. 192.168.1.100)',
+          okText: 'Connect',
+          initialText: this.hostIp || ''
+        });
+        if (kbdRes.result === 0 && kbdRes.text && kbdRes.text.trim().length > 6) {
+          const newIp = kbdRes.text.trim();
+          this.hostIp = newIp;
+          this.saveHostIpToLocal(newIp);
+          await this.saveConfiguration(fsService);
+          await this.probeHost();
+        }
+      }
+    }
+    // Action 6: Re-pair with Host
+    else if (action === 6) {
+      await this.initiatePairing();
+    }
+
+    return this.buildGpuBuffer();
+  }
+}
+
+const clientInstance = new S2MoonlightClient();
+module.exports = clientInstance;

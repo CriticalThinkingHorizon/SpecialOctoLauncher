@@ -1,0 +1,16 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "moonlight",
+  "name": "Moonlight S2",
+  "version": "1.0.0",
+  "description": "Sunshine & GameStream PC client with Pairing, App List & S2 Controller Input",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  }
+}

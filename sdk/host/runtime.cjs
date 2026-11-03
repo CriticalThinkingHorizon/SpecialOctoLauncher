@@ -614,6 +614,32 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
      payload.writeUInt32LE(gpuBuf.readUInt32LE(4),4);
      payload.writeUInt32LE(gpuBuf.readUInt32LE(8),8);
      payload.writeUInt32LE(gpuBuf.readUInt32LE(12),12);
+    }else if(subOp===50){
+     fsService??=await require('./fs.cjs').create(rpc);
+     swkbdService??=await require('./swkbd.cjs').create(rpc);
+     const moonlight=require('./moonlight.cjs');
+     const action=request.readUInt32LE(12)||0;
+     const arg=request.readUInt32LE(16)||0;
+     const buttonFlags=request.readUInt32LE(20)||0;
+     const triggers=request.readUInt32LE(24)||0;
+     const sticksL=request.readUInt32LE(28)||0;
+     const sticksR=request.readUInt32LE(32)||0;
+     const extInput={
+       buttonFlags,
+       lt: triggers & 0xff,
+       rt: (triggers >> 8) & 0xff,
+       lsX: (sticksL << 16) >> 16,
+       lsY: (sticksL >> 16),
+       rsX: (sticksR << 16) >> 16,
+       rsY: (sticksR >> 16)
+     };
+     const gpuBuf=await moonlight.handleAction({action,arg,extInput,fsService,swkbdService});
+     await rpc.write(mapped+1024+74000*4,gpuBuf);
+     payload=Buffer.alloc(16);
+     payload.writeUInt32LE(gpuBuf.readUInt32LE(0),0);
+     payload.writeUInt32LE(gpuBuf.readUInt32LE(4),4);
+     payload.writeUInt32LE(gpuBuf.readUInt32LE(8),8);
+     payload.writeUInt32LE(gpuBuf.readUInt32LE(12),12);
     }else{
      status=L.STATUS.invalid;
     }

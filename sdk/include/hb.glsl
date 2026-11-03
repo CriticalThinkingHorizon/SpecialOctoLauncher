@@ -260,6 +260,39 @@ uint hbDiscordMsgFlags(uint msgIdx){
  return msgIdx < 5u ? c.atlas[DISCORD_BASE + (960u + msgIdx * 256u + 236u) / 4u] : 0u;
 }
 
+// Moonlight S2 Client Response Accessors (subOp 50, stored persistently at c.atlas[MOONLIGHT_BASE])
+const uint MOONLIGHT_BASE = 74000u;
+
+uint hbMoonlightByte(uint byteOffset){
+ uint wordIdx = MOONLIGHT_BASE + (byteOffset / 4u);
+ uint shift = (byteOffset % 4u) * 8u;
+ return (c.atlas[wordIdx] >> shift) & 255u;
+}
+
+uint hbMoonlightStatus(){ return c.atlas[MOONLIGHT_BASE + 0u]; }
+uint hbMoonlightAppCount(){ return c.atlas[MOONLIGHT_BASE + 1u]; }
+uint hbMoonlightSelectedApp(){ return c.atlas[MOONLIGHT_BASE + 2u]; }
+uint hbMoonlightStreamState(){ return c.atlas[MOONLIGHT_BASE + 3u]; }
+uint hbMoonlightFps(){ return c.atlas[MOONLIGHT_BASE + 4u]; }
+uint hbMoonlightLatency(){ return c.atlas[MOONLIGHT_BASE + 5u]; }
+uint hbMoonlightBitrate(){ return c.atlas[MOONLIGHT_BASE + 6u]; }
+uint hbMoonlightPackets(){ return c.atlas[MOONLIGHT_BASE + 7u]; }
+uint hbMoonlightFrames(){ return c.atlas[MOONLIGHT_BASE + 8u]; }
+uint hbMoonlightServerPort(){ return c.atlas[MOONLIGHT_BASE + 9u]; }
+
+uint hbMoonlightServerNameByte(uint i){ return i < 32u ? hbMoonlightByte(40u + i) : 0u; }
+uint hbMoonlightServerIpByte(uint i){ return i < 32u ? hbMoonlightByte(72u + i) : 0u; }
+uint hbMoonlightPinByte(uint i){ return i < 16u ? hbMoonlightByte(104u + i) : 0u; }
+uint hbMoonlightStatusMsgByte(uint i){ return i < 64u ? hbMoonlightByte(120u + i) : 0u; }
+uint hbMoonlightActiveGameByte(uint i){ return i < 32u ? hbMoonlightByte(184u + i) : 0u; }
+
+uint hbMoonlightAppId(uint appIdx){
+ return appIdx < 16u ? c.atlas[MOONLIGHT_BASE + 64u + appIdx * 8u] : 0u;
+}
+uint hbMoonlightAppTitleByte(uint appIdx, uint charIdx){
+ return (appIdx < 16u && charIdx < 28u) ? hbMoonlightByte(256u + appIdx * 32u + 4u + charIdx) : 0u;
+}
+
 // nn::time & nn::os Response Accessors (after calling nnTimeGetNow() or nnOsGetSystemInfo())
 uvec2 nnTimeResultSteadyClockTick(){return uvec2(hbWord(4128u),hbWord(4132u));}
 uvec2 nnTimeResultSteadyClockFreq(){return uvec2(hbWord(4136u),hbWord(4140u));}
@@ -459,6 +492,28 @@ bool hbNonopostRate(uint postIndex,uint rating){return nnNonopostRatePost(postIn
 
 // Discord JWT Client Request Primitive (subOp 40)
 bool hbDiscordAction(uint action,uint arg){return hbRequest(10u,40u,action,arg);}
+
+// Moonlight S2 Action Primitive (subOp 50)
+bool hbMoonlightAction(uint action, uint arg){
+ return hbRequest(10u, 50u, action, arg);
+}
+
+// Moonlight S2 Controller Input Transmission Primitive
+bool hbMoonlightSendInput(uint buttonFlags, uint lt, uint rt, int lsX, int lsY, int rsX, int rsY){
+ if(!hbAvailable() || hbBusy()) return false;
+ uint o = HB_EXT + 2048u / 4u;
+ c.atlas[o + 1u] = 10u; // L.OP.net
+ c.atlas[o + 2u] = 50u; // Moonlight subOp
+ c.atlas[o + 3u] = 4u;  // action 4 = input
+ c.atlas[o + 4u] = 0u;  // arg
+ c.atlas[o + 5u] = buttonFlags;
+ c.atlas[o + 6u] = (lt & 255u) | ((rt & 255u) << 8u);
+ c.atlas[o + 7u] = (uint(lsX) & 0xffffu) | ((uint(lsY) & 0xffffu) << 16u);
+ c.atlas[o + 8u] = (uint(rsX) & 0xffffu) | ((uint(rsY) & 0xffffu) << 16u);
+ uint sequence = c.atlas[o] + 1u;
+ c.atlas[o] = sequence == 0u ? 1u : sequence;
+ return true;
+}
 
 // --- nn::swkbd (S2 Native Software Keyboard) ---
 void nnSwkbdSetPromptByte(uint index, uint value) {
