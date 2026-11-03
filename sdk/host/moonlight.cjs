@@ -91,6 +91,34 @@ function parseXmlApps(xml) {
   return apps;
 }
 
+function getX509Signature(certPem) {
+  const x509 = new crypto.X509Certificate(certPem);
+  const der = x509.raw;
+  // Locate the RSA signature BIT STRING in DER
+  for (let i = der.length - 260; i >= 0; i--) {
+    if (der[i] === 0x03 && der[i + 1] === 0x82 && der[i + 2] === 0x01 && der[i + 3] === 0x01 && der[i + 4] === 0x00) {
+      return der.subarray(i + 5, i + 5 + 256);
+    }
+  }
+  for (let i = der.length - 300; i >= 0; i--) {
+    if (der[i] === 0x03) {
+      let len = der[i + 1];
+      let offset = i + 2;
+      if (len === 0x81) { len = der[offset++]; }
+      else if (len === 0x82) { len = (der[offset] << 8) | der[offset + 1]; offset += 2; }
+      if (der[offset] === 0x00 && len > 1) {
+        return der.subarray(offset + 1, offset + len);
+      }
+    }
+  }
+  throw new Error('Failed to extract signature from certificate');
+}
+
+function getX509DerHex(certPem) {
+  const x509 = new crypto.X509Certificate(certPem);
+  return x509.raw.toString('hex');
+}
+
 class S2MoonlightClient {
   constructor() {
     this.hostIp = '';
@@ -471,7 +499,7 @@ class S2MoonlightClient {
       } else {
         this.isPaired = false;
         this.status = 3;
-        this.statusMessage = `Pairing Required: Enter PIN ${this.pairingPin}`;
+        this.statusMessage = `Type PIN ${this.pairingPin} at https://${this.hostIp}:47990/pin`;
 
         // Only start pairing if not already waiting for PIN!
         if (!this.pairingInProgress) {
@@ -480,7 +508,7 @@ class S2MoonlightClient {
       }
     } catch (err) {
       console.warn(`[Moonlight S2] Probe host failed: ${err.message}`);
-      if (!this.pairingInProgress) {
+      if (!this.pairingInProgress && !this.isPaired) {
         this.status = 5;
         this.statusMessage = `Cannot reach Sunshine at ${this.hostIp}`;
       }
@@ -554,11 +582,11 @@ class S2MoonlightClient {
     const saltBuf = crypto.randomBytes(16);
     this.pairingSalt = saltBuf.toString('hex');
 
-    // Convert client certificate PEM to hex representation
-    const certHex = Buffer.from(this.clientCert, 'utf8').toString('hex');
+    // Sunshine expects clientcert to be DER in hex format so OpenSSL d2i_X509 can parse it
+    const certHex = getX509DerHex(this.clientCert);
 
     // Step 1: getservercert
-    // Sunshine holds this HTTP request open (up to 5 minutes) while waiting for the PIN to be submitted!
+    // Sunshine holds this HTTP request open while waiting for the PIN to be submitted in the Web UI!
     const getCertUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=getservercert&salt=${this.pairingSalt}&clientcert=${certHex}`;
     
     const u = new URL(getCertUrl);
@@ -567,23 +595,23 @@ class S2MoonlightClient {
       port: u.port || 80,
       path: u.pathname + u.search,
       method: 'GET',
-      timeout: 300000, // 5 minutes timeout to give user ample time to enter PIN!
+      timeout: 300000, // 5 minutes timeout for user to enter PIN
       headers: { 'User-Agent': 'Moonlight-S2/1.0' }
     }, res => {
       let data = '';
       res.on('data', chunk => { data += chunk; });
       res.on('end', async () => {
         this.activePairingReq = null;
-        if (!data || !data.includes('plaincert')) {
-          console.warn('[Moonlight S2] getservercert ended without plaincert. Data:', data);
-          this.pairingInProgress = false;
+        if (!data || (!data.includes('plaincert') && !data.includes('paired'))) {
+          console.warn('[Moonlight S2] getservercert ended without valid payload. Data:', data ? data.slice(0, 300) : '<empty>');
+          setTimeout(() => { this.pairingInProgress = false; }, 3000);
           return;
         }
 
-        console.log(`[Moonlight S2] PIN verified by Sunshine! Received server plaincert.`);
+        console.log(`[Moonlight S2] PIN verified by Sunshine! Starting cryptographic challenge ladder.`);
 
         try {
-          // Compute shared AES key: SHA-256(salt || PIN)[0..16]
+          // Shared AES-128 key: SHA-256(salt || PIN)[0..16]
           const aesKey = crypto.createHash('sha256')
             .update(saltBuf)
             .update(Buffer.from(this.pairingPin, 'ascii'))
@@ -591,71 +619,95 @@ class S2MoonlightClient {
             .subarray(0, 16);
 
           // Step 2: clientchallenge
-          const challengeRand = crypto.randomBytes(16);
-          const cipher = crypto.createCipheriv('aes-128-ecb', aesKey, null);
-          cipher.setAutoPadding(false);
-          const encryptedChallenge = Buffer.concat([cipher.update(challengeRand), cipher.final()]).toString('hex');
+          const clientChallenge = crypto.randomBytes(16);
+          const cipher1 = crypto.createCipheriv('aes-128-ecb', aesKey, null);
+          cipher1.setAutoPadding(false);
+          const encryptedChallenge = Buffer.concat([cipher1.update(clientChallenge), cipher1.final()]).toString('hex');
 
           const challengeUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=clientchallenge&clientchallenge=${encryptedChallenge}`;
           const challengeRes = await this.httpGet(challengeUrl, 10000);
-          const serverChallengeData = parseXmlTag(challengeRes, 'challengedata');
+          console.log('[Moonlight S2] clientchallenge response:', challengeRes.slice(0, 160));
+
+          const challengeResponseHex = parseXmlTag(challengeRes, 'challengeresponse') || parseXmlTag(challengeRes, 'challengedata');
+          if (!challengeResponseHex) {
+            throw new Error('clientchallenge response missing challengeresponse tag');
+          }
+
+          const decipher1 = crypto.createDecipheriv('aes-128-ecb', aesKey, null);
+          decipher1.setAutoPadding(false);
+          const decryptedChallengeRes = Buffer.concat([decipher1.update(Buffer.from(challengeResponseHex, 'hex')), decipher1.final()]);
+
+          // Server challenge is the last 16 bytes of the decrypted block (preceded by 32-byte server hash)
+          const serverChallenge = decryptedChallengeRes.subarray(decryptedChallengeRes.length - 16);
 
           // Step 3: serverchallengeresp
-          const decipher = crypto.createDecipheriv('aes-128-ecb', aesKey, null);
-          decipher.setAutoPadding(false);
-          const decryptedServerChallenge = Buffer.concat([decipher.update(Buffer.from(serverChallengeData, 'hex')), decipher.final()]);
+          const clientSecret = crypto.randomBytes(16);
+          const clientCertSig = getX509Signature(this.clientCert);
 
-          const respHash = crypto.createHash('sha256')
-            .update(decryptedServerChallenge)
-            .digest();
-          const respCipher = crypto.createCipheriv('aes-128-ecb', aesKey, null);
-          respCipher.setAutoPadding(false);
-          const encryptedResp = Buffer.concat([respCipher.update(respHash.subarray(0, 16)), respCipher.final()]).toString('hex');
+          // hash = SHA-256(serverChallenge || clientCertSignature || clientSecret)
+          const challengeRespHashInput = Buffer.concat([serverChallenge, clientCertSig, clientSecret]);
+          const challengeRespHash = crypto.createHash('sha256').update(challengeRespHashInput).digest();
 
-          const respUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=serverchallengeresp&serverchallengeresp=${encryptedResp}`;
-          await this.httpGet(respUrl, 10000);
+          const cipher2 = crypto.createCipheriv('aes-128-ecb', aesKey, null);
+          cipher2.setAutoPadding(false);
+          const encryptedChallengeResp = Buffer.concat([cipher2.update(challengeRespHash), cipher2.final()]).toString('hex');
+
+          const respUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=serverchallengeresp&serverchallengeresp=${encryptedChallengeResp}`;
+          const respRes = await this.httpGet(respUrl, 10000);
+          console.log('[Moonlight S2] serverchallengeresp response:', respRes.slice(0, 160));
 
           // Step 4: clientpairingsecret
-          const secretRand = crypto.randomBytes(16);
-          const secretCipher = crypto.createCipheriv('aes-128-ecb', aesKey, null);
-          secretCipher.setAutoPadding(false);
-          const encryptedSecret = Buffer.concat([secretCipher.update(secretRand), secretCipher.final()]).toString('hex');
+          // Sign clientSecret with client RSA private key (RSA-SHA256)
+          const signer = crypto.createSign('RSA-SHA256');
+          signer.update(clientSecret);
+          const clientSecretSig = signer.sign(this.clientKey);
 
-          const secretUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=clientpairingsecret&clientpairingsecret=${encryptedSecret}`;
-          await this.httpGet(secretUrl, 10000);
+          const pairingSecretPayload = Buffer.concat([clientSecret, clientSecretSig]);
+          const pairingSecretHex = pairingSecretPayload.toString('hex');
 
-          // Step 5: Finalize over mTLS
+          const secretUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=clientpairingsecret&clientpairingsecret=${pairingSecretHex}`;
+          const secretRes = await this.httpGet(secretUrl, 10000);
+          console.log('[Moonlight S2] clientpairingsecret response:', secretRes.slice(0, 160));
+
+          // Step 5: Finalize over HTTPS with mutual TLS (mTLS)
           const finalUrl = `https://${this.hostIp}:47984/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=pairchallenge`;
           const finalRes = await this.httpGet(finalUrl, 10000);
-          const isSuccess = parseXmlTag(finalRes, 'paired') === '1' || finalRes.includes('status_code="200"');
+          console.log('[Moonlight S2] pairchallenge response:', finalRes.slice(0, 160));
 
+          const isSuccess = parseXmlTag(finalRes, 'paired') === '1' || finalRes.includes('status_code="200"');
           if (isSuccess) {
-            console.log('[Moonlight S2] Pairing successfully finalized!');
+            console.log('[Moonlight S2] Pairing successfully finalized and approved by Sunshine!');
             this.isPaired = true;
             this.pairingInProgress = false;
             this.status = 2;
-            this.statusMessage = `Paired & Ready - Connected to ${this.serverName}`;
+            this.statusMessage = `Ready - Connected to ${this.serverName}`;
+            if (this.savedFsService) {
+              await this.saveConfiguration(this.savedFsService);
+            }
             await this.fetchAppList();
+          } else {
+            console.warn('[Moonlight S2] Final pairchallenge did not return paired=1. Response:', finalRes);
+            this.pairingInProgress = false;
           }
         } catch (stepErr) {
           console.warn('[Moonlight S2] Pairing ladder step error:', stepErr.message);
-          this.pairingInProgress = false;
+          setTimeout(() => { this.pairingInProgress = false; }, 3000);
         }
       });
     });
 
     req.on('timeout', () => {
       console.log('[Moonlight S2] Pairing wait timed out after 5 minutes.');
-      this.pairingInProgress = false;
       this.activePairingReq = null;
+      setTimeout(() => { this.pairingInProgress = false; }, 3000);
       req.destroy();
     });
 
     req.on('error', err => {
       if (this.pairingInProgress) {
-        console.warn(`[Moonlight S2] Pairing wait aborted or timed out: ${err.message}`);
-        this.pairingInProgress = false;
+        console.warn(`[Moonlight S2] Pairing wait connection notice: ${err.message}`);
         this.activePairingReq = null;
+        setTimeout(() => { this.pairingInProgress = false; }, 3000);
       }
     });
 
@@ -825,11 +877,16 @@ class S2MoonlightClient {
   }
 
   async handleAction({ action = 0, arg = 0, extInput = null, fsService, swkbdService }) {
+    if (fsService) this.savedFsService = fsService;
+
     // Action 0: Init or Check Pairing Status
     if (action === 0) {
       await this.loadConfiguration(fsService);
       if (this.hostIp) {
-        await this.probeHost();
+        // If already waiting for PIN, do not interrupt the open getservercert request!
+        if (!this.pairingInProgress) {
+          await this.probeHost();
+        }
       } else {
         await this.discoverSunshineHosts();
       }
