@@ -90,6 +90,9 @@ node server.js --full-inspect
 # Probe codec/JPEG service access during setup, before the native worker starts
 node server.js --probe-codec
 
+# Capture the demo build's display import/PLT/GOT layout (read-only)
+node server.js --display-diagnostic
+
 # Custom pairing code
 node server.js --pairingCode 1234,5678,9012,3456
 

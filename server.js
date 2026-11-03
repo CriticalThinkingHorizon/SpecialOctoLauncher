@@ -84,6 +84,8 @@ async function main() {
   const verbose = process.argv.includes('--verbose') || process.argv.includes('--debug');
   const fullInspect = process.argv.includes('--full-inspect') || process.argv.includes('--probe');
   const probeCodec = process.argv.includes('--probe-codec');
+  const displayDiagnostic = process.argv.includes('--display-diagnostic') ||
+    process.argv.includes('--diagnose-display');
   global.VERBOSE = verbose;
 
   console.log('[SETUP] Verifying Python and Pillow dependencies...');
@@ -104,6 +106,7 @@ async function main() {
   console.log(`Host IP: ${host}`);
   console.log(`Port:    39380`);
   if (probeCodec) console.log('Codec probe: enabled (runs during setup, before the native worker)');
+  if (displayDiagnostic) console.log('Display diagnostic: enabled (read-only import layout capture)');
   console.log('\nManual Connection Command for SmileBASIC on S2:');
   console.log(connectCommand(host, token));
   console.log('========================================================================\n');
@@ -224,6 +227,20 @@ async function main() {
         startedAt: new Date()
       };
       activeSessions.set(sessionId, sessionRecord);
+
+      if (displayDiagnostic) {
+        console.log(`\n[SESSION #${sessionNum}] [DIAGNOSTIC] Capturing display/import layout...`);
+        await runScript(path.join(__dirname, 'inspection/display-diagnostic.cjs'), [sessionDir], 180000);
+        console.log(`[SESSION #${sessionNum}] [DIAGNOSTIC] Complete.`);
+        console.log(`[SESSION #${sessionNum}] [DIAGNOSTIC] Send this folder privately: ${path.join(sessionDir, 'diagnostic')}`);
+        await new Promise(resolve => {
+          const done = () => resolve();
+          connected.connection.socket.once('close', done);
+          connected.connection.socket.once('error', done);
+        });
+        console.log(`[SESSION #${sessionNum}] [DIAGNOSTIC] Console disconnected; capture retained.`);
+        return;
+      }
 
       // Fast, streamlined setup pipeline for Vulkan display initialization
       console.log(`\n[SESSION #${sessionNum}] Setting up S2 Vulkan display pipeline...`);
