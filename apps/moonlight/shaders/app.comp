@@ -12,6 +12,7 @@ void main(){
 
  c.motion.x += 1.0 / 60.0;
  c.flow.w += 1.0;
+ c.transition.x = max(0.0, c.transition.x - 1.0 / 15.0);
 
  // State layout:
  // c.game.x: Mode (0 = Menu/Browser, 1 = RPC Waiting, 2 = Live Game Streaming)
@@ -23,7 +24,7 @@ void main(){
  // c.piece.z: Last dispatched action
  // c.piece.w: Disconnect hold counter
 
- // 1. Initial host sync on app launch
+ // 1. Initial host sync & auto-discovery on launch
  if (c.flow.w < 5.0 && c.game.x == 0u && !hbBusy()) {
   if (hbMoonlightAction(0u, 0u)) {
    c.game.x = 1u;
@@ -130,16 +131,21 @@ void main(){
    return;
   }
 
-  // Periodic poll (every 3 seconds when unconfigured or waiting for PIN, every 6 seconds when ready)
-  c.piece.y++;
-  int pollTarget = (hbMoonlightStatus() == 2u) ? 360 : 180;
-  if (c.piece.y >= pollTarget) {
-   c.piece.y = 0;
-   if (hbMoonlightAction(0u, 0u)) {
-    c.game.x = 1u;
-    c.piece.z = 0;
-    hbEndFrame();
-    return;
+  uint status = hbMoonlightStatus();
+
+  // Periodic poll only when ready (every 6s) or searching (every 4s)
+  // When pairing (status == 3), do NOT poll to prevent resetting the PIN!
+  if (status != 3u) {
+   c.piece.y++;
+   int pollTarget = (status == 2u) ? 360 : 240;
+   if (c.piece.y >= pollTarget) {
+    c.piece.y = 0;
+    if (hbMoonlightAction(0u, 0u)) {
+     c.game.x = 1u;
+     c.piece.z = 0;
+     hbEndFrame();
+     return;
+    }
    }
   }
 
@@ -158,24 +164,24 @@ void main(){
   }
 
   // Press (A):
-  // - If Pairing Required (Status 3): Trigger Pair check / re-pair
+  // - If Pairing Required (Status 3): Check if pairing completed on PC
   // - If Ready (Status 2): Launch Selected Game
   // - If Unconfigured (Status 0): Open S2 Keyboard to enter PC IP
   if ((pressed & HB_A) != 0u) {
-   uint st = hbMoonlightStatus();
-   if (st == 3u) {
-    if (hbMoonlightAction(6u, 0u)) {
+   if (status == 3u) {
+    // Check pairing completion without generating new PIN
+    if (hbMoonlightAction(0u, 0u)) {
      c.game.x = 1u;
-     c.piece.z = 6;
+     c.piece.z = 0;
      hbVibrate(2u, 14u, 260u);
     }
-   } else if (st == 2u && appCount > 0u) {
+   } else if (status == 2u && appCount > 0u) {
     if (hbMoonlightAction(2u, c.game.z)) {
      c.game.x = 1u;
      c.piece.z = 2;
      hbVibrate(2u, 20u, 350u);
     }
-   } else if (st == 0u || st == 5u) {
+   } else if (status == 0u || status == 5u) {
     if (hbMoonlightAction(5u, 0u)) {
      c.game.x = 1u;
      c.piece.z = 5;
@@ -183,12 +189,12 @@ void main(){
    }
   }
 
-  // Press (X): Manual Refresh
+  // Press (X): Auto-Scan LAN for Sunshine hosts
   if ((pressed & HB_X) != 0u) {
    c.piece.y = 0;
-   if (hbMoonlightAction(0u, 0u)) {
+   if (hbMoonlightAction(8u, 0u)) {
     c.game.x = 1u;
-    c.piece.z = 0;
+    c.piece.z = 8;
     hbVibrate(1u, 12u, 200u);
    }
   }
@@ -202,11 +208,11 @@ void main(){
    }
   }
 
-  // Press (Y): Re-pair / Generate New PIN
+  // Press (Y): Enter Custom PIN via S2 Keyboard (or regenerate)
   if ((pressed & HB_Y) != 0u) {
-   if (hbMoonlightAction(6u, 0u)) {
+   if (hbMoonlightAction(7u, 0u)) {
     c.game.x = 1u;
-    c.piece.z = 6;
+    c.piece.z = 7;
     hbVibrate(2u, 14u, 250u);
    }
   }

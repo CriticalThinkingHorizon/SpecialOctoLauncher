@@ -330,7 +330,7 @@ void main(){
   // Line 2: Type this PIN
   if (p.y >= 540.0 && p.y <= 580.0 && p.x >= 470.0 && p.x <= 1450.0) {
    float l2Ink = 0.0;
-   for (uint i = 0u; i < 61u; i++) {
+   for (uint i = 0u; i < 59u; i++) {
     l2Ink = max(l2Ink, drawChar(p, vec2(480.0 + float(i) * gw, 545.0), PAIR_LINE2[i]));
    }
    color = mix(color, colCyan, l2Ink);

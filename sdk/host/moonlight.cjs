@@ -1,8 +1,9 @@
 // S2 Moonlight / Sunshine Game Streaming Client Service
 // Implements NVHTTP pairing ladder, App List discovery, RTSP session launch,
-// and real-time S2 controller input streaming over UDP (Port 47999).
+// automatic LAN subnet discovery, and real-time S2 controller input streaming over UDP (Port 47999).
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 const http = require('node:http');
 const https = require('node:https');
 const dgram = require('node:dgram');
@@ -97,11 +98,13 @@ class S2MoonlightClient {
     this.clientCert = EMBEDDED_CLIENT_CERT;
     this.clientKey = EMBEDDED_CLIENT_KEY;
     this.status = 0; // 0=Unconfigured, 1=Connecting, 2=Ready/Paired, 3=Pairing Required, 4=Streaming, 5=Error
-    this.statusMessage = 'Press (+) to enter Sunshine PC IP, or use Web Portal';
+    this.statusMessage = 'Searching for Sunshine PC on local network...';
     this.serverName = 'Unknown Sunshine PC';
-    this.pairingPin = '8421';
+    this.pairingPin = '1234';
     this.pairingSalt = '';
     this.isPaired = false;
+    this.pairingInProgress = false;
+    this.activePairingReq = null;
     this.apps = [];
     this.selectedAppIdx = 0;
     this.activeGameTitle = '';
@@ -141,6 +144,7 @@ class S2MoonlightClient {
     if (this.portalServer) return;
     try {
       this.portalServer = http.createServer((req, res) => {
+
         const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
         if (req.method === 'POST' && parsedUrl.pathname === '/set-ip') {
           let body = '';
@@ -164,8 +168,40 @@ class S2MoonlightClient {
           return;
         }
 
+        if (req.method === 'POST' && parsedUrl.pathname === '/set-pin') {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', async () => {
+            try {
+              const params = new URLSearchParams(body);
+              const newPin = (params.get('pin') || '').trim();
+              if (newPin && newPin.length >= 4) {
+                this.pairingPin = newPin.slice(0, 4);
+                await this.initiatePairing(true);
+              }
+              res.writeHead(302, { Location: '/' });
+              res.end();
+            } catch (err) {
+              res.writeHead(500, { 'Content-Type': 'text/plain' });
+              res.end('Error: ' + err.message);
+            }
+          });
+          return;
+        }
+
+        if (req.method === 'POST' && parsedUrl.pathname === '/scan') {
+          this.discoverSunshineHosts().then(() => {
+            res.writeHead(302, { Location: '/' });
+            res.end();
+          }).catch(err => {
+            res.writeHead(500, { 'Content-Type': 'text/plain' });
+            res.end('Scan Error: ' + err.message);
+          });
+          return;
+        }
+
         if (req.method === 'POST' && parsedUrl.pathname === '/pair') {
-          this.initiatePairing().then(() => {
+          this.initiatePairing(true).then(() => {
             res.writeHead(302, { Location: '/' });
             res.end();
           }).catch(err => {
@@ -226,8 +262,8 @@ class S2MoonlightClient {
     .card { max-width: 680px; margin: 0 auto; background: #313338; border-radius: 8px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
     h1 { color: #fff; margin-top: 0; font-size: 24px; display: flex; align-items: center; gap: 10px; }
     .badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 13px; font-weight: bold; background: ${statusColor}; color: #fff; }
-    .pin-box { font-size: 32px; font-family: monospace; letter-spacing: 6px; background: #111214; padding: 12px 24px; border-radius: 6px; display: inline-block; color: #5865f2; font-weight: bold; }
-    input[type=text] { width: calc(100% - 100px); padding: 10px; border: 1px solid #4e5058; border-radius: 4px; background: #1e1f22; color: #fff; font-size: 15px; }
+    .pin-box { font-size: 36px; font-family: monospace; letter-spacing: 8px; background: #111214; padding: 14px 28px; border-radius: 6px; display: inline-block; color: #f0b232; font-weight: bold; }
+    input[type=text] { width: calc(100% - 110px); padding: 10px; border: 1px solid #4e5058; border-radius: 4px; background: #1e1f22; color: #fff; font-size: 15px; }
     button { background: #5865f2; color: #fff; border: none; padding: 10px 18px; border-radius: 4px; font-size: 15px; cursor: pointer; font-weight: bold; }
     button:hover { background: #4752c4; }
     .info { margin: 16px 0; padding: 12px; background: #2b2d31; border-radius: 6px; line-height: 1.6; }
@@ -243,17 +279,28 @@ class S2MoonlightClient {
     </div>
 
     ${this.status === 3 ? `
-    <div style="text-align:center;margin:20px 0;background:#2b2d31;padding:16px;border-radius:6px;">
+    <div style="text-align:center;margin:20px 0;background:#2b2d31;padding:20px;border-radius:6px;border:1px solid #f0b232;">
       <h3 style="color:#f0b232;margin-top:0;">Pairing Required</h3>
-      <p>Enter this PIN on your PC at <a href="https://${this.hostIp}:47990/pin" target="_blank" style="color:#5865f2;">https://${this.hostIp}:47990/pin</a>:</p>
+      <p style="margin-bottom:12px;">Type this PIN on your PC at <a href="https://${this.hostIp}:47990/pin" target="_blank" style="color:#00e699;font-weight:bold;">https://${this.hostIp}:47990/pin</a>:</p>
       <div class="pin-box">${this.pairingPin}</div>
+      <p style="font-size:13px;color:#949ba4;margin-top:12px;">Sunshine will automatically approve Moonlight S2 once submitted.</p>
+      
+      <form method="POST" action="/set-pin" style="margin-top:16px;display:flex;gap:10px;justify-content:center;">
+        <input type="text" name="pin" placeholder="Or enter custom 4-digit PIN" style="width:200px;text-align:center;font-size:18px;" maxlength="4"/>
+        <button type="submit" style="background:#f0b232;color:#1e1f22;">Use PIN</button>
+      </form>
     </div>` : ''}
 
-    <h3>Configure Sunshine Host IP</h3>
+    <h3>Sunshine Host PC</h3>
     <form method="POST" action="/set-ip" style="display:flex;gap:10px;">
       <input type="text" name="hostIp" placeholder="e.g. 192.168.1.100" value="${this.hostIp}"/>
       <button type="submit">Connect</button>
     </form>
+    <div style="margin-top:10px;">
+      <form method="POST" action="/scan" style="display:inline;">
+        <button type="submit" style="background:#2b2d31;color:#dbdee1;border:1px solid #4e5058;">Auto-Discover Hosts on LAN</button>
+      </form>
+    </div>
 
     ${this.isPaired ? `
     <h3 style="margin-top:24px;">Available Games & Apps</h3>
@@ -270,6 +317,7 @@ class S2MoonlightClient {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(html);
       });
+      this.portalServer.on('error', (err) => { console.warn('[Moonlight S2] Web Portal port already in use or error:', err.message); });
       this.portalServer.listen(MOONLIGHT_PORTAL_PORT, '0.0.0.0', () => {
         console.log(`[Moonlight S2] Web Configuration Portal active at http://0.0.0.0:${MOONLIGHT_PORTAL_PORT}`);
       });
@@ -312,6 +360,71 @@ class S2MoonlightClient {
         }
       } catch {}
     }
+
+    // 3. If no host IP is set, auto-discover on local network
+    if (!this.hostIp) {
+      await this.discoverSunshineHosts();
+    }
+  }
+
+  async discoverSunshineHosts() {
+    console.log('[Moonlight S2] Scanning local network for Sunshine hosts...');
+    this.statusMessage = 'Scanning LAN for Sunshine PC...';
+
+    const ifaces = os.networkInterfaces();
+    const prefixes = [];
+    for (const n in ifaces) {
+      for (const a of ifaces[n]) {
+        if (a.family === 'IPv4' && !a.internal && (a.address.startsWith('10.') || a.address.startsWith('192.168.') || a.address.startsWith('172.'))) {
+          const p = a.address.split('.').slice(0, 3).join('.');
+          if (!prefixes.includes(p)) prefixes.push(p);
+        }
+      }
+    }
+
+    if (prefixes.length === 0) return null;
+
+    const probeIp = (ip) => {
+      return new Promise(resolve => {
+        const req = http.get(`http://${ip}:47989/serverinfo`, { timeout: 800 }, res => {
+          let body = '';
+          res.on('data', chunk => body += chunk);
+          res.on('end', () => {
+            if (body.includes('hostname') || body.includes('PairStatus') || body.includes('SUNSHINE')) {
+              const hostname = parseXmlTag(body, 'hostname') || 'Sunshine PC';
+              resolve({ ip, hostname });
+            } else {
+              resolve(null);
+            }
+          });
+        });
+        req.on('error', () => resolve(null));
+        req.on('timeout', () => { req.destroy(); resolve(null); });
+      });
+    };
+
+    // Parallel scan of subnets
+    const probes = [];
+    for (const prefix of prefixes) {
+      for (let i = 1; i <= 254; i++) {
+        probes.push(probeIp(`${prefix}.${i}`));
+      }
+    }
+
+    const results = (await Promise.all(probes)).filter(Boolean);
+    if (results.length > 0) {
+      const found = results[0];
+      console.log(`[Moonlight S2] Auto-discovered Sunshine Host at ${found.ip} (${found.hostname})`);
+      this.hostIp = found.ip;
+      this.serverName = sanitizeAscii(found.hostname, 30);
+      this.saveHostIpToLocal(found.ip);
+      await this.probeHost();
+      return found;
+    } else {
+      console.log('[Moonlight S2] No Sunshine hosts discovered on LAN.');
+      this.statusMessage = 'No Sunshine host found. Press (+) to enter IP';
+      return null;
+    }
   }
 
   async saveConfiguration(fsService) {
@@ -338,9 +451,6 @@ class S2MoonlightClient {
       return;
     }
 
-    this.status = 1;
-    this.statusMessage = `Querying Sunshine server at ${this.hostIp}...`;
-
     try {
       // Query NVHTTP serverinfo over HTTP port 47989
       const xml = await this.httpGet(`http://${this.hostIp}:47989/serverinfo`, 3500);
@@ -355,22 +465,29 @@ class S2MoonlightClient {
       if (pairStatus === '1') {
         this.isPaired = true;
         this.status = 2;
+        this.pairingInProgress = false;
         this.statusMessage = `Ready - Connected to ${this.serverName}`;
         await this.fetchAppList();
       } else {
         this.isPaired = false;
         this.status = 3;
         this.statusMessage = `Pairing Required: Enter PIN ${this.pairingPin}`;
-        await this.initiatePairing();
+
+        // Only start pairing if not already waiting for PIN!
+        if (!this.pairingInProgress) {
+          await this.initiatePairing(false);
+        }
       }
     } catch (err) {
       console.warn(`[Moonlight S2] Probe host failed: ${err.message}`);
-      this.status = 5;
-      this.statusMessage = `Cannot reach Sunshine at ${this.hostIp}`;
+      if (!this.pairingInProgress) {
+        this.status = 5;
+        this.statusMessage = `Cannot reach Sunshine at ${this.hostIp}`;
+      }
     }
   }
 
-  httpGet(urlStr, timeoutMs = 4000) {
+  httpGet(urlStr, timeoutMs = 5000) {
     return new Promise((resolve, reject) => {
       const u = new URL(urlStr);
       const isHttps = u.protocol === 'https:';
@@ -410,14 +527,28 @@ class S2MoonlightClient {
     });
   }
 
-  async initiatePairing() {
+  async initiatePairing(forceNewPin = false) {
     if (!this.hostIp) return;
-    this.status = 3;
-    // Generate new 4-digit PIN
-    this.pairingPin = String(Math.floor(1000 + Math.random() * 9000));
-    this.statusMessage = `Enter PIN ${this.pairingPin} at https://${this.hostIp}:47990/pin`;
+    if (this.pairingInProgress && !forceNewPin) {
+      console.log(`[Moonlight S2] Pairing session already active with PIN: ${this.pairingPin}`);
+      return;
+    }
 
-    console.log(`[Moonlight S2] Starting NVHTTP Pairing Ladder. PIN: ${this.pairingPin}`);
+    // Cancel existing pending pairing request if regenerating PIN
+    if (this.activePairingReq) {
+      try { this.activePairingReq.destroy(); } catch {}
+      this.activePairingReq = null;
+    }
+
+    if (forceNewPin || !this.pairingPin) {
+      this.pairingPin = String(Math.floor(1000 + Math.random() * 9000));
+    }
+
+    this.pairingInProgress = true;
+    this.status = 3;
+    this.statusMessage = `Type PIN ${this.pairingPin} at https://${this.hostIp}:47990/pin`;
+
+    console.log(`[Moonlight S2] Starting NVHTTP Pairing Ladder with PIN: ${this.pairingPin}`);
 
     // Generate 16-byte random salt
     const saltBuf = crypto.randomBytes(16);
@@ -427,74 +558,109 @@ class S2MoonlightClient {
     const certHex = Buffer.from(this.clientCert, 'utf8').toString('hex');
 
     // Step 1: getservercert
-    try {
-      const getCertUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=getservercert&salt=${this.pairingSalt}&clientcert=${certHex}`;
-      
-      // Sunshine holds this request until PIN is entered on the PC!
-      this.httpGet(getCertUrl, 60000).then(async (xml) => {
-        const plaincert = parseXmlTag(xml, 'plaincert');
-        console.log(`[Moonlight S2] getservercert accepted by host! Received server plaincert (${plaincert.length} chars)`);
-
-        // Compute shared AES key: SHA-256(salt || PIN)[0..16]
-        const aesKey = crypto.createHash('sha256')
-          .update(saltBuf)
-          .update(Buffer.from(this.pairingPin, 'ascii'))
-          .digest()
-          .subarray(0, 16);
-
-        // Step 2: clientchallenge
-        const challengeRand = crypto.randomBytes(16);
-        const cipher = crypto.createCipheriv('aes-128-ecb', aesKey, null);
-        cipher.setAutoPadding(false);
-        const encryptedChallenge = Buffer.concat([cipher.update(challengeRand), cipher.final()]).toString('hex');
-
-        const challengeUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=clientchallenge&clientchallenge=${encryptedChallenge}`;
-        const challengeRes = await this.httpGet(challengeUrl, 10000);
-        const serverChallengeData = parseXmlTag(challengeRes, 'challengedata');
-
-        // Step 3: serverchallengeresp
-        const decipher = crypto.createDecipheriv('aes-128-ecb', aesKey, null);
-        decipher.setAutoPadding(false);
-        const decryptedServerChallenge = Buffer.concat([decipher.update(Buffer.from(serverChallengeData, 'hex')), decipher.final()]);
-
-        const respHash = crypto.createHash('sha256')
-          .update(decryptedServerChallenge)
-          .digest();
-        const respCipher = crypto.createCipheriv('aes-128-ecb', aesKey, null);
-        respCipher.setAutoPadding(false);
-        const encryptedResp = Buffer.concat([respCipher.update(respHash.subarray(0, 16)), respCipher.final()]).toString('hex');
-
-        const respUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=serverchallengeresp&serverchallengeresp=${encryptedResp}`;
-        const respRes = await this.httpGet(respUrl, 10000);
-        console.log(`[Moonlight S2] serverchallengeresp response:`, respRes);
-
-        // Step 4: clientpairingsecret
-        const secretRand = crypto.randomBytes(16);
-        const secretCipher = crypto.createCipheriv('aes-128-ecb', aesKey, null);
-        secretCipher.setAutoPadding(false);
-        const encryptedSecret = Buffer.concat([secretCipher.update(secretRand), secretCipher.final()]).toString('hex');
-
-        const secretUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=clientpairingsecret&clientpairingsecret=${encryptedSecret}`;
-        await this.httpGet(secretUrl, 10000);
-
-        // Step 5: Finalize over mTLS
-        const finalUrl = `https://${this.hostIp}:47984/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=pairchallenge`;
-        const finalRes = await this.httpGet(finalUrl, 10000);
-        const isSuccess = parseXmlTag(finalRes, 'paired') === '1' || finalRes.includes('status_code="200"');
-
-        if (isSuccess) {
-          console.log('[Moonlight S2] Pairing successfully completed!');
-          this.isPaired = true;
-          this.status = 2;
-          this.statusMessage = `Paired & Ready - Connected to ${this.serverName}`;
-          await this.fetchAppList();
+    // Sunshine holds this HTTP request open (up to 5 minutes) while waiting for the PIN to be submitted!
+    const getCertUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=getservercert&salt=${this.pairingSalt}&clientcert=${certHex}`;
+    
+    const u = new URL(getCertUrl);
+    const req = http.request({
+      hostname: u.hostname,
+      port: u.port || 80,
+      path: u.pathname + u.search,
+      method: 'GET',
+      timeout: 300000, // 5 minutes timeout to give user ample time to enter PIN!
+      headers: { 'User-Agent': 'Moonlight-S2/1.0' }
+    }, res => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', async () => {
+        this.activePairingReq = null;
+        if (!data || !data.includes('plaincert')) {
+          console.warn('[Moonlight S2] getservercert ended without plaincert. Data:', data);
+          this.pairingInProgress = false;
+          return;
         }
-      }).catch(err => {
-        console.warn(`[Moonlight S2] Pairing wait aborted or timed out:`, err.message);
+
+        console.log(`[Moonlight S2] PIN verified by Sunshine! Received server plaincert.`);
+
+        try {
+          // Compute shared AES key: SHA-256(salt || PIN)[0..16]
+          const aesKey = crypto.createHash('sha256')
+            .update(saltBuf)
+            .update(Buffer.from(this.pairingPin, 'ascii'))
+            .digest()
+            .subarray(0, 16);
+
+          // Step 2: clientchallenge
+          const challengeRand = crypto.randomBytes(16);
+          const cipher = crypto.createCipheriv('aes-128-ecb', aesKey, null);
+          cipher.setAutoPadding(false);
+          const encryptedChallenge = Buffer.concat([cipher.update(challengeRand), cipher.final()]).toString('hex');
+
+          const challengeUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=clientchallenge&clientchallenge=${encryptedChallenge}`;
+          const challengeRes = await this.httpGet(challengeUrl, 10000);
+          const serverChallengeData = parseXmlTag(challengeRes, 'challengedata');
+
+          // Step 3: serverchallengeresp
+          const decipher = crypto.createDecipheriv('aes-128-ecb', aesKey, null);
+          decipher.setAutoPadding(false);
+          const decryptedServerChallenge = Buffer.concat([decipher.update(Buffer.from(serverChallengeData, 'hex')), decipher.final()]);
+
+          const respHash = crypto.createHash('sha256')
+            .update(decryptedServerChallenge)
+            .digest();
+          const respCipher = crypto.createCipheriv('aes-128-ecb', aesKey, null);
+          respCipher.setAutoPadding(false);
+          const encryptedResp = Buffer.concat([respCipher.update(respHash.subarray(0, 16)), respCipher.final()]).toString('hex');
+
+          const respUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=serverchallengeresp&serverchallengeresp=${encryptedResp}`;
+          await this.httpGet(respUrl, 10000);
+
+          // Step 4: clientpairingsecret
+          const secretRand = crypto.randomBytes(16);
+          const secretCipher = crypto.createCipheriv('aes-128-ecb', aesKey, null);
+          secretCipher.setAutoPadding(false);
+          const encryptedSecret = Buffer.concat([secretCipher.update(secretRand), secretCipher.final()]).toString('hex');
+
+          const secretUrl = `http://${this.hostIp}:47989/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=clientpairingsecret&clientpairingsecret=${encryptedSecret}`;
+          await this.httpGet(secretUrl, 10000);
+
+          // Step 5: Finalize over mTLS
+          const finalUrl = `https://${this.hostIp}:47984/pair?uniqueid=${this.uniqueId}&devicename=MoonlightS2&update=0&phrase=pairchallenge`;
+          const finalRes = await this.httpGet(finalUrl, 10000);
+          const isSuccess = parseXmlTag(finalRes, 'paired') === '1' || finalRes.includes('status_code="200"');
+
+          if (isSuccess) {
+            console.log('[Moonlight S2] Pairing successfully finalized!');
+            this.isPaired = true;
+            this.pairingInProgress = false;
+            this.status = 2;
+            this.statusMessage = `Paired & Ready - Connected to ${this.serverName}`;
+            await this.fetchAppList();
+          }
+        } catch (stepErr) {
+          console.warn('[Moonlight S2] Pairing ladder step error:', stepErr.message);
+          this.pairingInProgress = false;
+        }
       });
-    } catch (e) {
-      console.warn(`[Moonlight S2] Failed to initiate pairing:`, e.message);
-    }
+    });
+
+    req.on('timeout', () => {
+      console.log('[Moonlight S2] Pairing wait timed out after 5 minutes.');
+      this.pairingInProgress = false;
+      this.activePairingReq = null;
+      req.destroy();
+    });
+
+    req.on('error', err => {
+      if (this.pairingInProgress) {
+        console.warn(`[Moonlight S2] Pairing wait aborted or timed out: ${err.message}`);
+        this.pairingInProgress = false;
+        this.activePairingReq = null;
+      }
+    });
+
+    this.activePairingReq = req;
+    req.end();
   }
 
   async fetchAppList() {
@@ -506,7 +672,6 @@ class S2MoonlightClient {
         this.apps = parsed.slice(0, 16);
         console.log(`[Moonlight S2] Loaded ${this.apps.length} apps from Sunshine.`);
       } else {
-        // Fallback default entries if Sunshine returned empty applist
         this.apps = [
           { id: 1, title: 'Steam Big Picture' },
           { id: 2, title: 'Desktop' }
@@ -541,7 +706,6 @@ class S2MoonlightClient {
       const res = await this.httpGet(launchUrl, 10000);
       console.log(`[Moonlight S2] Launch response:`, res.slice(0, 200));
 
-      // Connect RTSP control session on port 48010
       this.initRtspSession();
       this.streamState = 1;
       this.streamStartTime = Date.now();
@@ -562,24 +726,19 @@ class S2MoonlightClient {
       }
       this.rtspSocket = net.createConnection({ host: this.hostIp, port: 48010 }, () => {
         console.log(`[Moonlight S2] RTSP connection established on port 48010.`);
-        // Send RTSP OPTIONS
         const msg = `OPTIONS rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: 1\r\nX-GS-ClientVersion: 11\r\n\r\n`;
         this.rtspSocket.write(msg);
       });
 
       this.rtspSocket.on('data', data => {
-        // Handle RTSP handshake replies
         const str = data.toString('utf8');
         if (str.includes('200 OK') && str.includes('CSeq: 1')) {
-          // Send DESCRIBE
           const desc = `DESCRIBE rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: 2\r\nAccept: application/sdp\r\n\r\n`;
           this.rtspSocket.write(desc);
         } else if (str.includes('200 OK') && str.includes('CSeq: 2')) {
-          // Send SETUP for streamid=control
           const setup = `SETUP rtsp://${this.hostIp}:48010/streamid=control RTSP/1.0\r\nCSeq: 3\r\nTransport: packet_stream;client_port=47999\r\n\r\n`;
           this.rtspSocket.write(setup);
         } else if (str.includes('200 OK') && str.includes('CSeq: 3')) {
-          // Send PLAY
           const play = `PLAY rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: 4\r\n\r\n`;
           this.rtspSocket.write(play);
         }
@@ -596,21 +755,10 @@ class S2MoonlightClient {
   sendControllerInput({ buttonFlags = 0, lt = 0, rt = 0, lsX = 0, lsY = 0, rsX = 0, rsY = 0 }) {
     if (!this.udpSocket || !this.hostIp || this.streamState !== 1) return;
 
-    // Moonlight Multi-Controller Packet layout (18 bytes payload)
-    // uint32 header = 0x0000000a (Controller Packet Type)
-    // int16 controllerNumber = 0
-    // int16 activeGamepadMask = 1
-    // uint32 buttonFlags
-    // uint8 leftTrigger
-    // uint8 rightTrigger
-    // int16 leftStickX
-    // int16 leftStickY
-    // int16 rightStickX
-    // int16 rightStickY
     const pkt = Buffer.alloc(24);
     pkt.writeUInt32LE(0x0000000a, 0); // Controller event packet header
     pkt.writeInt16LE(0, 4);          // Controller number 0
-    pkt.writeInt16LE(1, 6);          // Active gamepad mask (bit 0 = controller 0 active)
+    pkt.writeInt16LE(1, 6);          // Active gamepad mask
     pkt.writeUInt32LE(buttonFlags >>> 0, 8);
     pkt.writeUInt8(Math.max(0, Math.min(255, lt)), 12);
     pkt.writeUInt8(Math.max(0, Math.min(255, rt)), 13);
@@ -644,7 +792,6 @@ class S2MoonlightClient {
   }
 
   buildGpuBuffer() {
-    // 768 bytes total (192 words)
     const buf = Buffer.alloc(768);
 
     // Header words (0..9)
@@ -678,14 +825,13 @@ class S2MoonlightClient {
   }
 
   async handleAction({ action = 0, arg = 0, extInput = null, fsService, swkbdService }) {
-    // Action 0: Init or Refresh
+    // Action 0: Init or Check Pairing Status
     if (action === 0) {
       await this.loadConfiguration(fsService);
       if (this.hostIp) {
         await this.probeHost();
       } else {
-        this.status = 0;
-        this.statusMessage = 'Press (+) to enter Sunshine PC IP';
+        await this.discoverSunshineHosts();
       }
     }
     // Action 1: Select App
@@ -714,7 +860,7 @@ class S2MoonlightClient {
       if (swkbdService) {
         const kbdRes = await swkbdService.show({
           headerText: 'Sunshine Host PC IP',
-          guideText: 'Enter local PC IP (e.g. 192.168.1.100)',
+          guideText: 'Enter local PC IP (e.g. 10.0.0.2)',
           okText: 'Connect',
           initialText: this.hostIp || ''
         });
@@ -727,9 +873,28 @@ class S2MoonlightClient {
         }
       }
     }
-    // Action 6: Re-pair with Host
+    // Action 6: Regenerate PIN
     else if (action === 6) {
-      await this.initiatePairing();
+      await this.initiatePairing(true);
+    }
+    // Action 7: Enter Custom PIN via S2 Native Software Keyboard
+    else if (action === 7) {
+      if (swkbdService) {
+        const kbdRes = await swkbdService.show({
+          headerText: 'Moonlight S2 Pairing PIN',
+          guideText: 'Type 4-digit PIN (e.g. 1234)',
+          okText: 'Set PIN',
+          initialText: this.pairingPin || '1234'
+        });
+        if (kbdRes.result === 0 && kbdRes.text && kbdRes.text.trim().length >= 4) {
+          this.pairingPin = kbdRes.text.trim().slice(0, 4);
+          await this.initiatePairing(true);
+        }
+      }
+    }
+    // Action 8: Auto-Scan LAN
+    else if (action === 8) {
+      await this.discoverSunshineHosts();
     }
 
     return this.buildGpuBuffer();
