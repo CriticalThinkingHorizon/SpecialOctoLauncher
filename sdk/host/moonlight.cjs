@@ -586,8 +586,15 @@ class S2MoonlightClient {
     const saltBuf = crypto.randomBytes(16);
     this.pairingSalt = saltBuf.toString('hex');
 
-    // Sunshine expects clientcert to be DER in hex format so OpenSSL d2i_X509 can parse it
-    const certHex = getX509DerHex(this.clientCert);
+    // Normalize PEM certificate and private key
+    const cleanCertPem = (this.clientCert || '').replace(/\r\n/g, '\n').trim() + '\n';
+    this.clientCert = cleanCertPem;
+    if (this.clientKey) {
+      this.clientKey = this.clientKey.replace(/\r\n/g, '\n').trim() + '\n';
+    }
+
+    // Sunshine parses clientcert via crypto::x509(client.cert) using OpenSSL PEM reader
+    const certHex = Buffer.from(cleanCertPem, 'utf8').toString('hex');
 
     // Step 1: getservercert
     // Sunshine holds this HTTP request open while waiting for the PIN to be submitted in the Web UI!
