@@ -1,6 +1,7 @@
 // Resolve input imports afresh for the connected console session.
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const {contains, mainCodeRegion} = require('../rpc/main-module.cjs');
 
 const KNOWN_SDK_OFFSETS = {
   '_ZN2nn3hid19GetTouchScreenStateILm16EEEvPNS0_16TouchScreenStateIXT_EEE': 4852400,
@@ -17,11 +18,12 @@ async function main(directory) {
   const rpc = require(path.join(directory, 'shared/rpc.cjs'));
   const imports = require('./input-imports.json');
   const report = {session: rpc.a.session, started: new Date().toISOString(), imports: {}};
+  const code = await mainCodeRegion(rpc);
   for (const [name, {slot}] of Object.entries(imports)) {
     let target = Number((await rpc.read(rpc.a.main + slot, 8)).readBigUInt64LE());
     if (!Number.isSafeInteger(target) || !target)
       throw Error('Invalid input import: ' + name);
-    const isUnresolved = (target === rpc.a.main + 0x29b850);
+    const isUnresolved = contains(code, target);
     if (isUnresolved && KNOWN_SDK_OFFSETS[name] && rpc.a.sdk) {
       target = rpc.a.sdk + KNOWN_SDK_OFFSETS[name];
       const slotBuf = Buffer.alloc(8);

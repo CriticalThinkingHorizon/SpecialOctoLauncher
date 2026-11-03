@@ -4,6 +4,7 @@ const {journal} = require('./journal.cjs');
 const {create} = require('./native-six.cjs');
 const {prepare} = require('./gpu-app.cjs');
 const catalogTools = require('./app-catalog.cjs');
+const {contains, mainCodeRegion} = require('../rpc/main-module.cjs');
 const code = require('../rpc/thread-code.json').functions;
 const timing = require('../rpc/timing-code.json').functions;
 const sdkImage = require('../rpc/reference/sdk-checks.cjs');
@@ -253,16 +254,18 @@ async function main(directory, attempt = 'auto') {
 
     // Start continuous frame loop
     const inputInspection = JSON.parse(await fs.readFile(path.join(directory, 'input-inspection.json')));
+    const applicationCode = await mainCodeRegion(rpc);
+    const inApplication = value => contains(applicationCode, Number(value));
     let input = inputInspection.imports['_ZN2nn3hid12GetNpadStateEPNS0_17NpadHandheldStateERKj'];
     let touch = inputInspection.imports['_ZN2nn3hid19GetTouchScreenStateILm16EEEvPNS0_16TouchScreenStateIXT_EEE'];
 
-    if (!input || input.unresolved || !input.bytes || input.bytes.startsWith('00000000') || input.target === rpc.a.main + 0x29b850) {
+    if (!input || input.unresolved || !input.bytes || input.bytes.startsWith('00000000') || inApplication(input.target)) {
       const fallbackTarget = rpc.a.sdk + 4845408;
       const bytes = await rpc.read(fallbackTarget, 64);
       input = { target: fallbackTarget, bytes: bytes.toString('hex'), unresolved: false };
     }
 
-    if (!touch || touch.unresolved || !touch.bytes || touch.bytes.startsWith('00000000') || touch.target === rpc.a.main + 0x29b850) {
+    if (!touch || touch.unresolved || !touch.bytes || touch.bytes.startsWith('00000000') || inApplication(touch.target)) {
       const fallbackTarget = rpc.a.sdk + 4852400;
       const bytes = await rpc.read(fallbackTarget, 64);
       touch = { target: fallbackTarget, bytes: bytes.toString('hex'), unresolved: false };
