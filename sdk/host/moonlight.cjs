@@ -827,11 +827,51 @@ class S2MoonlightClient {
 
     try {
       console.log(`[Moonlight S2] Launching App ID: ${app.id} (${app.title})...`);
-      const launchUrl = `https://${this.hostIp}:47984/launch?uniqueid=${this.uniqueId}&appid=${app.id}&mode=1280x720x60&additionalflags=0`;
-      const res = await this.httpGet(launchUrl, 10000);
+
+      const rikey = crypto.randomBytes(16).toString('hex');
+      const rikeyId = Math.floor(100000 + Math.random() * 900000);
+      this.currentRikey = rikey;
+      this.currentRikeyId = rikeyId;
+
+      const launchParams = new URLSearchParams({
+        uniqueid: this.uniqueId,
+        appid: String(app.id),
+        mode: '1280x720x60',
+        additionalflags: '0',
+        rikey: rikey,
+        rikeyid: String(rikeyId),
+        localAudioPlayMode: '0',
+        surroundAudioInfo: '196610',
+        sops: '0',
+        gcmap: '0',
+        hdrMode: '0'
+      });
+
+      const launchUrl = `https://${this.hostIp}:47984/launch?${launchParams.toString()}`;
+      let res = '';
+      try {
+        res = await this.httpGet(launchUrl, 10000);
+      } catch (launchErr) {
+        res = launchErr.message || '';
+      }
+
+      if (res.includes('already running') || res.includes('status_code="400"') || !res.includes('gamesession')) {
+        console.log(`[Moonlight S2] App already running or launch requires reset. Clearing prior session...`);
+        try {
+          const resumeUrl = `https://${this.hostIp}:47984/resume?${launchParams.toString()}`;
+          res = await this.httpGet(resumeUrl, 10000);
+        } catch {}
+
+        if (!res || res.includes('already running') || res.includes('status_code="400"') || !res.includes('gamesession')) {
+          console.log(`[Moonlight S2] Sending /cancel to clean host session...`);
+          await this.httpGet(`https://${this.hostIp}:47984/cancel?uniqueid=${this.uniqueId}`, 6000);
+          await new Promise(r => setTimeout(r, 600));
+          res = await this.httpGet(launchUrl, 10000);
+        }
+      }
       console.log(`[Moonlight S2] Launch response:`, res.slice(0, 200));
 
-      this.initRtspSession();
+      await this.runRtspHandshake();
       this.streamState = 1;
       this.streamStartTime = Date.now();
       this.streamPackets = 0;
@@ -843,38 +883,65 @@ class S2MoonlightClient {
     }
   }
 
-  initRtspSession() {
+  sendRtspMessage(msg) {
+    return new Promise((resolve, reject) => {
+      const s = net.createConnection({ host: this.hostIp, port: 48010 }, () => {
+        s.write(msg);
+      });
+      s.on('data', d => {
+        resolve(d.toString('utf8'));
+        s.end();
+      });
+      s.on('error', err => {
+        reject(err);
+      });
+      s.setTimeout(5000, () => {
+        s.destroy();
+        reject(new Error('RTSP timeout'));
+      });
+    });
+  }
+
+  async runRtspHandshake() {
+    console.log(`[Moonlight S2] Initiating full RTSP Handshake with ${this.hostIp}:48010...`);
+    // 1. OPTIONS
+    const optRes = await this.sendRtspMessage(`OPTIONS rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: 1\r\nX-GS-ClientVersion: 11\r\n\r\n`);
+    if (!optRes.includes('200 OK')) throw new Error('OPTIONS failed: ' + optRes.slice(0, 100));
+    await new Promise(r => setTimeout(r, 40));
+
+    // 2. DESCRIBE
+    const descRes = await this.sendRtspMessage(`DESCRIBE rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: 2\r\nAccept: application/sdp\r\n\r\n`);
+    if (!descRes.includes('200 OK')) throw new Error('DESCRIBE failed: ' + descRes.slice(0, 100));
+    await new Promise(r => setTimeout(r, 40));
+
+    // 3. SETUP Audio (Port 48000)
+    const audioRes = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=audio/0/0 RTSP/1.0\r\nCSeq: 3\r\nTransport: unicast;X-GS-ClientPort=48000-48001\r\n\r\n`);
+    if (!audioRes.includes('200 OK')) throw new Error('SETUP audio failed: ' + audioRes.slice(0, 100));
+    await new Promise(r => setTimeout(r, 40));
+
+    // 4. SETUP Video (Port 47998)
+    const videoRes = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=video/0/0 RTSP/1.0\r\nCSeq: 4\r\nTransport: unicast;X-GS-ClientPort=47998-47999\r\n\r\n`);
+    if (!videoRes.includes('200 OK')) throw new Error('SETUP video failed: ' + videoRes.slice(0, 100));
+    await new Promise(r => setTimeout(r, 40));
+
+    // 5. SETUP Control (Port 47999)
+    const ctrlRes = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=control/13/0 RTSP/1.0\r\nCSeq: 5\r\nTransport: unicast;X-GS-ClientPort=47999-48000\r\n\r\n`);
+    if (!ctrlRes.includes('200 OK')) throw new Error('SETUP control failed: ' + ctrlRes.slice(0, 100));
+    await new Promise(r => setTimeout(r, 40));
+
+    // 6. PLAY Video
+    const playRes = await this.sendRtspMessage(`PLAY rtsp://${this.hostIp}:48010/streamid=video/0/0 RTSP/1.0\r\nCSeq: 6\r\n\r\n`);
+    if (!playRes.includes('200 OK')) throw new Error('PLAY failed: ' + playRes.slice(0, 100));
+
+    console.log(`[Moonlight S2] RTSP session active! Video/Audio/Input streaming pipeline established.`);
+    
+    // Send UDP Ping packet to ports 47998, 48000, and 47999 to establish bi-directional traffic
     try {
-      if (this.rtspSocket) {
-        this.rtspSocket.destroy();
-        this.rtspSocket = null;
-      }
-      this.rtspSocket = net.createConnection({ host: this.hostIp, port: 48010 }, () => {
-        console.log(`[Moonlight S2] RTSP connection established on port 48010.`);
-        const msg = `OPTIONS rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: 1\r\nX-GS-ClientVersion: 11\r\n\r\n`;
-        this.rtspSocket.write(msg);
-      });
-
-      this.rtspSocket.on('data', data => {
-        const str = data.toString('utf8');
-        if (str.includes('200 OK') && str.includes('CSeq: 1')) {
-          const desc = `DESCRIBE rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: 2\r\nAccept: application/sdp\r\n\r\n`;
-          this.rtspSocket.write(desc);
-        } else if (str.includes('200 OK') && str.includes('CSeq: 2')) {
-          const setup = `SETUP rtsp://${this.hostIp}:48010/streamid=control RTSP/1.0\r\nCSeq: 3\r\nTransport: packet_stream;client_port=47999\r\n\r\n`;
-          this.rtspSocket.write(setup);
-        } else if (str.includes('200 OK') && str.includes('CSeq: 3')) {
-          const play = `PLAY rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: 4\r\n\r\n`;
-          this.rtspSocket.write(play);
-        }
-      });
-
-      this.rtspSocket.on('error', err => {
-        console.warn(`[Moonlight S2] RTSP error:`, err.message);
-      });
-    } catch (e) {
-      console.warn(`[Moonlight S2] RTSP connection exception:`, e.message);
-    }
+      const pingPayload = Buffer.from('PING');
+      this.udpSocket.send(pingPayload, 47998, this.hostIp);
+      this.udpSocket.send(pingPayload, 48000, this.hostIp);
+      this.udpSocket.send(pingPayload, 47999, this.hostIp);
+    } catch {}
   }
 
   sendControllerInput({ buttonFlags = 0, lt = 0, rt = 0, lsX = 0, lsY = 0, rsX = 0, rsY = 0 }) {
