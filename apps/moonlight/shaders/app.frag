@@ -397,10 +397,16 @@ void main(){
    if (p.y >= rowY && p.y <= rowY + 32.0 && p.x >= 90.0 && p.x <= 1160.0) {
     float rowInk = 0.0;
     // Draw "#<idx+1> "
-    uint digitCh = 49u + i; // '1' + i
+    uint num = i + 1u;
     rowInk = max(rowInk, drawChar(p, vec2(90.0, rowY), 35u)); // '#'
-    rowInk = max(rowInk, drawChar(p, vec2(90.0 + gw, rowY), digitCh));
-    rowInk = max(rowInk, drawChar(p, vec2(90.0 + gw * 2.0, rowY), 32u));
+    if (num >= 10u) {
+     rowInk = max(rowInk, drawChar(p, vec2(90.0 + gw, rowY), 48u + (num / 10u)));
+     rowInk = max(rowInk, drawChar(p, vec2(90.0 + gw * 2.0, rowY), 48u + (num % 10u)));
+     rowInk = max(rowInk, drawChar(p, vec2(90.0 + gw * 3.0, rowY), 32u));
+    } else {
+     rowInk = max(rowInk, drawChar(p, vec2(90.0 + gw, rowY), 48u + num));
+     rowInk = max(rowInk, drawChar(p, vec2(90.0 + gw * 2.0, rowY), 32u));
+    }
 
     // Draw Title
     for (uint cIdx = 0u; cIdx < 28u; cIdx++) {

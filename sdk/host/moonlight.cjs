@@ -73,9 +73,19 @@ function sanitizeAscii(str, maxLen = 32) {
     .slice(0, maxLen);
 }
 
+function decodeXml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
 function parseXmlTag(xml, tag) {
   const match = new RegExp(`<${tag}[^>]*>([^<]+)<\\/${tag}>`, 'i').exec(xml);
-  return match ? match[1].trim() : '';
+  return match ? decodeXml(match[1].trim()) : '';
 }
 
 function parseXmlApps(xml) {
