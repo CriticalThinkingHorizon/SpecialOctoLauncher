@@ -166,6 +166,7 @@ class S2MoonlightClient {
     this.streamPackets = 0;
     this.streamFrames = 0;
     this.serverPort = 47989;
+    this.serverVersion = '';
 
     // Host-side video path (Route A): the console has no H.264 decoder in its
     // SDK, so the PC receives Sunshine's RTP, decodes it with ffmpeg and writes
@@ -766,6 +767,7 @@ class S2MoonlightClient {
 
       const hostname = parseXmlTag(xml, 'hostname') || parseXmlTag(xml, 'host');
       const appversion = parseXmlTag(xml, 'appversion') || 'Sunshine';
+      this.serverVersion = appversion;
 
       if (hostname) this.serverName = sanitizeAscii(hostname, 30);
 
@@ -1129,7 +1131,7 @@ class S2MoonlightClient {
     }
   }
 
-  sendRtspMessage(msg) {
+  sendRtspMessage(msg, label = 'RTSP') {
     return new Promise((resolve, reject) => {
       const s = net.createConnection({ host: this.hostIp, port: 48010 }, () => {
         s.write(msg);
@@ -1138,11 +1140,15 @@ class S2MoonlightClient {
       s.on('data', d => {
         response += d.toString('utf8');
         if (response.includes('\r\n\r\n') || response.includes('200 OK')) {
+          if (label !== 'keepalive')
+            console.log(`[Moonlight RTSP] ${label}: ${response.split('\r\n')[0]}`);
           s.end();
           resolve(response);
         }
       });
       s.on('error', err => {
+        if (label !== 'keepalive')
+          console.warn(`[Moonlight RTSP] ${label} failed: ${err.message}`);
         reject(err);
       });
       s.setTimeout(5000, () => {
@@ -1156,14 +1162,22 @@ class S2MoonlightClient {
     console.log(`[Moonlight S2] Initiating full RTSP Handshake with ${this.hostIp}:48010...`);
     const clientUdpPort = this.udpPort || 47999;
     let cseq = 1;
+    // Sunshine/GFE 7.1.431+ moved the control stream to control/13/0.
+    const versionMatch = String(this.serverVersion || '').match(/(\d+)\.(\d+)\.(\d+)/);
+    const [major, minor, patch] = versionMatch ? versionMatch.slice(1).map(Number) : [0, 0, 0];
+    const modernControl = major > 7 ||
+      (major === 7 && (minor > 1 || (minor === 1 && patch >= 431)));
+    const controlStreamId = modernControl ? 'streamid=control/13/0' : 'streamid=control/1/0';
+    const announceTarget = modernControl ? controlStreamId : 'streamid=video';
+    if (modernControl) console.log('[Moonlight S2] Using modern control stream (control/13/0).');
 
     // 1. OPTIONS
-    let res = await this.sendRtspMessage(`OPTIONS rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: ${cseq++}\r\nX-GS-ClientVersion: 11\r\n\r\n`);
+    let res = await this.sendRtspMessage(`OPTIONS rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: ${cseq++}\r\nX-GS-ClientVersion: 11\r\n\r\n`, 'OPTIONS');
     if (!res.includes('200 OK')) throw new Error('OPTIONS failed: ' + res.slice(0, 100));
     await new Promise(r => setTimeout(r, 40));
 
     // 2. DESCRIBE
-    res = await this.sendRtspMessage(`DESCRIBE rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: ${cseq++}\r\nAccept: application/sdp\r\n\r\n`);
+    res = await this.sendRtspMessage(`DESCRIBE rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: ${cseq++}\r\nAccept: application/sdp\r\n\r\n`, 'DESCRIBE');
     if (!res.includes('200 OK')) throw new Error('DESCRIBE failed: ' + res.slice(0, 100));
     await new Promise(r => setTimeout(r, 40));
 
@@ -1171,7 +1185,7 @@ class S2MoonlightClient {
     // NOTE: Audio/video are negotiated so Sunshine starts a normal session, but
     // this client never binds 47998/48000 or implements RTP reception, H.264
     // decode or frame presentation. Only the control/input stream is processed.
-    let aRes = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=audio/0/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\nTransport: unicast;X-GS-ClientPort=48000-48001\r\n\r\n`);
+    let aRes = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=audio/0/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\nTransport: unicast;X-GS-ClientPort=48000-48001\r\n\r\n`, 'SETUP audio');
     if (!aRes.includes('200 OK')) throw new Error('SETUP audio failed: ' + aRes.slice(0, 100));
     const sessMatch = aRes.match(/Session:\s*([^\r\n;]+)/i);
     this.rtspSessionId = sessMatch ? sessMatch[1].trim() : '';
@@ -1181,15 +1195,15 @@ class S2MoonlightClient {
     await new Promise(r => setTimeout(r, 40));
 
     // 4. SETUP Video (Port 47998)
-    let vRes = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=video/0/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}Transport: unicast;X-GS-ClientPort=47998-47999\r\n\r\n`);
+    let vRes = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=video/0/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}Transport: unicast;X-GS-ClientPort=47998-47999\r\n\r\n`, 'SETUP video');
     if (!vRes.includes('200 OK')) throw new Error('SETUP video failed: ' + vRes.slice(0, 100));
     this.videoPingPayload = vRes.match(/X-SS-Ping-Payload:\s*([^\r\n;]+)/i)?.[1]?.trim() || '';
     // Bind the RTP port and start the host-side H.264 decoder before PLAY.
     this.startVideo();
     await new Promise(r => setTimeout(r, 40));
 
-    // 5. SETUP Control (Port 47999) - Request unencrypted protocol 1 on streamid=control/1/0
-    let cRes = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/streamid=control/1/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}Transport: unicast;X-GS-ClientPort=${clientUdpPort}-${clientUdpPort + 1}\r\n\r\n`);
+    // 5. SETUP Control
+    let cRes = await this.sendRtspMessage(`SETUP rtsp://${this.hostIp}:48010/${controlStreamId} RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}Transport: unicast;X-GS-ClientPort=${clientUdpPort}-${clientUdpPort + 1}\r\n\r\n`, 'SETUP control');
     if (!cRes.includes('200 OK')) throw new Error('SETUP control failed: ' + cRes.slice(0, 100));
     this.enetConnectData = Number(cRes.match(/X-SS-Connect-Data:\s*(\d+)/i)?.[1] || 0);
     await new Promise(r => setTimeout(r, 40));
@@ -1228,13 +1242,13 @@ class S2MoonlightClient {
       'm=video 47998  '
     ];
     const sdpPayload = sdpLines.map(l => l + ' \r\n').join('');
-    const annReq = `ANNOUNCE rtsp://${this.hostIp}:48010/streamid=control/1/0 RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}X-GS-ClientVersion: 11\r\nContent-type: application/sdp\r\nContent-length: ${Buffer.byteLength(sdpPayload)}\r\n\r\n${sdpPayload}`;
-    let annRes = await this.sendRtspMessage(annReq);
+    const annReq = `ANNOUNCE rtsp://${this.hostIp}:48010/${announceTarget} RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}X-GS-ClientVersion: 11\r\nContent-type: application/sdp\r\nContent-length: ${Buffer.byteLength(sdpPayload)}\r\n\r\n${sdpPayload}`;
+    let annRes = await this.sendRtspMessage(annReq, 'ANNOUNCE');
     if (!annRes.includes('200 OK')) throw new Error('ANNOUNCE failed: ' + annRes.slice(0, 100));
     await new Promise(r => setTimeout(r, 40));
 
     // 7. PLAY
-    let playRes = await this.sendRtspMessage(`PLAY rtsp://${this.hostIp}:48010/ RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}\r\n`);
+    let playRes = await this.sendRtspMessage(`PLAY rtsp://${this.hostIp}:48010/ RTSP/1.0\r\nCSeq: ${cseq++}\r\n${sessHeader}\r\n`, 'PLAY');
     if (!playRes.includes('200 OK')) throw new Error('PLAY failed: ' + playRes.slice(0, 100));
 
     this.rtspCSeq = cseq;
@@ -1247,7 +1261,7 @@ class S2MoonlightClient {
         this.rtspCSeq++;
         try {
           const sH = this.rtspSessionId ? `Session: ${this.rtspSessionId}\r\n` : '';
-          await this.sendRtspMessage(`OPTIONS rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: ${this.rtspCSeq}\r\n${sH}\r\n`);
+          await this.sendRtspMessage(`OPTIONS rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: ${this.rtspCSeq}\r\n${sH}\r\n`, 'keepalive');
         } catch {}
       }
     }, 6000);
@@ -1411,7 +1425,7 @@ class S2MoonlightClient {
     if (this.rtspSessionId && this.hostIp) {
       try {
         this.rtspCSeq++;
-        await this.sendRtspMessage(`TEARDOWN rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: ${this.rtspCSeq}\r\nSession: ${this.rtspSessionId}\r\n\r\n`);
+        await this.sendRtspMessage(`TEARDOWN rtsp://${this.hostIp}:48010 RTSP/1.0\r\nCSeq: ${this.rtspCSeq}\r\nSession: ${this.rtspSessionId}\r\n\r\n`, 'TEARDOWN');
       } catch {}
     }
     if (this.hostIp) {
