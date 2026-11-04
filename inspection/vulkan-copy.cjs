@@ -61,6 +61,8 @@ async function main(directory,mode='copy',attempt){
    check(/^[A-Za-z0-9_.-]{1,63}$/.test(layerName),'Invalid S2_LAYER_NAME');
    console.log(`[Vulkan] opening layer "${layerName}" (applicationSignature=${inspection.applicationSignature||'unknown'})`);
    await call('_ZN2nn2vi5LayerC1Ev',layer);await call('_ZN2nn2vi21LayerCreationSettingsC1Eii',layer+0x1000,1920,1080);
+   await call('_ZN2nn2vi21LayerCreationSettings13SetVisibilityEb',layer+0x1000,1);
+   await call('_ZN2nn2vi21LayerCreationSettings13SetFullscreenEb',layer+0x1000,1);
    await rpc.write(layer+0x1100,Buffer.from(layerName+'\0'));
    check(await call('_ZN2nn2vi5Layer4OpenEPKNS0_21LayerCreationSettingsEPNS0_7DisplayEPKc',layer,layer+0x1000,display,layer+0x1100)===0n,'Independent layer failed');layerOpened=true;report.displayTouched=true;
   }
