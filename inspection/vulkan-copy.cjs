@@ -76,6 +76,8 @@ async function main(directory,mode='copy',attempt){
   await ok('vkEnumeratePhysicalDevices',instance,p+8,p+16);const physical=await pointer(16);
   if(present){
    const window=await call('_ZN2nn2vi5Layer15GetNativeWindowEv',layer);
+   console.log(`[Vulkan] native window 0x${window.toString(16)}`);
+   check(window>0n,'GetNativeWindow returned null');
    await put(0x6100,struct(32,1000062000,{}, {24:window}));await ok('vkCreateViSurfaceNN',instance,p+0x6100,0,p+104);surface=await pointer(104);
    await ok('vkGetPhysicalDeviceSurfaceCapabilitiesKHR',physical,surface,p+0x6200);
    const c=await rpc.read(p+0x6200,52);report.surface={width:c.readUInt32LE(8),height:c.readUInt32LE(12),minImages:c.readUInt32LE(),maxImages:c.readUInt32LE(4),transform:c.readUInt32LE(40),usage:c.readUInt32LE(48)};
