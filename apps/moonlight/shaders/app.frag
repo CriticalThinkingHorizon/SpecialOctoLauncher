@@ -88,14 +88,14 @@ void main(){
  // 1. STREAMING MODE RENDERER
  // =========================================================================
  if (mode == 2u) {
-  // Host-decoded video frame: RGB565 at c.atlas[65536], 640x360, scaled to 1080p.
+  // Host-decoded video frame: RGB565 at c.atlas[200000], 640x360, scaled to 1080p.
   if (c.flow.z > 0.5) {
    int vw = 640;
    int vh = 360;
    int px = clamp(int(p.x * float(vw) / 1920.0), 0, vw - 1);
    int py = clamp(int(p.y * float(vh) / 1080.0), 0, vh - 1);
    uint idx = uint(py * vw + px);
-   uint word = c.atlas[65536u + (idx >> 1u)];
+   uint word = c.atlas[200000u + (idx >> 1u)];
    uint rgb = ((idx & 1u) == 0u) ? (word & 65535u) : (word >> 16u);
    vec3 videoColor = vec3(
     float((rgb >> 11u) & 31u) / 31.0,

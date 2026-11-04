@@ -4,7 +4,7 @@
   "id": "moonlight",
   "name": "Moonlight S2",
   "version": "1.0.0",
-  "description": "Input-only Sunshine test client (video streaming is not implemented)",
+  "description": "Sunshine game streaming client (host-decoded video + controller input)",
   "icon": "assets/icon.png",
   "initialState": "assets/state.bin",
   "data": "assets/text.bin",

@@ -182,6 +182,12 @@ class S2MoonlightClient {
     this.videoHeight = 360;
     this.videoPort = 50000;
     this.videoSocket = null;
+    this.videoSocketBound = false;
+    this.videoSocketBinding = false;
+    this.videoBindRetryAt = 0;
+    this.videoBindError = '';
+    this.videoWatchdog = null;
+    this.videoPingPaused = false;
     this.videoPackets = 0;
     this.videoParityPackets = 0;
     this.videoStreams = 0;
@@ -189,7 +195,10 @@ class S2MoonlightClient {
     this.videoFrameChunks = [];
     this.videoSourceBytes = this.videoWidth * this.videoHeight * 3;
     this.videoFrameBytes = this.videoWidth * this.videoHeight * 2;
-    this.videoTargetOffset = 1024 + 262144;
+    // c.atlas[200000]: starts after the font atlas and all app state buffers
+    // (Moonlight state is at c.atlas[74000]); 640x360 RGB565 ends at word
+    // 315200, still inside the 8 MiB mapped buffer.
+    this.videoTargetOffset = 1024 + 200000 * 4;
 
     // Networking handles
     this.udpSocket = null;
@@ -215,6 +224,7 @@ class S2MoonlightClient {
     this.currentRikeyId = 0;
     this.rikeyBuf = null;
     this.currentAesIv = null;
+    this.controlSeq = 0;
 
     this.startPortalServer();
     this.initUdpSocket();
@@ -333,6 +343,7 @@ class S2MoonlightClient {
     this.enetConnected = false;
     this.enetServerPeerId = 0;
     this.enetClientReliableSeq = 1;
+    this.controlSeq = 0;
     this.enetConnectId = Math.floor(Math.random() * 0x7FFFFFFF);
 
     console.log(`[Moonlight ENet] Sending ENet CONNECT to ${this.hostIp}:47999 (cData=${this.enetConnectData})...`);
@@ -395,16 +406,31 @@ class S2MoonlightClient {
 
     const sendPings = () => {
       if (this.streamState !== 1 || !this.hostIp) return;
-      const video = this.videoSocket || this.udpSocket;
-      if (!video) return;
       try {
-        const videoPing = this.makePingPacket(this.videoPingPayload, ++videoSequence);
-        video.send(videoPing, 47998, this.hostIp, error => {
-          if (error) console.warn('[Moonlight Video] video ping error:', error.message);
-        });
-        this.videoPings = (this.videoPings || 0) + 1;
-        if (this.videoPings <= 3)
-          console.log(`[Moonlight Video] video ping ${this.videoPings} to ${this.hostIp}:47998 ${videoPing.toString('hex')}`);
+        // Video pings must only ever originate from the bound video socket.
+        // Sending them from the control socket makes Sunshine retarget the
+        // video peer to an ephemeral port, so the real 50000 socket goes silent.
+        if (!this.videoSocket || !this.videoSocketBound) {
+          const now = Date.now();
+          if (this.videoRpc && this.videoMapped &&
+              (!this.videoBindRetryAt || now - this.videoBindRetryAt > 1000)) {
+            this.videoBindRetryAt = now;
+            this.bindVideoSocket();
+          }
+          if (!this.videoPingPaused) {
+            console.warn('[Moonlight Video] waiting for the video socket bind; video pings paused');
+            this.videoPingPaused = true;
+          }
+        } else {
+          this.videoPingPaused = false;
+          const videoPing = this.makePingPacket(this.videoPingPayload, ++videoSequence);
+          this.videoSocket.send(videoPing, 47998, this.hostIp, error => {
+            if (error) console.warn('[Moonlight Video] video ping error:', error.message);
+          });
+          this.videoPings = (this.videoPings || 0) + 1;
+          if (this.videoPings <= 3)
+            console.log(`[Moonlight Video] video ping ${this.videoPings} from ${this.videoSocket.address().port} to ${this.hostIp}:47998`);
+        }
         if (this.udpSocket)
           this.udpSocket.send(this.makePingPacket(this.audioPingPayload, ++audioSequence), 48000, this.hostIp);
       } catch {}
@@ -412,6 +438,11 @@ class S2MoonlightClient {
 
     sendPings();
     this.udpPingTimer = setInterval(sendPings, 100);
+    if (this.videoWatchdog) clearTimeout(this.videoWatchdog);
+    this.videoWatchdog = setTimeout(() => {
+      if (this.streamState === 1 && !this.videoPackets)
+        console.warn('[Moonlight Video] no video packets after 3s; Sunshine may be sending to another peer port');
+    }, 3000);
   }
 
   sendControllerArrival() {
@@ -1072,7 +1103,7 @@ class S2MoonlightClient {
     }
     const app = this.apps[appIndex] || this.apps[0];
     if (!app) return;
-    this.stopVideo();
+    this.stopVideo('launch');
 
     this.activeGameTitle = app.title;
     this.status = 4;
@@ -1140,7 +1171,7 @@ class S2MoonlightClient {
       // Initiate ENet handshake on port 47999 for low-latency gamepad streaming
       this.connectEnet();
     } catch (err) {
-      this.stopVideo();
+      this.stopVideo('launch failed');
       console.warn(`[Moonlight S2] Launch failed:`, err.message);
       this.status = 2;
       this.statusMessage = `Launch error: ${err.message}`;
@@ -1297,7 +1328,7 @@ class S2MoonlightClient {
     if (!playRes.includes('200 OK')) throw new Error('PLAY failed: ' + playRes.slice(0, 100));
 
     this.rtspCSeq = cseq;
-    console.log(`[Moonlight S2] RTSP session active (control/input only; video and audio are not implemented).`);
+    console.log(`[Moonlight S2] RTSP session active (host-side video depacketizer + input control).`);
 
     // Start RTSP keepalive ping timer (every 6 seconds)
     if (this.rtspKeepAliveTimer) clearInterval(this.rtspKeepAliveTimer);
@@ -1335,22 +1366,30 @@ class S2MoonlightClient {
     pkt.writeInt16LE(0x0055, 32); // tailB
 
     try {
-      // Encrypt with AES-128-GCM using session rikey and chaining IV
-      const cipher = crypto.createCipheriv('aes-128-gcm', this.rikeyBuf, this.currentAesIv);
-      const enc = Buffer.concat([cipher.update(pkt), cipher.final()]);
+      // Control protocol 13 always encrypts, even with
+      // x-ss-general.encryptionEnabled:0. Wrap the input message in the
+      // NVCTL encrypted envelope (type 0x0001) instead of sending 0x0206 raw.
+      const plaintext = Buffer.alloc(4 + pkt.length);
+      plaintext.writeUInt16LE(0x0206, 0);          // NVCTL_ENET_PACKET_HEADER_V2.type
+      plaintext.writeUInt16LE(pkt.length, 2);      // payloadLength
+      pkt.copy(plaintext, 4);
+
+      const seq = this.controlSeq++ >>> 0;
+      // encryptionEnabled:0 selects the legacy 16-byte IV (IV[0] = seq).
+      const iv = Buffer.alloc(16);
+      iv[0] = seq & 0xFF;
+      const cipher = crypto.createCipheriv('aes-128-gcm', this.rikeyBuf, iv);
+      const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
       const tag = cipher.getAuthTag();
-      const taggedCipher = Buffer.concat([tag, enc]); // 16 bytes tag + 34 bytes enc = 50 bytes
 
-      const inputDataPayload = Buffer.alloc(4 + taggedCipher.length);
-      inputDataPayload.writeUInt32BE(taggedCipher.length, 0);
-      taggedCipher.copy(inputDataPayload, 4);
+      const envelope = Buffer.alloc(8 + 16 + ciphertext.length);
+      envelope.writeUInt16LE(0x0001, 0);           // encryptedHeaderType
+      envelope.writeUInt16LE(4 + 16 + plaintext.length, 2);
+      envelope.writeUInt32LE(seq, 4);
+      tag.copy(envelope, 8);
+      ciphertext.copy(envelope, 24);
 
-      // Chaining IV: update currentAesIv to last 16 bytes of inputDataPayload
-      inputDataPayload.copy(this.currentAesIv, 0, inputDataPayload.length - 16, inputDataPayload.length);
-
-      // Send as ENet Reliable (0x86) on channel 0
-      this.sendEnetReliable(0x0206, inputDataPayload, 0);
-      // Counts sent controller packets. No video frames are received or decoded.
+      this.sendEnetReliable(0x0001, envelope, 0);
       this.streamPackets++;
     } catch (e) {
       console.warn('[Moonlight Input] Error sending gamepad packet:', e.message);
@@ -1365,38 +1404,73 @@ class S2MoonlightClient {
     this.videoRpc = rpc;
     this.videoMapped = mapped;
     if (directory) this.videoDirectory = directory;
+    console.log(`[Moonlight Video] attached GPU frame target ${mapped}`);
   }
 
-  startVideo() {
-    if (this.videoProcess) return;
-    if (!this.videoRpc || !this.videoMapped) {
-      console.warn('[Moonlight Video] no GPU frame target attached; video disabled.');
-      return;
-    }
+  // Bind the socket that both receives video and sources the video pings.
+  // Never call send() before this bind completes: Node would auto-bind the
+  // socket to an ephemeral port, and Sunshine would retarget video there.
+  bindVideoSocket() {
     if (this.videoSocket) {
+      // Never replace a socket that is still binding. Doing so leaves the old
+      // bind callback alive long enough to mark the new, unbound socket as
+      // ready; sendPings would then auto-bind it to an ephemeral port.
+      if (this.videoSocketBound || this.videoSocketBinding) return this.videoSocket;
       try { this.videoSocket.close(); } catch {}
       this.videoSocket = null;
     }
+    this.videoSocketBound = false;
+    this.videoSocketBinding = true;
+    const socket = dgram.createSocket('udp4');
     // GameStream video is not plain RTP: each datagram is
     //   12-byte RTP header + 4-byte extension + 16-byte NV_VIDEO_PACKET
     // followed by H.264 Annex B payload. The first packet of a frame carries
     // an extra Sunshine frame header. Reassemble the Annex B stream in Node
     // and feed it to ffmpeg over stdin; ffmpeg cannot parse these datagrams
     // as standard RTP.
-    this.videoSocket = dgram.createSocket('udp4');
-    this.videoSocket.on('error', error => {
-      console.warn('[Moonlight Video] video socket error:', error.message);
+    this.videoSocket = socket;
+    socket.on('error', error => {
+      if (this.videoSocket !== socket) return;
+      this.videoSocketBinding = false;
+      this.videoSocketBound = false;
+      if (this.videoBindError === error.message) return;
+      this.videoBindError = error.message;
+      const hint = /EADDRINUSE/.test(error.message)
+        ? `; port ${this.videoPort} is already in use by another Moonlight stream on this PC`
+        : '';
+      console.warn(`[Moonlight Video] video socket error: ${error.message}${hint}`);
     });
-    this.videoSocket.on('message', message => this.handleVideoPacket(message));
-    this.videoSocket.bind(this.videoPort, '0.0.0.0', () => {
-      console.log(`[Moonlight Video] video socket on ${this.videoPort}`);
+    socket.on('message', message => this.handleVideoPacket(message));
+    socket.bind(this.videoPort, '0.0.0.0', () => {
+      // A late callback from a replaced socket must not mark the new one ready.
+      if (this.videoSocket !== socket) return;
+      this.videoSocketBinding = false;
+      this.videoSocketBound = true;
+      this.videoBindError = '';
+      console.log(`[Moonlight Video] video socket on ${this.videoPort} from ${socket.address().port}`);
     });
+    return socket;
+  }
+
+  startVideo() {
+    if (!this.videoRpc || !this.videoMapped) {
+      console.warn('[Moonlight Video] no GPU frame target attached; video disabled.');
+      return;
+    }
+    if (this.videoProcess) {
+      // Self-heal a stream whose socket was closed without restarting ffmpeg.
+      this.bindVideoSocket();
+      return;
+    }
+    // Reuse the bound receiver across launches. Closing and immediately
+    // rebinding 50000 can fail with EADDRINUSE while the old socket unwinds.
+    if (!this.videoSocket || !this.videoSocketBound) this.bindVideoSocket();
 
     const args = [
       '-hide_banner', '-loglevel', 'warning',
       '-flags', 'low_delay',
       '-f', 'h264', '-i', 'pipe:0',
-      '-vf', `scale=${this.videoWidth}:${this.videoHeight}:flags=fast_bilinear`,
+      '-vf', `fps=30,scale=${this.videoWidth}:${this.videoHeight}:flags=fast_bilinear`,
       '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'
     ];
     const child = spawn('ffmpeg', args, {stdio: ['pipe', 'pipe', 'pipe']});
@@ -1428,11 +1502,11 @@ class S2MoonlightClient {
     });
     child.on('error', error => {
       console.warn('[Moonlight Video] ffmpeg failed:', error.message);
-      this.videoProcess = null;
+      if (this.videoProcess === child) this.videoProcess = null;
     });
     child.on('close', code => {
       if (code && code !== 0) console.warn('[Moonlight Video] ffmpeg exited with', code);
-      this.videoProcess = null;
+      if (this.videoProcess === child) this.videoProcess = null;
     });
     console.log(`[Moonlight Video] depacketizer on ${this.videoPort} -> ffmpeg -> ${this.videoWidth}x${this.videoHeight} RGB565`);
   }
@@ -1441,6 +1515,10 @@ class S2MoonlightClient {
   // Annex B payload for the current frame.
   handleVideoPacket(message) {
     if (message.length < 32 || (message[0] >> 6) !== 2) return;
+    if (this.videoWatchdog) {
+      clearTimeout(this.videoWatchdog);
+      this.videoWatchdog = null;
+    }
     this.videoPackets = (this.videoPackets || 0) + 1;
 
     const payloadType = message[1] & 0x7f;
@@ -1539,15 +1617,21 @@ class S2MoonlightClient {
       .finally(() => { this.videoBusy = false; });
   }
 
-  stopVideo() {
+  stopVideo(reason = '') {
+    if (reason) console.log(`[Moonlight Video] stopVideo (${reason})`);
+    if (this.videoWatchdog) {
+      clearTimeout(this.videoWatchdog);
+      this.videoWatchdog = null;
+    }
+    this.videoPingPaused = false;
     if (this.videoProcess) {
       try { this.videoProcess.kill('SIGTERM'); } catch {}
       this.videoProcess = null;
     }
-    if (this.videoSocket) {
-      try { this.videoSocket.close(); } catch {}
-      this.videoSocket = null;
-    }
+    // Keep the bound video socket for the process lifetime. Closing and
+    // rebinding 50000 races with the OS releasing the port and can miss the
+    // first IDR, which is the only guaranteed keyframe at stream start.
+    this.videoBindRetryAt = 0;
     this.videoPending = Buffer.alloc(0);
     this.videoFrames = 0;
     this.videoPackets = 0;
@@ -1564,7 +1648,9 @@ class S2MoonlightClient {
   }
 
   async quitSession() {
-    this.stopVideo();
+    // Keep the bound video socket for the next launch; closing and rebinding
+    // 50000 races with the OS releasing the port and can miss the first IDR.
+    this.stopVideo('quit');
     this.streamState = 0;
     this.enetConnected = false;
     if (this.udpPingTimer) {

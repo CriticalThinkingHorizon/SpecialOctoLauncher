@@ -16,6 +16,7 @@ async function main(directory,mode='copy',attempt){
  const byteCount=render?1920*1080*4:65536;
  directory=path.resolve(directory);const rpc=require(path.join(directory,'shared/rpc.cjs'));
  const module=JSON.parse(await fs.readFile(path.join(directory,'compatibility-module.json')));
+ const inspection=JSON.parse(await fs.readFile(path.join(directory,'display-inspection.json')));
  const report={session:rpc.a.session,started:new Date().toISOString(),bytes:byteCount,api:'Vulkan 1.4',displayTouched:false,mode};
  const file=path.join(directory,'vulkan-'+mode+(attempt?'-'+attempt:'')+'.json');const lock=await fs.open(file,'wx',0o600);await lock.close();
  const save=()=>fs.writeFile(file,JSON.stringify(report,null,2),{mode:0o600});
@@ -52,9 +53,13 @@ async function main(directory,mode='copy',attempt){
    check(await sdkCall('allocate',p,4096,0x2000)===0n,'Layer allocation failed');layer=Number(await pointer(0));
    check(Number.isSafeInteger(layer)&&layer%4096===0,'Invalid layer allocation');await sdkCall('memset',layer,0,0x2000);
    check(await call('_ZN2nn2vi18OpenDefaultDisplayEPPNS0_7DisplayE',p+8)===0n,'Display reference failed');display=await pointer(8);
-   const layerName=process.env.S2_LAYER_NAME||'default';
+   // The demo app may already own the "default" VI layer/window, which makes
+   // vkCreateViSurfaceNN block on a second surface. Use an independent layer
+   // name for the demo build unless the user overrides it.
+   const defaultLayerName=inspection.applicationSignature==='different'?'s2launcher':'default';
+   const layerName=process.env.S2_LAYER_NAME||defaultLayerName;
    check(/^[A-Za-z0-9_.-]{1,63}$/.test(layerName),'Invalid S2_LAYER_NAME');
-   console.log(`[Vulkan] opening layer "${layerName}"`);
+   console.log(`[Vulkan] opening layer "${layerName}" (applicationSignature=${inspection.applicationSignature||'unknown'})`);
    await call('_ZN2nn2vi5LayerC1Ev',layer);await call('_ZN2nn2vi21LayerCreationSettingsC1Eii',layer+0x1000,1920,1080);
    await rpc.write(layer+0x1100,Buffer.from(layerName+'\0'));
    check(await call('_ZN2nn2vi5Layer4OpenEPKNS0_21LayerCreationSettingsEPNS0_7DisplayEPKc',layer,layer+0x1000,display,layer+0x1100)===0n,'Independent layer failed');layerOpened=true;report.displayTouched=true;
