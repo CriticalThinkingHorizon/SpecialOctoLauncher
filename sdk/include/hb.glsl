@@ -211,6 +211,32 @@ uint nnNonopostGetContentByte(uint postIdx,uint byteIdx){
  return (postIdx < 4u && byteIdx < 160u) ? nnNonopostGetFeedByte(16u + postIdx * 240u + 80u + byteIdx) : 0u;
 }
 
+// DucktoChat shared room messages (subOp 55/56, stored persistently at c.atlas[DUCKTOCHAT_BASE])
+const uint DUCKTOCHAT_BASE = 76000u;
+
+uint nnDucktochatGetByte(uint byteOffset){
+ uint wordIdx = DUCKTOCHAT_BASE + (byteOffset / 4u);
+ uint shift = (byteOffset % 4u) * 8u;
+ return (c.atlas[wordIdx] >> shift) & 255u;
+}
+
+uint nnDucktochatGetMessageCount(){return c.atlas[DUCKTOCHAT_BASE];}
+uint hbDucktochatCount(){return nnDucktochatGetMessageCount();}
+uint nnDucktochatGetTotalCount(){return c.atlas[DUCKTOCHAT_BASE + 1u];}
+uint hbDucktochatTotal(){return nnDucktochatGetTotalCount();}
+uint nnDucktochatGetRoom(){return c.atlas[DUCKTOCHAT_BASE + 2u];}
+uint nnDucktochatGetStatusCode(){return c.atlas[DUCKTOCHAT_BASE + 3u];}
+
+uint nnDucktochatGetMessageAuthorByte(uint msgIdx,uint byteIdx){
+ return (msgIdx < 8u && byteIdx < 16u) ? nnDucktochatGetByte(16u + msgIdx * 128u + byteIdx) : 0u;
+}
+uint nnDucktochatGetMessageTimeByte(uint msgIdx,uint byteIdx){
+ return (msgIdx < 8u && byteIdx < 8u) ? nnDucktochatGetByte(16u + msgIdx * 128u + 16u + byteIdx) : 0u;
+}
+uint nnDucktochatGetMessageTextByte(uint msgIdx,uint byteIdx){
+ return (msgIdx < 8u && byteIdx < 104u) ? nnDucktochatGetByte(16u + msgIdx * 128u + 24u + byteIdx) : 0u;
+}
+
 // Discord JWT Client Response Accessors (subOp 40, stored persistently at c.atlas[DISCORD_BASE])
 const uint DISCORD_BASE = 72000u;
 
@@ -489,6 +515,15 @@ bool nnNonopostCreatePost(uint authorLen,uint contentLen){return hbRequest(10u,3
 bool hbNonopostPost(uint authorLen,uint contentLen){return nnNonopostCreatePost(authorLen,contentLen);}
 bool nnNonopostRatePost(uint postIndex,uint rating){return hbRequest(10u,32u,postIndex,clamp(rating,1u,10u));}
 bool hbNonopostRate(uint postIndex,uint rating){return nnNonopostRatePost(postIndex,rating);}
+
+// DucktoChat shared room staging and request primitives (subOp 55, 56)
+void nnDucktochatSetMessageByte(uint index,uint value){if(index>=104u||hbBusy())return;uint o=HB_EXT+(2048u+64u)/4u+index/4u,shift=(index%4u)*8u;c.atlas[o]=(c.atlas[o]&~(255u<<shift))|((value&255u)<<shift);}
+void hbDucktochatMessageByte(uint index,uint value){nnDucktochatSetMessageByte(index,value);}
+
+bool nnDucktochatFetchRoom(uint room){return hbRequest(10u,55u,room&3u,0u);}
+bool hbDucktochatFetch(uint room){return nnDucktochatFetchRoom(room);}
+bool nnDucktochatSendMessage(uint room,uint textLen){return hbRequest(10u,56u,room&3u,min(textLen,104u));}
+bool hbDucktochatSend(uint room,uint textLen){return nnDucktochatSendMessage(room,textLen);}
 
 // Discord JWT Client Request Primitive (subOp 40)
 bool hbDiscordAction(uint action,uint arg){return hbRequest(10u,40u,action,arg);}

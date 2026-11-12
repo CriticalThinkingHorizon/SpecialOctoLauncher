@@ -1,0 +1,19 @@
+{
+  "format": "hblauncher.gpu-app",
+  "abi": 1,
+  "id": "ducktochat",
+  "name": "DucktoChat",
+  "version": "1.0.0",
+  "description": "Shared chat rooms A-D with touch keyboard for consoles on the same server",
+  "icon": "assets/icon.png",
+  "initialState": "assets/state.bin",
+  "data": "assets/text.bin",
+  "shaders": {
+    "vertex": "app.vert.spv",
+    "fragment": "app.frag.spv",
+    "compute": "app.comp.spv"
+  },
+  "sdk": {
+    "capabilities": ["net", "swkbd", "vibration"]
+  }
+}

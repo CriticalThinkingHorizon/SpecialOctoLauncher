@@ -7,7 +7,7 @@ function validateManifest(value){
  return {capabilities:SUPPORTED_CAPABILITIES,endpoints};
 }
 async function create({rpc,mapped,directory,hardware:providedHardware}){
-  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,httpServer,netSockets,timeService,swkbdService,webService,audioService,lastSequence=0,lastPoll=0;
+  const hardware=providedHardware??await require('./helpers/hardware.cjs').create(rpc);let nfc,network,fsService,httpServer,netSockets,timeService,swkbdService,webService,audioService,ducktochatService,lastSequence=0,lastPoll=0;
   const base=mapped+L.OFFSET;
  return {hardware,resetSequence(seq=0){lastSequence=seq>>>0;},async atBoundary(app=null){
   if(app?.manifest?.id==='moonlight')require('./moonlight.cjs').attachVideo({rpc,mapped,directory});
@@ -559,6 +559,32 @@ async function create({rpc,mapped,directory,hardware:providedHardware}){
        payload=Buffer.alloc(24);
        payload.writeUInt32LE(0,0);
        payload.writeUInt32LE(2,20);
+     }
+    }else if(subOp===55||subOp===56){
+     ducktochatService??=require('./ducktochat.cjs').create(rpc);
+     const roomIdx=request.readUInt32LE(12)&0xff;
+     if(subOp===55){
+      const res=await ducktochatService.fetchRoom(roomIdx);
+      payload=Buffer.alloc(16+res.messages.length*128);
+      payload.writeUInt32LE(res.messages.length>>>0,0);
+      payload.writeUInt32LE(res.total>>>0,4);
+      payload.writeUInt32LE(roomIdx>>>0,8);
+      payload.writeUInt32LE(200,12);
+      for(let i=0;i<res.messages.length;i++){
+       const m=res.messages[i],o=16+i*128;
+       payload.write(String(m.author||'').slice(0,15),o,16,'utf8');
+       payload.write(String(m.time||'').slice(0,7),o+16,8,'utf8');
+       payload.write(String(m.text||'').slice(0,103),o+24,104,'utf8');
+      }
+      await rpc.write(mapped+1024+76000*4,payload);
+     }else{
+      const textLen=Math.min(request.readUInt32LE(16)||0,104);
+      const textBuf=request.subarray(64,64+textLen);
+      const text=textBuf.toString('utf8').replace(/\0.*$/,'');
+      const sendRes=await ducktochatService.sendMessage(roomIdx,text);
+      payload=Buffer.alloc(16);
+      payload.writeUInt32LE(sendRes.status>>>0,0);
+      payload.writeUInt32LE(roomIdx>>>0,4);
      }
     }else if(subOp===30){
      const nono=require('./nonopost.cjs');

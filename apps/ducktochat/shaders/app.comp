@@ -1,0 +1,181 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+layout(local_size_x=1) in;
+#include "abi.glsl"
+#include "hb.glsl"
+#include "kbd.glsl"
+
+const uint PROMPT_CHARS[16] = uint[16](83u,101u,110u,100u,32u,77u,101u,115u,115u,97u,103u,101u,58u,32u,0u,0u);
+const uint GUIDE_CHARS[24] = uint[24](84u,121u,112u,101u,32u,121u,111u,117u,114u,32u,109u,101u,115u,115u,97u,103u,101u,46u,46u,46u,0u,0u,0u,0u);
+
+bool pcSendInput(uint room){
+ uint len = uint(clamp(c.piece.x, 0, 104));
+ if (len == 0u) return false;
+ for (uint i=0u;i<len;i++) nnDucktochatSetMessageByte(i, pcInputByte(i));
+ return nnDucktochatSendMessage(room, len);
+}
+
+void pcAppend(uint ch){
+ uint len = uint(clamp(c.piece.x, 0, 104));
+ if (len < 104u) {
+  pcSetInputByte(len, ch);
+  c.piece.x = int(len + 1u);
+ }
+}
+
+void pcBackspace(){
+ uint len = uint(clamp(c.piece.x, 0, 104));
+ if (len > 0u) {
+  pcSetInputByte(len - 1u, 0u);
+  c.piece.x = int(len - 1u);
+ }
+}
+
+void main(){
+ uint pressed = hbPressed();
+ uint held = hbButtons();
+
+ c.motion.x += 1.0 / 60.0;
+ c.flow.w += 1.0;
+ c.transition.x = max(0.0, c.transition.x - 1.0 / 15.0);
+
+ if (((pressed | held) & HB_MINUS) != 0u) {
+  hbExit();
+  hbEndFrame();
+  return;
+ }
+
+ if (c.flow.y > 0.0) c.flow.y -= 1.0;
+ if (c.flow.x > 0.0) c.flow.x -= 1.0;
+
+ // State machine: c.game.x
+ // 0 = idle, 1 = fetch in flight, 2 = native keyboard open,
+ // 3 = send in flight, 4 = refresh after send.
+ if (c.flow.w < 5.0 && c.game.x == 0u && !hbBusy()) {
+  if (nnDucktochatFetchRoom(c.game.z)) c.game.x = 1u;
+ }
+
+ if (c.game.x == 1u && !hbBusy()) {
+  c.game.x = 0u;
+  c.game.y = nnDucktochatGetMessageCount();
+  hbVibrate(2u, 15u, 250u);
+ }
+
+ // Native S2 keyboard: put the returned text into the visible input buffer.
+ if (c.game.x == 2u && !hbBusy()) {
+  uint textLen = min(nnSwkbdGetTextLength(), 104u);
+  for (uint i=0u;i<textLen;i++) pcSetInputByte(i, nnSwkbdGetTextByte(i));
+  c.piece.x = int(textLen);
+  c.game.x = 0u;
+  hbVibrate(0u, 25u, 400u);
+ }
+
+ if (c.game.x == 3u && !hbBusy()) {
+  pcSetInputByte(0u, 0u);
+  c.piece.x = 0;
+  hbVibrate(2u, 40u, 600u);
+  c.game.x = 4u;
+ }
+
+ if (c.game.x == 4u && !hbBusy()) {
+  nnDucktochatFetchRoom(c.game.z);
+  c.game.x = 1u;
+ }
+
+ // ------------------------------------------------------------ touch keyboard
+ if (c.game.x == 0u && !hbBusy()) {
+  if (hbTouchCount() > 0u) {
+   if (c.piece.z == 0) {
+    c.piece.z = 1;
+    vec2 pt = hbTouch(0u) * 1.5;
+
+    // Room tabs
+    bool roomHit = false;
+    for (uint r=0u;r<4u;r++) {
+     vec2 rc = pcRoomCenter(r);
+     if (abs(pt.x-rc.x) <= 30.0 && abs(pt.y-rc.y) <= 30.0) {
+      roomHit = true;
+      if (r != (c.game.z % 4u)) {
+       c.game.z = r;
+       nnDucktochatFetchRoom(c.game.z);
+       c.game.x = 1u;
+       hbVibrate(0u, 16u, 260u);
+      }
+     }
+    }
+
+    if (!roomHit) {
+     uint key = pcKeyAt(pt);
+     if (key != 0u) { c.piece.y = int(key); c.flow.x = 12.0; }
+     if (key >= 32u && key <= 126u) {
+      pcAppend(key);
+      hbVibrate(0u, 8u, 180u);
+     } else if (key == PC_KEY_SPACE) {
+      pcAppend(32u);
+      hbVibrate(0u, 8u, 180u);
+     } else if (key == PC_KEY_BACK) {
+      pcBackspace();
+      hbVibrate(1u, 10u, 200u);
+     } else if (key == PC_KEY_CLEAR) {
+      c.piece.x = 0;
+      pcSetInputByte(0u, 0u);
+      hbVibrate(1u, 12u, 240u);
+     } else if (key == PC_KEY_SEND) {
+      if (pcSendInput(c.game.z)) {
+       c.game.x = 3u;
+       c.flow.y = 180.0;
+       hbVibrate(2u, 35u, 700u);
+      }
+     }
+    }
+   }
+  } else {
+   c.piece.z = 0;
+  }
+ }
+
+ // ------------------------------------------------------------ physical input
+ if (c.game.x == 0u && !hbBusy()) {
+  if ((pressed & (HB_LEFT | HB_L)) != 0u) {
+   if (c.game.z > 0u) {
+    c.game.z--;
+    nnDucktochatFetchRoom(c.game.z);
+    c.game.x = 1u;
+    hbVibrate(0u, 12u, 200u);
+   }
+  }
+  if ((pressed & (HB_RIGHT | HB_R)) != 0u) {
+   if (c.game.z < 3u) {
+    c.game.z++;
+    nnDucktochatFetchRoom(c.game.z);
+    c.game.x = 1u;
+    hbVibrate(0u, 12u, 200u);
+   }
+  }
+  if ((pressed & HB_X) != 0u) {
+   nnDucktochatFetchRoom(c.game.z);
+   c.game.x = 1u;
+  }
+  if ((pressed & HB_B) != 0u) {
+   pcBackspace();
+   hbVibrate(1u, 10u, 200u);
+  }
+  if ((pressed & HB_A) != 0u) {
+   if (pcSendInput(c.game.z)) {
+    c.game.x = 3u;
+    c.flow.y = 180.0;
+    hbVibrate(2u, 35u, 700u);
+   }
+  }
+  if ((pressed & HB_Y) != 0u) {
+   for (uint i=0u;i<15u;i++) nnSwkbdSetPromptByte(i, PROMPT_CHARS[i]);
+   for (uint i=0u;i<23u;i++) nnSwkbdSetGuideByte(i, GUIDE_CHARS[i]);
+   if (hbSwkbdShow(15u, 23u, 0u)) {
+    c.game.x = 2u;
+    hbVibrate(0u, 30u, 500u);
+   }
+  }
+ }
+
+ hbEndFrame();
+}
