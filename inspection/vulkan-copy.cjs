@@ -148,7 +148,10 @@ async function main(directory,mode='copy',attempt){
   }
   const source=render?null:crypto.randomBytes(byteCount);
   if(source)await rpc.write(mapped[0],source);
-  await rpc.write(mapped[render?0:1],Buffer.alloc(byteCount,0x5a));
+  // The render path fills the destination buffer on the GPU via
+  // vkCmdCopyImageToBuffer2, so pre-filling 8 MiB over the network would only
+  // add WAN transfer time. Keep the prefill for the buffer-to-buffer check.
+  if(!render)await rpc.write(mapped[1],Buffer.alloc(byteCount,0x5a));
   if(render&&!present){
    await put(0x4000,struct(88,14,{20:1,24:37,28:1920,32:1080,36:1,40:1,44:1,48:1,56:0x11}));
    await ok('vkCreateImage',device,p+0x4000,0,p+88);image=await pointer(88);
@@ -200,19 +203,29 @@ async function main(directory,mode='copy',attempt){
   if(present){const mask=Buffer.alloc(4);mask.writeUInt32LE(0x400);await put(0x6a00,mask);}
   await put(0x3200,struct(72,4,{40:1,...present?{16:1,56:1}:{}},{48:p+80,...present?{24:p+120,32:p+0x6a00,64:p+128}:{}}));
   submitted=true;await ok('vkQueueSubmit',queue,1,p+0x3200,0);await ok('vkQueueWaitIdle',queue);finished=true;
-  const result=await rpc.read(mapped[render?0:1],byteCount);
-  if(render){
-   const colors=present?Array(4).fill([0,0,0,255]):[[255,0,0,255],[0,255,0,255],[0,0,255,255],[255,255,255,255]];let mismatches=0;
-   for(let y=0;y<1080;y++)for(let x=0;x<1920;x++){
-    const color=colors[(y>=540?2:0)+(x>=960?1:0)],at=(y*1920+x)*4;
-    if(color.some((v,c)=>result[at+c]!==v))mismatches++;
-   }
-   report.width=1920;report.height=1080;report.mismatchedPixels=mismatches;report.verified=mismatches===0;
-   await fs.writeFile(path.join(directory,'vulkan-1920x1080.rgba'),result,{mode:0o600});
-  }else{report.verified=result.equals(source);report.sourceSha256=crypto.createHash('sha256').update(source).digest('hex');}
-  report.destinationSha256=crypto.createHash('sha256').update(result).digest('hex');
-  await save();check(report.verified,'GPU result mismatch');
-  console.log(render?'Verified direct Vulkan 1920x1080 render: all pixels match.':'Verified direct Vulkan GPU transfer: 65,536 bytes match.');
+  // Reading back 8 MiB costs several seconds on a WAN link and the visible
+  // startup frame is intentionally black. Make the full present-mode readback
+  // opt-in; offscreen render/copy diagnostics still verify every byte.
+  const verify=!present||process.env.S2_VERIFY_DISPLAY==='1';
+  if(verify){
+   const result=await rpc.read(mapped[render?0:1],byteCount);
+   if(render){
+    const colors=present?Array(4).fill([0,0,0,255]):[[255,0,0,255],[0,255,0,255],[0,0,255,255],[255,255,255,255]];let mismatches=0;
+    for(let y=0;y<1080;y++)for(let x=0;x<1920;x++){
+     const color=colors[(y>=540?2:0)+(x>=960?1:0)],at=(y*1920+x)*4;
+     if(color.some((v,c)=>result[at+c]!==v))mismatches++;
+    }
+    report.width=1920;report.height=1080;report.mismatchedPixels=mismatches;report.verified=mismatches===0;
+    await fs.writeFile(path.join(directory,'vulkan-1920x1080.rgba'),result,{mode:0o600});
+   }else{report.verified=result.equals(source);report.sourceSha256=crypto.createHash('sha256').update(source).digest('hex');}
+   report.destinationSha256=crypto.createHash('sha256').update(result).digest('hex');
+   await save();check(report.verified,'GPU result mismatch');
+   console.log(render?'Verified direct Vulkan 1920x1080 render: all pixels match.':'Verified direct Vulkan GPU transfer: 65,536 bytes match.');
+  }else{
+   report.verificationSkipped='display-present';
+   await save();
+   console.log('Display surface submitted without host readback (set S2_VERIFY_DISPLAY=1 to verify pixels).');
+  }
   if(present){
    await put(0x6b00,struct(64,1000001001,{16:1,32:1},{24:p+128,40:p+112,48:p+136}));
    await ok('vkQueuePresentKHR',queue,p+0x6b00);report.presentationAccepted=true;report.presentationAcceptedAt=new Date().toISOString();await save();

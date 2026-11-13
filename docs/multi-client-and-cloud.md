@@ -89,6 +89,9 @@ When hosting the server on a cloud instance (e.g., VPS, AWS, GCP) instead of a l
   * Import resolution is ordered best-evidence-first (recorded thunk, proven
     shift, nearby thunk, bounded signature fallback). A lazily-bound import can
     no longer walk thousands of candidates before failing.
+  * The display setup no longer pre-fills or reads back the 8 MiB copy buffer on
+    the visible startup path. The GPU still renders and presents the surface;
+    set `S2_VERIFY_DISPLAY=1` to opt back into the full pixel verification.
 
 ### G. Native Request Pipelining
 * **Problem**: The console protocol returns at most 32 KiB per request. Large
@@ -142,4 +145,7 @@ S2_STAGE_TIMEOUT_MS=900000 S2_VULKAN_TIMEOUT_MS=1200000 node server.js <host-ip>
 
 # Native request pipeline window (default 32; lower it on a very slow link)
 S2_NATIVE_PIPELINE=32 node server.js <host-ip>
+
+# Verify the displayed frame by reading 8 MiB back from the console (slower)
+S2_VERIFY_DISPLAY=1 node server.js <host-ip>
 ```
