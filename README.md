@@ -154,7 +154,7 @@ All apps have unrestricted access to the native SDK mailbox (`mapped + 0x7f0000`
    ```bash
    node server.js [host-ip]
    ```
-   *(Optional flags: `--app=<app-id>` to boot directly into a specific app instead of `launcher`, `--verbose` for low-level RPC transfer logs).*
+   *(Optional flags: `--app=<app-id>` to boot directly into a specific app instead of `launcher`, `--verbose` for low-level RPC transfer logs, `--full-inspect` for deep diagnostic probes. On a slow or high-latency remote link, raise the stage safety limits with `S2_STAGE_TIMEOUT_MS` / `S2_VULKAN_TIMEOUT_MS`; the native transfer pipeline can be tuned with `S2_NATIVE_PIPELINE`.)*
 
 2. **Configure your PC IP in `bootstrap.bas` (Required for the `I` shortcut):**
    > [!IMPORTANT]

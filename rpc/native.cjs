@@ -5,6 +5,13 @@ const INPUT_OFFSET = 0x40000;
 const DATA_OFFSET = 0x80;
 const OUTPUT_OFFSET = 0x4040;
 const SDK_BYTES = 0x5e1000;
+// The native protocol carries at most 32 KiB per response, so large transfers
+// are split into many requests. The console processes requests strictly in
+// order, which means the host can keep several in flight to hide WAN latency.
+// Bound the window so a slow link does not build a huge queue in memory.
+const MAX_PIPELINE = Math.max(1,
+  Math.min(64, Number(process.env.S2_NATIVE_PIPELINE || 32) | 0));
+const IO_BATCH = Math.max(1, Math.min(MAX_PIPELINE, 16));
 
 function callRecord(sdk, offset, args) {
   if (!Number.isSafeInteger(sdk) || sdk < 0x1000 || sdk >= 2 ** 39 || sdk % 4 ||
@@ -27,8 +34,14 @@ class NativeClient {
     this.connection = connection;
     this.addresses = addresses;
     this.output = addresses.scratch + OUTPUT_OFFSET;
-    this.queue = Promise.resolve();
     this.calls = 0;
+    // Ordered pipeline: writes and reads are chained independently so request
+    // N+1 can be sent while response N is still crossing the network.
+    this.writeChain = Promise.resolve();
+    this.readChain = Promise.resolve();
+    this.inFlight = 0;
+    this.waiters = [];
+    this.tasks = new Set();
     this.functions = new Set();
     if (addresses.memmove) this.functions.add(addresses.memmove);
     this.allowedRanges = [];
@@ -60,18 +73,47 @@ class NativeClient {
       callRecord(address ?? this.addresses.sdk, address === undefined ? offset : 0, args).copy(packet, index * 40);
     });
     data.copy(packet, DATA_OFFSET);
-    const task = this.queue.then(async () => {
-      if (global.VERBOSE) console.log(`[NATIVE EXCHANGE] Sending ${calls.length} call(s) to console (offset/addr: 0x${calls[0]?.offset?.toString(16) || calls[0]?.address?.toString(16)})...`);
-      await this.connection.write(packet);
-      if (global.VERBOSE) console.log(`[NATIVE EXCHANGE] Waiting for response from console socket...`);
-      const bytes = await this.connection.read(RESPONSE_BYTES);
-      if (global.VERBOSE) console.log(`[NATIVE EXCHANGE] Response received successfully.`);
-      this.calls += calls.length;
-      return {results: [bytes.readBigUInt64LE(8), bytes.readBigUInt64LE()],
-        result: bytes.readBigUInt64LE(8), output: bytes.subarray(16)};
-    });
-    this.queue = task.catch(() => {});
+    const task = (async () => {
+      await this.acquire();
+      try {
+        const write = this.writeChain.then(async () => {
+          if (global.VERBOSE) console.log(`[NATIVE EXCHANGE] Sending ${calls.length} call(s) to console (offset/addr: 0x${calls[0]?.offset?.toString(16) || calls[0]?.address?.toString(16)})...`);
+          await this.connection.write(packet);
+        });
+        this.writeChain = write.catch(() => {});
+        await write;
+        const read = this.readChain.then(async () => {
+          if (global.VERBOSE) console.log(`[NATIVE EXCHANGE] Waiting for response from console socket...`);
+          const bytes = await this.connection.read(RESPONSE_BYTES);
+          if (global.VERBOSE) console.log(`[NATIVE EXCHANGE] Response received successfully.`);
+          return bytes;
+        });
+        this.readChain = read.catch(() => {});
+        const bytes = await read;
+        this.calls += calls.length;
+        return {results: [bytes.readBigUInt64LE(8), bytes.readBigUInt64LE()],
+          result: bytes.readBigUInt64LE(8), output: bytes.subarray(16)};
+      } finally {
+        this.release();
+      }
+    })();
+    this.tasks.add(task);
+    task.finally(() => this.tasks.delete(task)).catch(() => {});
     return task;
+  }
+
+  acquire() {
+    if (this.inFlight < MAX_PIPELINE) {
+      this.inFlight++;
+      return Promise.resolve();
+    }
+    return new Promise(resolve => this.waiters.push(resolve));
+  }
+
+  release() {
+    const next = this.waiters.shift();
+    if (next) next();
+    else this.inFlight--;
   }
 
   call(offset, ...args) {
@@ -139,12 +181,19 @@ class NativeClient {
   async read(address, length) {
     if (length === 0) return Buffer.alloc(0);
     await this.guard(address, length, 1);
-    const parts = [];
-    for (let at = 0; at < length; at += OUTPUT_BYTES) {
-      const count = Math.min(OUTPUT_BYTES, length - at);
-      const reply = await this.call(0x586fb0, this.output, address + at, count);
-      if (reply.result !== BigInt(this.output)) throw Error('Native memory read failed');
-      parts.push(reply.output.subarray(0, count));
+    const parts = new Array(Math.ceil(length / OUTPUT_BYTES));
+    for (let base = 0; base < length; base += IO_BATCH * OUTPUT_BYTES) {
+      const end = Math.min(length, base + IO_BATCH * OUTPUT_BYTES);
+      const jobs = [];
+      for (let at = base; at < end; at += OUTPUT_BYTES) {
+        const count = Math.min(OUTPUT_BYTES, length - at);
+        jobs.push(this.call(0x586fb0, this.output, address + at, count).then(reply => {
+          if (reply.result !== BigInt(this.output)) throw Error('Native memory read failed');
+          return reply.output.subarray(0, count);
+        }));
+      }
+      const done = await Promise.all(jobs);
+      done.forEach((part, index) => { parts[base / OUTPUT_BYTES + index] = part; });
     }
     return Buffer.concat(parts);
   }
@@ -153,17 +202,32 @@ class NativeClient {
     if (!Buffer.isBuffer(bytes)) throw Error('Expected a byte buffer');
     if (bytes.length === 0) return;
     await this.guard(address, bytes.length, 2);
-    for (let at = 0; at < bytes.length; at += 0x8000) {
-      const part = bytes.subarray(at, at + 0x8000);
-      const args = [address + at, this.addresses.scratch + INPUT_OFFSET + DATA_OFFSET, part.length, 0];
-      const reply = await this.exchange([{offset: 0x5872f0, args}], part);
-      if (reply.result !== BigInt(address + at)) throw Error('Native memory write failed');
+    for (let base = 0; base < bytes.length; base += IO_BATCH * 0x8000) {
+      const end = Math.min(bytes.length, base + IO_BATCH * 0x8000);
+      const jobs = [];
+      for (let at = base; at < end; at += 0x8000) {
+        const part = bytes.subarray(at, at + 0x8000);
+        const args = [address + at, this.addresses.scratch + INPUT_OFFSET + DATA_OFFSET, part.length, 0];
+        jobs.push(this.exchange([{offset: 0x5872f0, args}], part).then(reply => {
+          if (reply.result !== BigInt(address + at)) throw Error('Native memory write failed');
+        }));
+      }
+      await Promise.all(jobs);
     }
   }
 
   async stop() {
     try {
-      await this.queue;
+      // Drain any in-flight pipeline before asking the console loop to exit,
+      // but never let a wedged console hold session teardown open for minutes.
+      let timer;
+      await Promise.race([
+        (async () => {
+          while (this.tasks.size) await Promise.allSettled([...this.tasks]);
+        })(),
+        new Promise(resolve => { timer = setTimeout(resolve, 5000); timer.unref?.(); })
+      ]);
+      clearTimeout(timer);
       if (!this.connection.error) await this.connection.write(Buffer.alloc(REQUEST_BYTES));
     } finally {this.connection.close();}
   }

@@ -252,8 +252,15 @@ async function main(directory, attempt = 'auto') {
     await save();
     console.log('Launcher GPU pipeline prepared successfully (apps load on-demand).');
 
-    // Start continuous frame loop
-    const inputInspection = JSON.parse(await fs.readFile(path.join(directory, 'input-inspection.json')));
+    // Start continuous frame loop. Input offsets are stable within the SDK
+    // image that qualify() checks by CRC, so only the optional diagnostic file
+    // can override them. Missing input-inspection.json is not an error.
+    let inputInspection = {imports: {}};
+    try {
+      inputInspection = JSON.parse(await fs.readFile(path.join(directory, 'input-inspection.json')));
+    } catch (error) {
+      if (error.code !== 'ENOENT') console.warn('[INPUT] Ignoring inspection file:', error.message);
+    }
     const applicationCode = await mainCodeRegion(rpc);
     const inApplication = value => contains(applicationCode, Number(value));
     let input = inputInspection.imports['_ZN2nn3hid12GetNpadStateEPNS0_17NpadHandheldStateERKj'];

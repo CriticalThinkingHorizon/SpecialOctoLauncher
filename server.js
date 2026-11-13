@@ -7,6 +7,17 @@ const {NativeClient} = require('./rpc/native.cjs');
 const {qualify} = require('./rpc/qualify.cjs');
 const {serve} = require('./rpc/bridge.cjs');
 
+// Stage scripts can legitimately run for a while on a slow WAN link. Keep the
+// previous 3/5 minute limits only as a hard safety net; operators can raise
+// them without editing code.
+function envMilliseconds(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value >= 60000 ? Math.floor(value) : fallback;
+}
+const STAGE_TIMEOUT = envMilliseconds('S2_STAGE_TIMEOUT_MS', 600000);
+const VULKAN_TIMEOUT = Math.max(STAGE_TIMEOUT,
+  envMilliseconds('S2_VULKAN_TIMEOUT_MS', 900000));
+
 async function runScript(scriptPath, args = [], timeout = 0) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [scriptPath, ...args], {
@@ -16,6 +27,12 @@ async function runScript(scriptPath, args = [], timeout = 0) {
     let timer = null;
     if (timeout) timer = setTimeout(() => {
       try { child.kill('SIGTERM'); } catch (_) {}
+      // A wedged child must not keep the session alive after we have reported
+      // the timeout; give it a short grace period and then force it down.
+      const kill = setTimeout(() => {
+        try { child.kill('SIGKILL'); } catch (_) {}
+      }, 5000);
+      kill.unref();
       reject(Error(`Script timed out after ${timeout}ms: ${scriptPath}`));
     }, timeout);
     child.once('error', reject);
@@ -105,6 +122,7 @@ async function main() {
   console.log('========================================================================');
   console.log(`Host IP: ${host}`);
   console.log(`Port:    39380`);
+  console.log(`Stage timeout: ${STAGE_TIMEOUT / 1000}s (Vulkan: ${VULKAN_TIMEOUT / 1000}s)`);
   if (probeCodec) console.log('Codec probe: enabled (runs during setup, before the native worker)');
   if (displayDiagnostic) console.log('Display diagnostic: enabled (read-only import layout capture)');
   console.log('\nManual Connection Command for SmileBASIC on S2:');
@@ -242,38 +260,50 @@ async function main() {
         return;
       }
 
-      // Fast, streamlined setup pipeline for Vulkan display initialization
+      // Fast, streamlined setup pipeline for Vulkan display initialization.
+      // Only the data the runtime actually consumes is captured per session:
+      // the NVN bootstrap import, the compatibility symbol table, and the
+      // Vulkan display objects. Input offsets are fixed inside the SDK image
+      // that qualify() already checks, so no per-session input scan is needed.
       console.log(`\n[SESSION #${sessionNum}] Setting up S2 Vulkan display pipeline...`);
 
-      console.log(`[SESSION #${sessionNum}] [1/4] Inspecting Display Imports (VI & NVN Bootstrap)...`);
-      await runScript(path.join(__dirname, 'inspection/inspect-display.cjs'), [sessionDir], 180000);
+      const runStage = async (label, script, args, timeout) => {
+        const started = Date.now();
+        console.log(`[SESSION #${sessionNum}] ${label}`);
+        await runScript(path.join(__dirname, script), args, timeout);
+        const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+        console.log(`[SESSION #${sessionNum}] ${label} done in ${elapsed}s`);
+      };
 
-      console.log(`[SESSION #${sessionNum}] [2/4] Inspecting Driver Compatibility Module...`);
-      await runScript(path.join(__dirname, 'inspection/inspect-compatibility.cjs'), [sessionDir], 180000);
+      await runStage('[1/3] Inspecting Display Imports (NVN bootstrap & signature)...',
+        'inspection/inspect-display.cjs',
+        fullInspect ? [sessionDir, '--full'] : [sessionDir], STAGE_TIMEOUT);
 
-      console.log(`[SESSION #${sessionNum}] [3/4] Inspecting Input & Controller State...`);
-      await runScript(path.join(__dirname, 'inspection/inspect-input.cjs'), [sessionDir], 120000);
+      await runStage('[2/3] Inspecting Driver Compatibility Module...',
+        'inspection/inspect-compatibility.cjs', [sessionDir], STAGE_TIMEOUT);
 
       if (probeCodec) {
         // Run before hello-runner starts the native worker: the probe allocates
         // through the SDK and opens service handles, which must not race the
         // launcher's autonomous frame loop.
         console.log(`[SESSION #${sessionNum}] [PROBE] Inspecting codec/image symbols (pre-worker)...`);
-        await runScript(path.join(__dirname, 'inspection/codec-probe.cjs'), [sessionDir, '--symbols-only'], 120000);
+        await runScript(path.join(__dirname, 'inspection/codec-probe.cjs'), [sessionDir, '--symbols-only'], STAGE_TIMEOUT);
       }
 
-      console.log(`[SESSION #${sessionNum}] [4/4] Setting Up Vulkan Display Resources...`);
+      console.log(`[SESSION #${sessionNum}] [3/3] Setting Up Vulkan Display Resources...`);
       console.log(`[SESSION #${sessionNum}] Each native call is logged as [Vulkan] <name>. ` +
         `If this step stalls, send ${path.join(sessionDir, 'vulkan-display.json')} (the last operation is the one that hung).`);
-      await runScript(path.join(__dirname, 'inspection/vulkan-copy.cjs'), [sessionDir, 'display'], 300000);
-      console.log(`✔ [SESSION #${sessionNum}] Vulkan display pipeline ready.`);
+      const vulkanStarted = Date.now();
+      await runScript(path.join(__dirname, 'inspection/vulkan-copy.cjs'), [sessionDir, 'display'], VULKAN_TIMEOUT);
+      console.log(`✔ [SESSION #${sessionNum}] Vulkan display pipeline ready in ${((Date.now() - vulkanStarted) / 1000).toFixed(1)}s.`);
 
       // Optional deep probes (enabled with --full-inspect)
       if (fullInspect) {
         console.log(`\n[SESSION #${sessionNum}] Running Deep Subsystem Probes (--full-inspect enabled)...`);
-        await runScript(path.join(__dirname, 'inspection/fs-inspect.cjs'), [sessionDir]);
-        await runScript(path.join(__dirname, 'inspection/swkbd-inspect.cjs'), [sessionDir]);
-        await runScript(path.join(__dirname, 'inspection/web-inspect.cjs'), [sessionDir]);
+        await runScript(path.join(__dirname, 'inspection/inspect-input.cjs'), [sessionDir], STAGE_TIMEOUT);
+        await runScript(path.join(__dirname, 'inspection/fs-inspect.cjs'), [sessionDir], STAGE_TIMEOUT);
+        await runScript(path.join(__dirname, 'inspection/swkbd-inspect.cjs'), [sessionDir], STAGE_TIMEOUT);
+        await runScript(path.join(__dirname, 'inspection/web-inspect.cjs'), [sessionDir], STAGE_TIMEOUT);
       }
 
       // Update runs/latest mirror for standalone inspection scripts

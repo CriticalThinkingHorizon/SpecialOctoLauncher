@@ -73,6 +73,33 @@ When hosting the server on a cloud instance (e.g., VPS, AWS, GCP) instead of a l
   * **Instant Native Memmove**: Switching to any previously loaded app (or returning to the Launcher via `-` MINUS) now bypasses network transmission entirely. The server dispatches an ARM64 native `memmove` call on the console, copying the 256 KiB font atlas and command buffers in **0.05 milliseconds** locally with **0 bytes transferred over the internet**.
   * The switch occurs in **1 frame** with zero network delay.
 
+### F. Minimal Per-Session Inspection
+* **Problem**: The startup path used to capture every display import and run a
+  full input-import scan. On a high-latency link, unresolved imports triggered a
+  signature search across a 32 KiB PLT window and a 512 KiB GOT window. A single
+  session could spend several minutes there and hit the old 180 s stage timeout.
+* **Optimization**:
+  * Startup now resolves only `nvnBootstrapLoader` (the import the compatibility
+    module actually consumes) and verifies the application signature in one or
+    two tiny PLT reads. The remaining VI imports are captured only with
+    `--full-inspect` / `--display-diagnostic`.
+  * HID entry points are fixed offsets inside the SDK image that `qualify()`
+    already validates by CRC. The runtime uses those offsets directly; the GOT
+    scan and slot patching are no longer part of the connection handshake.
+  * Import resolution is ordered best-evidence-first (recorded thunk, proven
+    shift, nearby thunk, bounded signature fallback). A lazily-bound import can
+    no longer walk thousands of candidates before failing.
+
+### G. Native Request Pipelining
+* **Problem**: The console protocol returns at most 32 KiB per request. Large
+  reads and writes were issued one request at a time, so a 1 MB transfer cost
+  ~32 network round trips.
+* **Optimization**: `NativeClient` keeps the write and read streams ordered but
+  independent, allowing the host to keep several requests in flight. The console
+  still processes them strictly in order, so output buffers remain safe; the
+  window is bounded (`S2_NATIVE_PIPELINE`, default 32) to cap memory use. Large
+  reads/writes are submitted in batches of up to 16 requests.
+
 ---
 
 ## 3. Server Command-Line Reference
@@ -108,4 +135,11 @@ node server.js --pairingCode 1234,5678,9012,3456
 
 # Verbose debugging output
 node server.js --verbose
+
+# Slow or high-latency console: raise the stage safety limits (milliseconds)
+S2_STAGE_TIMEOUT_MS=900000 S2_VULKAN_TIMEOUT_MS=1200000 node server.js <host-ip>
+# PowerShell: $env:S2_STAGE_TIMEOUT_MS=900000; $env:S2_VULKAN_TIMEOUT_MS=1200000; node server.js <host-ip>
+
+# Native request pipeline window (default 32; lower it on a very slow link)
+S2_NATIVE_PIPELINE=32 node server.js <host-ip>
 ```

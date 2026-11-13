@@ -89,7 +89,14 @@ async function serve(native) {
       clearInterval(heartbeat);
       server.closeAllConnections();
       await new Promise(resolve => server.close(resolve));
-      await queue;
+      // A console that stopped answering must not hold the session open. The
+      // native connection is closed immediately after this returns.
+      let timer;
+      await Promise.race([
+        queue,
+        new Promise(resolve => { timer = setTimeout(resolve, 5000); timer.unref?.(); })
+      ]);
+      clearTimeout(timer);
     },
   };
 }

@@ -9,9 +9,14 @@ const crypto = require('node:crypto');
 const {contains, decodePltThunk} = require('../rpc/main-module.cjs');
 
 const MAX_ADDRESS = 2 ** 39;
-const PLT_SCAN_ENTRIES = 1024;  // 16 KiB each side of the recorded thunk
+// Import table drift between SmileBASIC builds is a handful of entries, not a
+// whole mapping. Keep the normal search window small so a WAN session never
+// spends minutes walking every PLT stub for an import that is not bound yet.
+const PLT_SCAN_ENTRIES = 32;    // 512 bytes each side of the recorded thunk
+const DIAGNOSTIC_PLT_SCAN_ENTRIES = 1024; // full window, only for diagnostics
 const NARROW_SCAN_SPAN = 0x2000; // fast path for small demo-build shifts
 const GOT_SCAN_SPAN = 0x40000;  // 256 KiB each side of a recorded slot
+const MAX_SIGNATURE_CANDIDATES = 256; // hard bound for the slow fallback
 
 const align = (value, size) => Math.floor(value / size) * size;
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest();
@@ -77,12 +82,13 @@ class ImportResolver {
 
   // Decode every PLT stub in a window around the recorded offset. Inserting or
   // removing one import moves the demo build's thunk by one 16-byte entry.
-  async thunkSlots(pltOffset) {
+  async thunkSlots(pltOffset, entries = PLT_SCAN_ENTRIES) {
     const center = this.rpc.a.main + pltOffset;
     const region = await this.region(center);
     if (!region || (region.permissions & 5) !== 5) return [];
-    const start = Math.max(region.address, align(center - PLT_SCAN_ENTRIES * 16, 16));
-    const end = Math.min(region.address + region.size, center + PLT_SCAN_ENTRIES * 16 + 16);
+    const span = Math.max(1, entries | 0) * 16;
+    const start = Math.max(region.address, align(center - span, 16));
+    const end = Math.min(region.address + region.size, center + span + 16);
     if (end - start < 16) return [];
     let bytes;
     try { bytes = await this.rpc.read(start, end - start); } catch { return []; }
@@ -115,8 +121,9 @@ class ImportResolver {
   }
 
   async findBySignature(anchorOffsets, signature, span = GOT_SCAN_SPAN) {
-    const expected = Buffer.from(signature, 'hex');
+    const expected = Buffer.isBuffer(signature) ? signature : Buffer.from(signature, 'hex');
     const seen = new Set();
+    let examined = 0;
     for (const anchorOffset of new Set(anchorOffsets)) {
       const window = await this.gotWindow(anchorOffset, span);
       if (!window) continue;
@@ -126,6 +133,9 @@ class ImportResolver {
         if (!Number.isSafeInteger(value) || value < 0x1000 || value >= MAX_ADDRESS) continue;
         if (seen.has(value)) continue;
         seen.add(value);
+        // A signature scan is a last resort. Bound the work so a slow link
+        // fails fast instead of timing out the whole inspection stage.
+        if (++examined > MAX_SIGNATURE_CANDIDATES) return null;
         const described = await this.describe(value);
         if (described?.hash?.equals(expected))
           return {slotOffset: start + at - this.rpc.a.main, described};
@@ -150,62 +160,86 @@ class ImportResolver {
 
   // Resolve one import. `deltaHints` are slot shifts already proven by other
   // imports in the same build; `signature` is the recorded target code hash.
-  async resolve(entry, {signature = null, deltaHints = []} = {}) {
-    const thunks = await this.thunkSlots(entry.plt);
-    const thunkOffsets = new Set(thunks.map(thunk => thunk.slotOffset));
-    const candidates = new Map();
-    const add = (offset, source) => {
-      if (Number.isSafeInteger(offset) && offset > 0 && !candidates.has(offset))
-        candidates.set(offset, source);
-    };
-    for (const delta of deltaHints) {
-      const offset = entry.slot + delta;
-      add(offset, thunkOffsets.has(offset) ? 'thunk' : 'shift');
-    }
-    add(entry.slot, thunkOffsets.has(entry.slot) ? 'thunk' : 'table');
-    for (const thunk of thunks) add(thunk.slotOffset, 'thunk');
+  //
+  // Work is deliberately ordered cheapest-and-most-certain first:
+  //   1. recorded thunk still matches -> its decoded GOT slot is authoritative
+  //   2. shifts proven by sibling imports
+  //   3. nearby PLT thunks (different build only, bounded window)
+  //   4. a bounded signature scan (last resort only)
+  // The previous version walked every decoded thunk in a 32 KiB window for
+  // every import, which is thousands of round trips on a WAN link.
+  async resolve(entry, {signature = null, deltaHints = [], thunkBytes} = {}) {
+    const expected = signature ? Buffer.from(signature, 'hex') : null;
+    const tried = new Set();
+    const deferred = [];
 
-    let deferred = null;
-    for (const [slotOffset, slotSource] of candidates) {
+    const consider = async (slotOffset, slotSource) => {
+      if (!Number.isSafeInteger(slotOffset) || slotOffset <= 0 || tried.has(slotOffset))
+        return null;
+      tried.add(slotOffset);
       const value = await this.readSlot(this.rpc.a.main + slotOffset);
-      if (value === null) continue;
-      if (!value) { deferred ??= {slotOffset, slotSource, value: 0}; continue; }
+      if (value === null) return null;
+      if (!value) {
+        deferred.push({slotOffset, slotSource, target: 0, region: null,
+          code: null, unresolved: true});
+        return null;
+      }
       const described = await this.describe(value);
-      if (!described?.executable) continue;
-      if (signature) {
-        if (described.hash?.equals(Buffer.from(signature, 'hex')))
+      if (!described) return null;
+      if (expected) {
+        if (described.hash?.equals(expected))
           return {slotOffset, slotSource, target: value, region: described.region,
             code: described.code, unresolved: false};
-        continue;
+        // A lazily bound slot still points at the application resolver stub.
+        // Remember it as an unresolved result instead of scanning the world.
+        if (!described.executable || isResolverStub(described.code))
+          deferred.push({slotOffset, slotSource, target: value,
+            region: described.region, code: described.code, unresolved: true});
+        return null;
       }
-      if (slotSource === 'shift')
-        return {slotOffset, slotSource, target: value, region: described.region,
-          code: described.code, unresolved: false};
-      deferred ??= {slotOffset, slotSource, value, described};
+      return {slotOffset, slotSource, target: value, region: described.region,
+        code: described.code, unresolved: !described.executable};
+    };
+
+    const recorded = thunkBytes === undefined
+      ? await this.thunkAt(this.rpc.a.main + entry.plt) : thunkBytes;
+    const thunkMatches = recorded !== null && recorded !== undefined &&
+      Buffer.isBuffer(recorded) && recorded.toString('hex') === entry.bytes;
+
+    if (thunkMatches) {
+      const direct = await consider(entry.slot, 'thunk');
+      if (direct) return direct;
     }
 
-    if (signature) {
+    for (const delta of new Set(deltaHints)) {
+      const found = await consider(entry.slot + delta, 'shift');
+      if (found) return found;
+    }
+
+    if (!thunkMatches) {
+      const table = await consider(entry.slot, 'table');
+      if (table) return table;
+      for (const thunk of await this.thunkSlots(entry.plt)) {
+        const found = await consider(thunk.slotOffset, 'thunk');
+        if (found) return found;
+      }
+    }
+
+    if (expected && !thunkMatches) {
       const anchors = [entry.slot, ...deltaHints.map(delta => entry.slot + delta),
-        ...[...candidates.keys()]];
-      // The demo app shifts imports by a handful of entries, so scan a narrow
-      // window first and only fall back to the full GOT window if needed.
-      let found = await this.findBySignature(anchors, signature, NARROW_SCAN_SPAN);
-      if (!found) found = await this.findBySignature(anchors, signature);
+        ...tried];
+      const found = await this.findBySignature(anchors, expected, NARROW_SCAN_SPAN);
       if (found)
         return {slotOffset: found.slotOffset, slotSource: 'signature',
           target: found.described.value, region: found.described.region,
           code: found.described.code, unresolved: false};
     }
 
-    if (deferred)
-      return {slotOffset: deferred.slotOffset, slotSource: deferred.slotSource,
-        target: deferred.value, region: deferred.described?.region || null,
-        code: deferred.described?.code || null, unresolved: !deferred.value};
-    return null;
+    return deferred[0] || null;
   }
 }
 
 module.exports = {
   ImportResolver, isResolverStub,
-  PLT_SCAN_ENTRIES, GOT_SCAN_SPAN, MAX_ADDRESS
+  PLT_SCAN_ENTRIES, DIAGNOSTIC_PLT_SCAN_ENTRIES, GOT_SCAN_SPAN, MAX_ADDRESS
 };

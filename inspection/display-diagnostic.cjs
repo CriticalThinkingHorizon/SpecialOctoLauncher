@@ -5,7 +5,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const {decodePltThunk, mainCodeRegion} = require('../rpc/main-module.cjs');
-const {ImportResolver, isResolverStub} = require('./imports.cjs');
+const {ImportResolver, isResolverStub, DIAGNOSTIC_PLT_SCAN_ENTRIES} = require('./imports.cjs');
 const displayImports = require('./display-imports.json');
 const inputImports = require('./input-imports.json');
 const {KNOWN_SDK_OFFSETS} = require('./inspect-input.cjs');
@@ -44,7 +44,7 @@ async function displayEntry(rpc, resolver, name, entry, folder, deltas) {
   result.thunkAddress = thunkAddress;
   result.thunkHex = thunk ? thunk.toString('hex') : null;
   result.thunkMatches = thunk !== null && thunk.toString('hex') === entry.bytes;
-  const thunks = await resolver.thunkSlots(entry.plt);
+  const thunks = await resolver.thunkSlots(entry.plt, DIAGNOSTIC_PLT_SCAN_ENTRIES);
   result.thunks = thunks.slice(0, 64).map(item => ({slot: item.slotOffset, distance: item.distance}));
 
   const candidates = [...new Set([entry.slot,
